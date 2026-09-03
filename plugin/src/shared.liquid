@@ -36,28 +36,26 @@ badge_image_row/chip_body's own call sites further down).
 {% template chip_body %}
   {%- comment -%} The left "meaning" rail (plain color accent, or 1-2 badge circles) plus the
   title — every all-day and timed-event chip {% render %}s this SAME template instead of each
-  carrying its own copy (see the per-tier badge_d1/badge_d2/rail_w1/rail_w2 comment in "main"
-  for why a solo badge gets a bigger circle than a stacked pair). Flush to the chip's own left/
-  top/bottom edges — radius is passed in rather than computed here since only the all-day caller
-  has a real "which corner is mid-span" question to answer (continues_before/after); a timed
-  event always passes the same constant (see timed_rail_radius in "main"). clip/fit_min stay
-  real, separate params rather than being forced identical: all-day rows contribute real height
-  to a shared flex budget (see that chip's own h--[Ncqh] comment), so an oversized title there
-  needs cal-fit-clip to keep it from growing the row; a timed event is an absolutely-positioned
-  overlay that can safely let fit() leave it visible-overflow instead.
-  Params: badges, bar, title, fg, title_cls, fit_min, clip, pad_right, radius, bar_w, badge_d1,
-  badge_d2, rail_w1, rail_w2. {%- endcomment -%}
-  {%- if badges.size == 1 -%}
-    {%- assign chip_badge_d = badge_d1 -%}
-    {%- assign chip_rail_w = rail_w1 -%}
-  {%- else -%}
-    {%- assign chip_badge_d = badge_d2 -%}
-    {%- assign chip_rail_w = rail_w2 -%}
-  {%- endif -%}
+  carrying its own copy. Badges sit SIDE BY SIDE (flex--row), not stacked — a stacked pair used
+  to force each circle down to half the available height, so a solo badge (the common case) and
+  a paired one ended up different, smaller-than-necessary sizes; laid out side by side, one
+  shared badge_d (see "main") fills the rail's own height regardless of count, and the rail
+  itself grows WIDER to fit however many circles it's actually hosting instead of taller. Flush
+  to the chip's own left/top/bottom edges — radius is passed in rather than computed here since
+  only the all-day caller has a real "which corner is mid-span" question to answer
+  (continues_before/after); a timed event always passes the same constant (see
+  timed_rail_radius in "main"). clip/fit_min stay real, separate params rather than being
+  forced identical: all-day rows contribute real height to a shared flex budget (see that
+  chip's own h--[Ncqh] comment), so an oversized title there needs cal-fit-clip to keep it from
+  growing the row; a timed event is an absolutely-positioned overlay that can safely let fit()
+  leave it visible-overflow instead.
+  Params: badges, bar, title, fg, title_cls, fit_min, clip, pad_right, radius, bar_w, badge_d.
+  {%- endcomment -%}
   {%- if badges.size > 0 -%}
-    <div class="bg--{{ bar }} flex flex--col flex--center-x flex--center-y" style="position:absolute;top:0;bottom:0;left:0;width:{{ chip_rail_w }}px;overflow:hidden;border-radius:{{ radius }};">
+    {%- assign chip_rail_w = badge_d | times: badges.size | plus: 3 | plus: 8 -%}
+    <div class="bg--{{ bar }} flex flex--row flex--center-x flex--center-y" style="position:absolute;top:0;bottom:0;left:0;width:{{ chip_rail_w }}px;overflow:hidden;border-radius:{{ radius }};">
       {%- for b in badges -%}
-        <span class="rounded--full flex flex--center-x flex--center-y text--white bg--black" style="width:{{ chip_badge_d }}px;height:{{ chip_badge_d }}px;flex-shrink:0;{% unless forloop.first %}margin-top:3px;{% endunless %}overflow:hidden;border:1.5px solid currentColor;box-sizing:border-box;">
+        <span class="rounded--full flex flex--center-x flex--center-y text--white bg--black" style="width:{{ badge_d }}px;height:{{ badge_d }}px;flex-shrink:0;{% unless forloop.first %}margin-left:3px;{% endunless %}overflow:hidden;border:1.5px solid currentColor;box-sizing:border-box;">
           {%- render "badge_content", b: b -%}
         </span>
       {%- endfor -%}
@@ -100,24 +98,19 @@ badge_image_row/chip_body's own call sites further down).
   {%- assign event_title_cls = "title--small" -%}
   {%- assign pad_right = 4 -%}
   {%- assign bar_w = 3 -%}
-  {%- assign badge_d1 = 16 -%}
-  {%- assign badge_d2 = 9 -%}
-  {%- assign rail_w1 = 22 -%}
-  {%- assign rail_w2 = 16 -%}
+  {%- assign badge_d = 16 -%}
   {%- assign image_d = 24 -%}
 {%- elsif view == 3 -%}
   {%- comment -%} half_vertical: only ~400px WIDE (3 narrow day columns, ~133px each) —
   width-constrained rather than area-constrained, so it needs a smaller FONT tier than
   half_horizontal even though both are nominally "half" the full-view area. Day-label font
   matches quadrant's (title--small) rather than getting its own tier — same reasoning as
-  quadrant: narrow columns need the compact size regardless of view. Badge sizing (rail_w/
-  badge_d/image_d) is a DIFFERENT axis, though: half_vertical splits the screen into side-by-
-  side halves, so it's full SCREEN HEIGHT (same ~480px as the full view) unlike half_horizontal
-  and quadrant, which are both genuinely half-height (~240px) — badge_d1/badge_d2/rail_w1/
-  rail_w2/image_d are fixed-px ceilings tuned against each tier's own row-height budget
-  (allday_row_pct/MIN_EVENT_PCT, both computed as a share of the WHOLE screen — see
-  layoutNative in transform.js), so this shares the full view's badge tier below rather than
-  quadrant's, even though its FONT tier matches quadrant's. {%- endcomment -%}
+  quadrant: narrow columns need the compact size regardless of view. image_d (the "image"
+  display mode circle) still shares the full view's larger tier below it — that mode has no
+  title text competing for room, so half_vertical's narrow columns don't constrain it the way
+  they constrain badge_d (see its own comment further down: side-by-side badges spend rail
+  WIDTH now, not just height, so badge_d follows this view's narrow-WIDTH font tier instead of
+  its full-SCREEN-HEIGHT row budget). {%- endcomment -%}
   {%- assign head_title_cls = "title--small" -%}
   {%- assign chip_title_cls = "title--small" -%}
   {%- assign axis_cls = "label--base lg:label--large" -%}
@@ -125,10 +118,13 @@ badge_image_row/chip_body's own call sites further down).
   {%- assign event_title_cls = "title--small" -%}
   {%- assign pad_right = 4 -%}
   {%- assign bar_w = 3 -%}
-  {%- assign badge_d1 = 30 -%}
-  {%- assign badge_d2 = 20 -%}
-  {%- assign rail_w1 = 36 -%}
-  {%- assign rail_w2 = 26 -%}
+  {%- comment -%} badge_d breaks from the "shares full view's tier" reasoning above: that
+  applied to the OLD stacked-badge rail, where only row HEIGHT mattered and half_vertical's is
+  genuinely full-screen tall. Side-by-side badges (see chip_body) also spend rail WIDTH, and
+  half_vertical's ~133px-wide columns can't absorb the full-tier rail without wrapping/crushing
+  the title — quadrant's smaller badge_d fits this view's real width constraint instead.
+  {%- endcomment -%}
+  {%- assign badge_d = 16 -%}
   {%- assign image_d = 42 -%}
 {%- elsif view == 2 -%}
   {%- comment -%} half_horizontal: full 800px width but half SCREEN HEIGHT (~240px, same as
@@ -142,10 +138,7 @@ badge_image_row/chip_body's own call sites further down).
   {%- assign event_title_cls = "title--small" -%}
   {%- assign pad_right = 8 -%}
   {%- assign bar_w = 4 -%}
-  {%- assign badge_d1 = 16 -%}
-  {%- assign badge_d2 = 9 -%}
-  {%- assign rail_w1 = 22 -%}
-  {%- assign rail_w2 = 16 -%}
+  {%- assign badge_d = 16 -%}
   {%- assign image_d = 24 -%}
 {%- else -%}
   {%- comment -%} full / "OG" 800x480 device: the hour axis at xlarge/xxlarge read too big
@@ -166,32 +159,22 @@ badge_image_row/chip_body's own call sites further down).
   {%- comment -%} Same badge tier as half_vertical (view 3) — both are full SCREEN HEIGHT
   (~480px), the axis that actually constrains badge sizing (see the badge_pct comments further
   down and view 3's own comment above). {%- endcomment -%}
-  {%- assign badge_d1 = 30 -%}
-  {%- assign badge_d2 = 20 -%}
-  {%- assign rail_w1 = 36 -%}
-  {%- assign rail_w2 = 26 -%}
+  {%- assign badge_d = 30 -%}
   {%- assign image_d = 42 -%}
 {%- endif -%}
 
 {%- comment -%} Left "meaning" rail on every event/all-day chip — see the chip_body template
 below, {% render %}ed identically by both chip types instead of each having its own bespoke
 treatment. bar_w: how wide the rail is with NO badges in it — just the plain color accent it's
-always been. rail_w1/rail_w2 + badge_d1/badge_d2: how wide the rail expands to, and how big each
-circle inside it gets, once it's actually hosting badges — a SOLO badge (badge_d1/rail_w1) gets
-a noticeably bigger circle than a stacked PAIR (badge_d2/rail_w2, sized so both still fit the
-same rail without overflowing it), since one photo filling most of the rail's height reads as an
-actual recognizable face where a small one just reads as a blob, and a lone badge is the common
-case (a category icon + a person's photo/letter together is the only time a pair happens at
-all). image_d is a separate, larger circle size for "image" display mode (see
-categories[].display in transform.js), where the badge(s) become the WHOLE chip's content
-instead of a rail down the side. pad_right is the fixed breathing room on the title's other
-(non-rail) side; the rail-side padding is computed inside chip_body itself, from whichever
-rail width that chip actually used. quadrant/half_horizontal's own badge_d2/rail_w2 stay
-conservative (9px/16px) rather than growing further: their all-day row is only ~20-24px tall
-(allday_row_pct of a ~240px-tall screen) and a stacked PAIR already nearly fills that — bigger
-circles here would overflow it and get clipped by the rail's own overflow:hidden, which reads
-worse than a small-but-complete pair of circles. badge_d1 (solo) doesn't have that ceiling since
-one circle alone fits the same row with real room to spare. {%- endcomment -%}
+always been. badge_d: how big each circle is once the rail is actually hosting badges — ONE
+size regardless of count, since chip_body lays badges out SIDE BY SIDE rather than stacking
+them, so a circle's size is bounded only by the chip's own height (same whether it's a solo
+badge or one of a pair) and the rail simply grows WIDER to fit however many there are, instead
+of each circle having to shrink to share a fixed rail width. image_d is a separate, larger
+circle size for "image" display mode (see categories[].display in transform.js), where the
+badge(s) become the WHOLE chip's content instead of a rail down the side. pad_right is the
+fixed breathing room on the title's other (non-rail) side; the rail-side padding is computed
+inside chip_body itself, from however many badges that chip actually ended up with. {%- endcomment -%}
 {%- assign timed_rail_radius = "7px 0 0 7px" -%}
 
 
@@ -394,7 +377,7 @@ where the axis was already a sane fraction and unchanged. {%- endcomment -%}
                        above): unlike a timed event's absolutely-positioned overlay, an
                        oversized title here needs cal-fit-clip to keep it from growing the row
                        past its allday_pct allocation. -->
-                  {% render "chip_body", badges: a.badges, bar: a.bar, title: a.title, fg: a.fg, title_cls: chip_title_cls, fit_min: 9, clip: true, pad_right: pad_right, radius: rail_radius, bar_w: bar_w, badge_d1: badge_d1, badge_d2: badge_d2, rail_w1: rail_w1, rail_w2: rail_w2 %}
+                  {% render "chip_body", badges: a.badges, bar: a.bar, title: a.title, fg: a.fg, title_cls: chip_title_cls, fit_min: 9, clip: true, pad_right: pad_right, radius: rail_radius, bar_w: bar_w, badge_d: badge_d %}
                 {% endif %}
               </div>
             {% endfor %}
@@ -550,7 +533,7 @@ where the axis was already a sane fraction and unchanged. {%- endcomment -%}
                        contributing height to a shared row budget, so fit() can safely leave an
                        oversized title visible-overflow here instead of needing cal-fit-clip to
                        protect a row height. -->
-                  {% render "chip_body", badges: event.badges, bar: event.bar, title: event.title, fg: event.fg, title_cls: event_title_cls, fit_min: 11, clip: false, pad_right: pad_right, radius: timed_rail_radius, bar_w: bar_w, badge_d1: badge_d1, badge_d2: badge_d2, rail_w1: rail_w1, rail_w2: rail_w2 %}
+                  {% render "chip_body", badges: event.badges, bar: event.bar, title: event.title, fg: event.fg, title_cls: event_title_cls, fit_min: 11, clip: false, pad_right: pad_right, radius: timed_rail_radius, bar_w: bar_w, badge_d: badge_d %}
                 {% endif %}
               </div>
             </div>
