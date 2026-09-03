@@ -39,7 +39,14 @@ const WD_MAP = { MO: 0, TU: 1, WE: 2, TH: 3, FR: 4, SA: 5, SU: 6 };
 // near-white though (bg--gray-10 is #111111, bg--gray-70 is #DDDDDD), so unlike the hues they
 // DO need a real per-shade foreground decision — see foregroundFor.
 const HUES = ["blue", "green", "orange", "purple", "red", "cyan", "pink", "lime", "violet", "yellow"];
-const GRAY_SHADES = [10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70];
+// 10..75 in steps of 5 is the framework's full extended-grayscale range (confirmed against the
+// live compiled CSS) — this used to stop at 70, one step short of the framework's own lightest
+// defined shade. "black"/"white" are a separate pair of real framework classes (bg--black/
+// bg--white, already used all over this file for badges/pills) rather than an extreme step of
+// this numeric scale — gray-10 is #111111 and gray-75 a light gray, not literal 0/255 — so
+// they're handled as their own two-value set below, not folded into GRAY_SHADES.
+const GRAY_SHADES = [10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75];
+const BLACK_WHITE = ["black", "white"];
 
 // This plugin has no notion of "which device" at all — it only ever reads/renders whatever
 // `color` values are already sitting in the config (pinned, or left blank to auto-cycle the
@@ -50,7 +57,7 @@ const GRAY_SHADES = [10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70];
 // values into the JSON you paste in here, so this file stays simple and hardware-agnostic.
 
 function isValidColor(v) {
-  if (HUES.includes(v)) return true;
+  if (HUES.includes(v) || BLACK_WHITE.includes(v)) return true;
   const m = /^gray-(\d+)$/.exec(v);
   return !!m && GRAY_SHADES.includes(parseInt(m[1], 10));
 }
@@ -67,6 +74,8 @@ function colorClass(color) {
 // (#888888, relative luminance ~136 of 255 — the last step light enough for black text; 40's
 // #777777 (~119) is not).
 function foregroundFor(color) {
+  if (color === "black") return "white";
+  if (color === "white") return "black";
   const m = /^gray-(\d+)$/.exec(color);
   if (!m) return "black";
   return parseInt(m[1], 10) < 45 ? "white" : "black";
@@ -81,6 +90,14 @@ function foregroundFor(color) {
 // at the darkest, gray-10).
 function accentColor(color) {
   if (HUES.includes(color)) return color + "-45";
+  // "black" has nowhere darker to step to, same as gray-10 below (index already clamped to 0)
+  // — the bar and fill end up the same color, which reads as "no separate accent" rather than
+  // a bug; that's an acceptable ceiling for the single darkest option. "white" is the opposite
+  // problem — gray-N's darker-by-two-steps logic doesn't apply (it isn't in GRAY_SHADES), and
+  // returning "white" unchanged would make the bar invisible against its own fill, unlike every
+  // other color here. gray-30 gives a genuinely visible dark stripe against a white card.
+  if (color === "black") return "black";
+  if (color === "white") return "gray-30";
   const m = /^gray-(\d+)$/.exec(color);
   if (m) {
     const idx = GRAY_SHADES.indexOf(parseInt(m[1], 10));
@@ -196,13 +213,14 @@ async function run(input) {
     e.title = r.title;
     e.hueOverride = r.hue;
     e.badge = r.badge;
-    // Categories are matched against the FINAL (post-rename) title, globally across every
-    // calendar — a category's own color wins over a person's (more specific signal), and its
-    // icon replaces the person badge letter in the same corner slot (see shared.liquid). Falls
-    // back to the calendar's own default icon (calendars[].icon, e.g. a flag for a public
-    // holiday calendar the Configuration Editor's country picker added) when no category
-    // matched — same "most specific signal wins" precedence used for color throughout this file.
-    const c = applyCategory(e.title, categories);
+    // Categories are matched against the FINAL (post-rename) title, by default across every
+    // calendar (unless scoped — see categories[].calendars/excludeCalendars in parseConfig) —
+    // a category's own color wins over a person's (more specific signal), and its icon replaces
+    // the person badge letter in the same corner slot (see shared.liquid). Falls back to the
+    // calendar's own default icon (calendars[].icon, e.g. a flag for a public holiday calendar
+    // the Configuration Editor's country picker added) when no category matched — same "most
+    // specific signal wins" precedence used for color throughout this file.
+    const c = applyCategory(e.title, categories, e.calIdx);
     if (c.color) e.hueOverride = c.color;
     e.icon = c.icon || calendars[e.calIdx].icon || null;
   }
@@ -299,6 +317,7 @@ async function run(input) {
     tz: tzname,
     error: err,
     unavailable_label: unavailableText(locale),
+    all_day_label: allDayText(locale),
     has_events: rawDays.some((d) => d.timed.length || d.allday.length),
     show_title_bar: showTitleBar,
     title_text: titleTextVal,
@@ -357,6 +376,7 @@ function emptyResult(tzname, tz, locale, daysN, msg, showTitleBar, titleBarPct, 
     tz: tzname,
     error: msg,
     unavailable_label: unavailableText(locale),
+    all_day_label: allDayText(locale),
     has_events: false,
     show_title_bar: showTitleBar,
     title_text: titleTextVal,
@@ -491,13 +511,21 @@ function parseConfig(raw) {
   // is only ever applied per-calendar (via personRules/defaultPerson), a category is matched
   // against every surviving event's title regardless of which calendar it came from — meant for
   // "kind of event" (Birthday, Work, Medical...) rather than "whose event", so it doesn't need
-  // per-calendar wiring. See applyCategory. `match` (required) is a regex, or an array of them
-  // (case-insensitive, any match applies) — same shape as calendars[].exclude. `icon` is a
-  // Material Symbols name (see resolveIcon above) or an http(s) URL to a custom image, OR an
-  // array of up to two of either — e.g. ["work", "home"] for a "Work From Home" category —
-  // rendered as two small overlapping badge circles instead of one. `color` is one of HUES or
-  // "gray-10".."gray-70". Both icon and color are optional independently — a color-only
-  // category just recolors the chip, an icon-only category just swaps the badge.
+  // per-calendar wiring by default. See applyCategory. `match` (required) is a regex, or an
+  // array of them (case-insensitive, any match applies) — same shape as calendars[].exclude.
+  // `icon` is a Material Symbols name (see resolveIcon above) or an http(s) URL to a custom
+  // image, OR an array of up to two of either — e.g. ["work", "home"] for a "Work From Home"
+  // category — rendered as two small overlapping badge circles instead of one. `color` is one
+  // of HUES or "gray-10".."gray-75", "black", or "white". Both icon and color are optional
+  // independently — a color-only category just recolors the chip, an icon-only category just
+  // swaps the badge.
+  //
+  // `calendars` / `excludeCalendars` (both optional) narrow which calendars a category can
+  // apply to, by `calendars[].id` (or `.url`, for a calendar with no id) — e.g. a global "Work"
+  // category that matches every calendar EXCEPT someone's own personal one, where their own
+  // defaultPerson badge should show through instead. `calendars` is a whitelist (present ->
+  // ONLY those calendars); `excludeCalendars` is a blacklist (present -> every calendar EXCEPT
+  // those). Omit both for the original global behavior (every calendar, unchanged default).
   const categories = [];
   for (const item of Array.isArray(data.categories) ? data.categories : []) {
     if (!item || typeof item !== "object") continue;
@@ -506,21 +534,43 @@ function parseConfig(raw) {
     const name = typeof item.name === "string" ? item.name.trim() : "";
     const color = typeof item.color === "string" && isValidColor(item.color.toLowerCase()) ? item.color.toLowerCase() : null;
     const icon = resolveIcon(item.icon);
-    categories.push({ name, rx: matchRx, color, icon });
+    const calIdxWhitelist = calendarIndexesFor(item.calendars, calendars);
+    const calIdxBlacklist = calendarIndexesFor(item.excludeCalendars, calendars);
+    categories.push({ name, rx: matchRx, color, icon, calIdxWhitelist, calIdxBlacklist });
   }
 
   return { calendars, people, hours, categories };
+}
+
+// Resolves categories[].calendars / categories[].excludeCalendars — a calendar reference (or
+// array of them), each matched against calendars[].id first, falling back to calendars[].url
+// for a calendar with no id — into a Set of calendar-array indexes. Returns null (not an empty
+// Set) when the raw field is absent/empty, so applyCategory can tell "no restriction" apart
+// from "restricted to zero calendars" (a typo'd id matching nothing).
+function calendarIndexesFor(raw, calendars) {
+  const refs = Array.isArray(raw) ? raw : typeof raw === "string" && raw.trim() ? [raw] : [];
+  const cleaned = refs.filter((r) => typeof r === "string" && r.trim()).map((r) => r.trim());
+  if (!cleaned.length) return null;
+  const idxs = new Set();
+  calendars.forEach((cal, idx) => {
+    if (cleaned.includes(cal.id) || cleaned.includes(cal.url)) idxs.add(idx);
+  });
+  return idxs;
 }
 
 // Tests `title` (the event's title, already through any personRules rename) against every
 // configured category IN ORDER — each category that matches contributes whichever of
 // color/icon it defines, later matches overwriting earlier ones field-by-field (not as a whole
 // object), so e.g. one category matching for color and a later one matching only for icon both
-// still apply, same "last match wins" convention as personRules/calendar color.
-function applyCategory(title, categories) {
+// still apply, same "last match wins" convention as personRules/calendar color. calIdx (the
+// event's own calendar position) is checked against the category's own calendars/
+// excludeCalendars scope (see calendarIndexesFor) before the title match even runs.
+function applyCategory(title, categories, calIdx) {
   let color = null;
   let icon = null;
   for (const cat of categories) {
+    if (cat.calIdxWhitelist && !cat.calIdxWhitelist.has(calIdx)) continue;
+    if (cat.calIdxBlacklist && cat.calIdxBlacklist.has(calIdx)) continue;
     if (!cat.rx.some((rx) => rx.test(title))) continue;
     if (cat.color) color = cat.color;
     if (cat.icon) icon = cat.icon;
@@ -598,6 +648,14 @@ function unavailableText(locale) {
   // names below. Falls back to English for any locale outside this short list.
   const code = String(locale).toLowerCase().split(/[-_]/)[0];
   return (UNAVAILABLE[code] || UNAVAILABLE.en);
+}
+
+// Label shown in the hour-axis gutter next to the all-day event row. Same small hand-maintained
+// table/fallback pattern as unavailableText — this is real, narrow real estate (the same gutter
+// column hour numbers share), so the strings above are kept deliberately short.
+function allDayText(locale) {
+  const code = String(locale).toLowerCase().split(/[-_]/)[0];
+  return (ALL_DAY_LABEL[code] || ALL_DAY_LABEL.en);
 }
 
 function userTz(input) {
@@ -781,34 +839,40 @@ const I18N = {
     months: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
     months_short: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
     unavailable: "Calendar unavailable",
+    all_day: "All day",
   },
   nl: {
     wd: ["Ma", "Di", "Wo", "Do", "Vr", "Za", "Zo"],
     months: ["Januari", "Februari", "Maart", "April", "Mei", "Juni", "Juli", "Augustus", "September", "Oktober", "November", "December"],
     months_short: ["Jan", "Feb", "Mrt", "Apr", "Mei", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec"],
     unavailable: "Kalender niet beschikbaar",
+    all_day: "Hele dag",
   },
   fr: {
     wd: ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"],
     months: ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"],
     months_short: ["Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Août", "Sep", "Oct", "Nov", "Déc"],
     unavailable: "Agenda indisponible",
+    all_day: "Journée",
   },
   de: {
     wd: ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"],
     months: ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"],
     months_short: ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"],
     unavailable: "Kalender nicht verfügbar",
+    all_day: "Ganztägig",
   },
   es: {
     wd: ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"],
     months: ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"],
     months_short: ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"],
     unavailable: "Calendario no disponible",
+    all_day: "Todo el día",
   },
 };
 
 const UNAVAILABLE = Object.fromEntries(Object.entries(I18N).map(([code, t]) => [code, t.unavailable]));
+const ALL_DAY_LABEL = Object.fromEntries(Object.entries(I18N).map(([code, t]) => [code, t.all_day]));
 
 const _weekdayFmtCache = new Map();
 const _monthFmtCache = new Map();

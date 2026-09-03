@@ -527,4 +527,5 @@ variables:
   tz: Europe/Brussels
   error: null
   unavailable_label: Kalender niet beschikbaar
+  all_day_label: Hele dag
   has_events: true

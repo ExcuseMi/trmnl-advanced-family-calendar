@@ -101,8 +101,8 @@ The JSON shape it produces:
   Outlook, and Apple Calendar, all of which have a private/secret ICS link tucked away in their
   calendar settings. `webcal://` links are handled automatically.
 - `calendars[].color` — optional, one of `red` `orange` `yellow` `lime` `green` `cyan` `blue`
-  `violet` `purple` `pink`, or an explicit `gray-10`..`gray-70` shade. Pins that calendar's color
-  instead of auto-assigning by position.
+  `violet` `purple` `pink`, an explicit `gray-10`..`gray-75` shade, or literal `black`/`white`.
+  Pins that calendar's color instead of auto-assigning by position.
 - `calendars[].icon` — optional, same shape as `categories[].icon` below. A default icon for
   every event on that calendar; a matching Category's own icon still wins over this. What the
   Configuration Editor's "Add public holidays" picker sets, for instance — the plugin has no
@@ -127,6 +127,12 @@ The JSON shape it produces:
   (e.g. `"cake"`) or a custom image URL, or an array of up to two of either (rendered as two
   small overlapping badge circles, e.g. `["work", "home"]`). Replaces the person-badge letter in
   the same corner slot.
+- `categories[].calendars` / `categories[].excludeCalendars` — optional, both by
+  `calendars[].id` (or `.url` for a calendar with no id). `calendars` is a whitelist (only those
+  calendars); `excludeCalendars` is a blacklist (every calendar except those). Omit both for the
+  default — every calendar. Handy for a category that should apply broadly but not to one
+  calendar that's already "someone's own" — e.g. a global "Work" category kept off your own
+  personal calendar so your own name/badge shows through there instead.
 
 ## Local layout development
 

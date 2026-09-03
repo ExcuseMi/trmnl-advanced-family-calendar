@@ -27,7 +27,6 @@
   {%- assign event_pad_cls = "pt--0 pb--1 px--1" -%}
   {%- assign daylabel_pad_cls = "p--2" -%}
   {%- assign event_title_cls = "title--small" -%}
-  {%- assign badge_hide_cls = "" -%}
   {%- assign bar_w = 3 -%}
 {%- elsif view == 3 -%}
   {%- comment -%} half_vertical: only ~400px WIDE (3 narrow day columns, ~133px each) —
@@ -41,7 +40,6 @@
   {%- assign event_pad_cls = "pt--0 pb--1 px--1" -%}
   {%- assign daylabel_pad_cls = "p--2" -%}
   {%- assign event_title_cls = "title--small" -%}
-  {%- assign badge_hide_cls = "" -%}
   {%- assign bar_w = 3 -%}
 {%- elsif view == 2 -%}
   {%- comment -%} half_horizontal: full 800px width but half height — width is ample,
@@ -52,7 +50,6 @@
   {%- assign event_pad_cls = "pt--1 pb--2 px--2" -%}
   {%- assign daylabel_pad_cls = "p--2" -%}
   {%- assign event_title_cls = "title--small" -%}
-  {%- assign badge_hide_cls = "" -%}
   {%- assign bar_w = 4 -%}
 {%- else -%}
   {%- comment -%} full / "OG" 800x480 device: the hour axis at xlarge/xxlarge read too big
@@ -73,14 +70,6 @@
   {%- assign daylabel_pad_cls = "pt--1 pb--2 px--2" -%}
   {%- assign event_title_cls = "title--base" -%}
   {%- assign bar_w = 5 -%}
-  {%- comment -%} Person badges (see the Calendar Configuration field) hidden specifically on
-  the OG device's own full-screen size bucket (screen--lg) in this view — chips are already
-  large enough there for the title/color alone to read clearly, and the badge circle was
-  competing for space with the recent all-day title-truncation fix (see the cal-fit-clip
-  changes) at exactly this size. Only this view/bucket combination — quadrant/half_* and
-  smaller size buckets of the full view all keep badges, where the extra identification
-  matters more against a much smaller chip. {%- endcomment -%}
-  {%- assign badge_hide_cls = "lg:hidden" -%}
 {%- endif -%}
 
 {%- comment -%} Left accent bar on every event (see the "meaning" bar in shared.liquid's event
@@ -143,17 +132,6 @@ where the axis was already a sane fraction and unchanged. {%- endcomment -%}
          device — including the larger, portrait, 4-bit TRMNL X — via the framework's
          own container-query system instead of a fixed-aspect picture. -->
 
-    <!-- Abbreviated-month day label. quadrant/half_vertical/half_horizontal always use it
-         (the OG device's own 800x480 hardware, where the header runs noticeably tighter than
-         the multi-device-scaled full view's own tuning assumed), and the wider views get
-         tight once Days to Show pushes past 3-4 columns (see the head_title_cls step-down
-         above). -->
-    {% if view == 2 or view == 3 or view == 4 or days.size >= 4 %}
-      {% assign use_short_month = true %}
-    {% else %}
-      {% assign use_short_month = false %}
-    {% endif %}
-
     <!-- Header gets its own visual "zone" — a light background fill plus a solid bottom rule
          (border--h-1, a real framework border utility: a themed 1px line, black by default,
          confirmed against the compiled CSS at trmnl.com/css/latest/plugins.css) — so it reads
@@ -166,11 +144,7 @@ where the axis was already a sane fraction and unchanged. {%- endcomment -%}
     <div class="grid gap--none h--[{{ header_pct }}cqh] bg--gray-70 border--h-1" style="flex-shrink:0;flex-grow:0;height:{{ header_pct }}cqh;min-height:{{ header_pct }}cqh;">
       <div class="col--span-1"></div>
       {% for day in days %}
-        {% if use_short_month %}
-          {% assign dlabel = day.label_short %}
-        {% else %}
-          {% assign dlabel = day.label %}
-        {% endif %}
+        {% assign dlabel = day.label_short %}
         <!-- gap--xsmall is explicit rather than relying on the framework's default flex gap:
              today's label is wrapped in an extra div (the black pill) that plain-text days
              don't have, and without a deliberate gap value here the two box shapes ended up
@@ -252,6 +226,16 @@ where the axis was already a sane fraction and unchanged. {%- endcomment -%}
               </div>
             {% endif %}
             {% if day.icon and view != 3 %}
+              <!-- A plain divider between the day label and the temp row below it — same
+                   border--h-1 utility as the header's own outer bottom rule (see above),
+                   applied here to one thin, full-width, zero-content div rather than to
+                   either real content element, so it doesn't interfere with either one's own
+                   sizing/centering. w--full is required (not optional): the day column is
+                   flex--col with align-items:center (see the "w--full" note on the all-day
+                   badge markup elsewhere in this file for the same underlying reason), so a
+                   bare content-less div would otherwise shrink-wrap to zero width and the
+                   line would never actually show. -->
+              <div class="w--full border--h-1" style="height:1px;"></div>
               <!-- max-width:100%/overflow:hidden on the row (same treatment as the day label
                    above) — without it, the lg:portrait: size bump on chip_title_cls made this
                    row wider than the narrow portrait column and it bled into the next day's
@@ -273,7 +257,18 @@ where the axis was already a sane fraction and unchanged. {%- endcomment -%}
 
     {% if allday_pct > 0 %}
       <div class="grid gap--none h--[{{ allday_pct }}cqh]" style="flex-shrink:0;flex-grow:0;height:{{ allday_pct }}cqh;min-height:{{ allday_pct }}cqh;">
-        <div class="col--span-1"></div>
+        <!-- Gutter label for the all-day band, same column the hour axis sits in below it —
+             without this the gutter here was just blank, giving no hint what the colored bars
+             above the hour grid actually are. Deliberately its own small fixed size (label--
+             small) rather than axis_cls (the hour numbers' own per-view tier): axis_cls can run
+             up to label--xxlarge on the full view, sized for a 1-2 digit number, not a word —
+             translated via all_day_label (see allDayText in transform.js), so it's kept short
+             in every language on purpose. Left un-clamped (free to wrap to two lines) rather
+             than truncated: the row is tall enough now (ALLDAY_ROW_PCT) that two short lines
+             fit comfortably, and a wrapped real word reads better than an ellipsis on this one. -->
+        <div class="col--span-1 flex flex--col flex--center-x flex--center-y" style="overflow:hidden;box-sizing:border-box;padding:0 2px;text-align:center;">
+          <span class="label label--small">{{ all_day_label }}</span>
+        </div>
         {% for day in days %}
           <div class="col--span-{{ day_span }} flex flex--col gap--xsmall px--[4px] border--v-1">
             {% for a in day.allday %}
@@ -572,16 +567,16 @@ where the axis was already a sane fraction and unchanged. {%- endcomment -%}
                        the right of the first when present. Icon <img> sizing/inversion is
                        inline style, not classes — see the all-day badge comment for why. -->
                   {% if event.icon %}
-                    <span class="text--white bg--black rounded--full flex flex--center-x flex--center-y {{ badge_hide_cls }}" style="position:absolute;top:1px;left:1px;width:20px;height:20px;border:2px solid currentColor;box-sizing:border-box;z-index:2;overflow:hidden;">
+                    <span class="text--white bg--black rounded--full flex flex--center-x flex--center-y" style="position:absolute;top:1px;left:1px;width:20px;height:20px;border:2px solid currentColor;box-sizing:border-box;z-index:2;overflow:hidden;">
                       <img src="{{ event.icon.first }}" alt="" style="width:14px;height:14px;filter:invert(1);">
                     </span>
                     {% if event.icon.second %}
-                      <span class="text--white bg--black rounded--full flex flex--center-x flex--center-y {{ badge_hide_cls }}" style="position:absolute;top:1px;left:14px;width:20px;height:20px;border:2px solid currentColor;box-sizing:border-box;z-index:1;overflow:hidden;">
+                      <span class="text--white bg--black rounded--full flex flex--center-x flex--center-y" style="position:absolute;top:1px;left:14px;width:20px;height:20px;border:2px solid currentColor;box-sizing:border-box;z-index:1;overflow:hidden;">
                         <img src="{{ event.icon.second }}" alt="" style="width:14px;height:14px;filter:invert(1);">
                       </span>
                     {% endif %}
                   {% else %}
-                    <span class="text--white bg--black rounded--full flex flex--center-x flex--center-y {{ badge_hide_cls }}" style="position:absolute;top:1px;left:1px;width:20px;height:20px;font-size:12px;line-height:1;border:2px solid currentColor;box-sizing:border-box;z-index:1;overflow:hidden;">{{ event.badge }}</span>
+                    <span class="text--white bg--black rounded--full flex flex--center-x flex--center-y" style="position:absolute;top:1px;left:1px;width:20px;height:20px;font-size:12px;line-height:1;border:2px solid currentColor;box-sizing:border-box;z-index:1;overflow:hidden;">{{ event.badge }}</span>
                   {% endif %}
                 {% endif %}
                 <span class="title {{ event_title_cls }} text--{{ event.fg }} cal-fit-text" data-fit-min="11" data-fit-max="90">{{ event.title }}</span>
