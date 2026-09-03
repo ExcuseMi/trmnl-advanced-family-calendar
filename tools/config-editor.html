@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Daylight &amp; Weather Calendar — Configuration Editor</title>
-<!-- Real TRMNL framework CSS, so every swatch/preview here uses the SAME bg--{hue}-45 /
+<!-- Real TRMNL framework CSS, so every swatch/preview here uses the SAME bg--{hue}-65 /
      text--black / rounded--full classes the plugin itself renders with — what you see here
      is what actually ships, not an approximation of it. -->
 <link rel="stylesheet" href="https://trmnl.com/css/latest/plugins.css">
@@ -65,6 +65,16 @@
 <div class="wrap">
   <h1>Daylight &amp; Weather Calendar</h1>
   <p class="lede">Build the <strong>Calendar Configuration</strong> field visually, test it against real (or pasted) ICS data, and preview colors/badges using TRMNL's actual CSS — then copy the JSON into the plugin's settings. This page runs <code>plugin/src/transform.js</code> directly, unmodified — the same code that runs on TRMNL.</p>
+
+  <h2>Import existing configuration <span class="muted">(optional)</span></h2>
+  <div class="card">
+    <p class="muted" style="margin-top:0;">Already have a Calendar Configuration from TRMNL? Paste it here to load it into the form below instead of starting from scratch.</p>
+    <textarea id="importIn" rows="4" placeholder='{"calendars": [...], "people": [...]}'></textarea>
+    <div class="row" style="margin-top:8px;">
+      <button id="loadImport">Load into editor</button>
+      <span id="importStatus" class="status"></span>
+    </div>
+  </div>
 
   <h2>Calendars</h2>
   <div id="calendars"></div>
@@ -162,19 +172,29 @@
   }
 
   function swatchFor(hue) {
-    var s = el("span", { class: "swatch " + (hue ? "bg--" + hue + "-45 text--black" : ""), style: hue ? "" : "border:1px dashed #bbb;" });
+    var s = el("span", { class: "swatch " + (hue ? "bg--" + hue + "-65 text--black" : ""), style: hue ? "" : "border:1px dashed #bbb;" });
     return s;
   }
 
   // ------------------------------------------------------------------- state
 
   var calendars = [
-    { url: "", color: "", exclude: "" },
+    { url: "", color: "", exclude: "", id: "" },
   ];
   var people = [];
 
   function uid() { return Math.random().toString(36).slice(2, 9); }
   calendars.forEach(function (c) { c._id = uid(); });
+
+  // Label + ref (id if set, else url) for a calendar, used both in the "link to calendar"
+  // checkboxes below and to resolve what string actually gets stored in people[].calendars —
+  // must match what transform.js's parseConfig looks up against (calendar.id || calendar.url).
+  function calendarRef(c) { return c.id.trim() || c.url.trim(); }
+  function calendarLabel(c, idx) {
+    if (c.id.trim()) return c.id.trim();
+    if (c.url.trim()) return c.url.trim().length > 40 ? c.url.trim().slice(0, 37) + "…" : c.url.trim();
+    return "Calendar " + (idx + 1) + " (no URL yet)";
+  }
 
   // -------------------------------------------------------------- calendars UI
 
@@ -183,7 +203,10 @@
     wrap.innerHTML = "";
     calendars.forEach(function (c, idx) {
       var urlInput = el("input", { type: "text", class: "field-url", placeholder: "https://.../calendar.ics", value: c.url });
-      urlInput.addEventListener("input", function () { c.url = urlInput.value; renderJson(); renderIcsSources(); });
+      urlInput.addEventListener("input", function () { c.url = urlInput.value; renderJson(); renderIcsSources(); renderPeople(); });
+
+      var idInput = el("input", { type: "text", class: "field-narrow", placeholder: "(optional, for linking people)", value: c.id });
+      idInput.addEventListener("input", function () { c.id = idInput.value; renderJson(); renderPeople(); });
 
       var colorSel = hueSelect("cal-color-" + c._id, c.color, true);
       colorSel.addEventListener("change", function () { c.color = colorSel.value; renderJson(); swatch.replaceWith(swatchFor(c.color)); swatch = wrap.querySelector("#swatch-" + c._id); });
@@ -196,7 +219,7 @@
       var removeBtn = el("button", { class: "small danger" }, [document.createTextNode("Remove")]);
       removeBtn.addEventListener("click", function () {
         calendars = calendars.filter(function (x) { return x._id !== c._id; });
-        renderCalendars(); renderJson(); renderIcsSources();
+        renderCalendars(); renderJson(); renderIcsSources(); renderPeople();
       });
 
       var head = el("div", { class: "entry-head" }, [
@@ -205,6 +228,7 @@
       ]);
       var body = el("div", { class: "row" }, [
         el("div", { style: "flex:1 1 320px;" }, [el("label", { text: "ICS URL" }), urlInput]),
+        el("div", {}, [el("label", { text: "ID (optional)" }), idInput]),
         el("div", {}, [el("label", { text: "Color" }), el("div", { class: "row", style: "gap:6px;" }, [colorSel, swatch])]),
         el("div", { style: "flex:1 1 260px;" }, [el("label", { text: "Exclude (regex, optional)" }), excludeInput]),
       ]);
@@ -213,15 +237,41 @@
   }
 
   document.getElementById("addCalendar").addEventListener("click", function () {
-    calendars.push({ _id: uid(), url: "", color: "", exclude: "" });
-    renderCalendars(); renderJson(); renderIcsSources();
+    calendars.push({ _id: uid(), url: "", color: "", exclude: "", id: "" });
+    renderCalendars(); renderJson(); renderIcsSources(); renderPeople();
   });
 
   // ----------------------------------------------------------------- people UI
 
+  function calendarLinksControl(p) {
+    if (!calendars.length) {
+      return el("p", { class: "muted", text: "(add a calendar above to link this person to it)" });
+    }
+    var box = el("div", { class: "row", style: "gap:10px;" });
+    calendars.forEach(function (c, idx) {
+      var ref = calendarRef(c);
+      var chk = el("input", { type: "checkbox" });
+      chk.checked = ref ? p.calendars.indexOf(ref) !== -1 : false;
+      chk.disabled = !ref;
+      chk.addEventListener("change", function () {
+        p.calendars = p.calendars.filter(function (r) { return r !== ref; });
+        if (chk.checked && ref) p.calendars.push(ref);
+        renderJson();
+      });
+      var lbl = el("label", { style: "display:flex;align-items:center;gap:4px;margin:0;font-size:12px;color:#333;" }, [chk, document.createTextNode(calendarLabel(c, idx))]);
+      box.appendChild(lbl);
+    });
+    return box;
+  }
+
   function renderPeople() {
     var wrap = document.getElementById("people");
     wrap.innerHTML = "";
+    // Drop link references to calendars that no longer resolve to anything (removed, or
+    // never got a URL/id) so stale checkboxes can't silently linger unchecked-but-stored.
+    var validRefs = calendars.map(calendarRef).filter(Boolean);
+    people.forEach(function (p) { p.calendars = p.calendars.filter(function (r) { return validRefs.indexOf(r) !== -1; }); });
+
     people.forEach(function (p, idx) {
       var nameInput = el("input", { type: "text", class: "field-narrow", placeholder: "Aiko", value: p.name });
       nameInput.addEventListener("input", function () { p.name = nameInput.value; renderJson(); });
@@ -258,12 +308,16 @@
         el("div", {}, [el("label", { text: "Badge" }), badgeInput]),
         el("div", {}, [el("label", { text: "Rename matches" }), renameChk]),
       ]);
-      wrap.appendChild(el("div", { class: "entry" }, [head, body]));
+      var linkRow = el("div", { style: "margin-top:8px;" }, [
+        el("label", { text: "Linked calendars (blank = applies to every calendar)" }),
+        calendarLinksControl(p),
+      ]);
+      wrap.appendChild(el("div", { class: "entry" }, [head, body, linkRow]));
     });
   }
 
   document.getElementById("addPerson").addEventListener("click", function () {
-    people.push({ _id: uid(), name: "", match: "", color: "", badge: "", rename: true });
+    people.push({ _id: uid(), name: "", match: "", color: "", badge: "", rename: true, calendars: [] });
     renderPeople(); renderJson();
   });
 
@@ -274,6 +328,7 @@
     calendars.forEach(function (c) {
       if (!c.url.trim()) return;
       var entry = { url: c.url.trim() };
+      if (c.id.trim()) entry.id = c.id.trim();
       if (c.color) entry.color = c.color;
       if (c.exclude.trim()) entry.exclude = c.exclude.trim();
       cfg.calendars.push(entry);
@@ -284,10 +339,67 @@
       if (p.color) entry.color = p.color;
       if (p.badge.trim()) entry.badge = p.badge.trim();
       if (p.rename === false) entry.rename = false;
+      if (p.calendars && p.calendars.length) entry.calendars = p.calendars.slice();
       cfg.people.push(entry);
     });
     return cfg;
   }
+
+  // --------------------------------------------------------------- import JSON
+
+  document.getElementById("loadImport").addEventListener("click", function () {
+    var status = document.getElementById("importStatus");
+    var raw = document.getElementById("importIn").value.trim();
+    if (!raw) {
+      status.textContent = "Paste a configuration JSON first.";
+      status.className = "status err";
+      return;
+    }
+    var data;
+    try {
+      data = JSON.parse(raw);
+    } catch (e) {
+      status.textContent = "Invalid JSON: " + e.message;
+      status.className = "status err";
+      return;
+    }
+    if (!data || typeof data !== "object") {
+      status.textContent = "Expected a JSON object with \"calendars\"/\"people\".";
+      status.className = "status err";
+      return;
+    }
+
+    var newCalendars = (Array.isArray(data.calendars) ? data.calendars : [])
+      .filter(function (c) { return c && typeof c === "object" && typeof c.url === "string" && c.url.trim(); })
+      .map(function (c) {
+        return {
+          _id: uid(),
+          url: c.url.trim(),
+          id: typeof c.id === "string" ? c.id.trim() : "",
+          color: typeof c.color === "string" && HUES.indexOf(c.color.toLowerCase()) !== -1 ? c.color.toLowerCase() : "",
+          exclude: typeof c.exclude === "string" ? c.exclude : "",
+        };
+      });
+    var newPeople = (Array.isArray(data.people) ? data.people : [])
+      .filter(function (p) { return p && typeof p === "object" && typeof p.name === "string" && p.name.trim() && typeof p.match === "string" && p.match.trim(); })
+      .map(function (p) {
+        return {
+          _id: uid(),
+          name: p.name.trim(),
+          match: p.match.trim(),
+          color: typeof p.color === "string" && HUES.indexOf(p.color.toLowerCase()) !== -1 ? p.color.toLowerCase() : "",
+          badge: typeof p.badge === "string" ? p.badge.trim() : "",
+          rename: p.rename !== false,
+          calendars: Array.isArray(p.calendars) ? p.calendars.filter(function (r) { return typeof r === "string" && r.trim(); }).map(function (r) { return r.trim(); }) : [],
+        };
+      });
+
+    calendars = newCalendars.length ? newCalendars : [{ _id: uid(), url: "", color: "", exclude: "", id: "" }];
+    people = newPeople;
+    renderCalendars(); renderPeople(); renderJson(); renderIcsSources();
+    status.textContent = "Loaded " + newCalendars.length + " calendar(s) and " + newPeople.length + " person/people.";
+    status.className = "status ok";
+  });
 
   function renderJson() {
     document.getElementById("jsonOut").value = JSON.stringify(buildConfig(), null, 2);
@@ -446,7 +558,7 @@
 
   function chipFor(title, hue, badge, isEvent) {
     var chip = el("div", { class: isEvent ? "preview-event" : "preview-chip", style: "" });
-    chip.classList.add("bg--" + hue + "-45");
+    chip.classList.add("bg--" + hue + "-65");
     chip.classList.add("text--black");
     if (badge) {
       chip.appendChild(el("span", {

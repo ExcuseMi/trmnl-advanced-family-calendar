@@ -243,10 +243,14 @@ there are more columns than the sizes above were tuned for, regardless of view. 
               {% else %}
                 {% assign ad_radius = "7px" %}
               {% endif %}
-              <!-- Softer, lighter fill (step 45 of the framework's 10=darkest/75=lightest
-                   chromatic scale, up from the original 30) reads less saturated/harsh —
-                   near-black text keeps solid contrast against every hue at this lighter
-                   step, so there's no more per-hue white/black branching needed here. -->
+              <!-- Pastel fill (step 65 of the framework's 10=darkest/75=lightest chromatic
+                   scale — checked against the real compiled CSS: the scale peaks in
+                   SATURATION around step 40-45, e.g. blue-45 is #1111FF, not lighter/softer
+                   than blue-30's #0000AA at all despite the higher number; 65+ is where it
+                   actually desaturates toward pastel, e.g. blue-65 is #9999FF) reads clearly
+                   less harsh than the original step 30 — near-black text keeps solid contrast
+                   against every hue at this much lighter step, so there's no more per-hue
+                   white/black branching needed here. -->
               <!-- w--full: the framework's .flex--col sets align-items:center (not the
                    usual stretch), so without this every chip shrink-wraps to its own title's
                    text width and centers in the column instead of spanning it. -->
@@ -256,7 +260,7 @@ there are more columns than the sizes above were tuned for, regardless of view. 
                    stylesheet) silently wins over a separate pl--N class fighting it for
                    padding-left — named pl--N/pr--N classes each only touch their own side,
                    so they don't conflict with each other. -->
-              <div class="bg--{{ a.hue }}-45 w--full pl--1 pr--2 py--[2px] flex flex--row flex--center-y gap--xsmall" style="overflow:hidden;border-radius:{{ ad_radius }};{% if a.continues_before %}margin-left:-4px;{% endif %}{% if a.continues_after %}margin-right:-4px;{% endif %}">
+              <div class="bg--{{ a.hue }}-65 w--full pl--1 pr--2 py--[2px] flex flex--row flex--center-y gap--xsmall" style="overflow:hidden;border-radius:{{ ad_radius }};{% if a.continues_before %}margin-left:-4px;{% endif %}{% if a.continues_after %}margin-right:-4px;{% endif %}">
                 {% if a.badge %}
                   <!-- A Person's badge (see the Calendar Configuration field) — solid black/
                        white regardless of the chip's own hue, same reasoning as the chip text
@@ -368,7 +372,7 @@ there are more columns than the sizes above were tuned for, regardless of view. 
                        chromatic scale, up from the original 30) reads less saturated/harsh —
                        near-black text keeps solid contrast against every hue at this lighter
                        step, so there's no more per-hue white/black branching needed here. -->
-                  <div class="col--span-1 h--full w--full bg--{{ lane.hue }}-45 rounded--small {{ event_pad_cls }} flex flex--col flex--center-y cal-fit-box" style="position:relative;">
+                  <div class="col--span-1 h--full w--full bg--{{ lane.hue }}-65 rounded--small {{ event_pad_cls }} flex flex--col flex--center-y cal-fit-box" style="position:relative;">
                     {% if lane.badge %}
                       <!-- Absolutely positioned in the corner, deliberately NOT inline with
                            the title: the fit-text script (see run() below) sizes the title
