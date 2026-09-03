@@ -39,6 +39,11 @@
   button.small { padding: 4px 9px; font-size: 12px; }
   .entry { border: 1px solid #eee; border-radius: 8px; padding: 12px; margin-bottom: 10px; background: #fafaf9; }
   .entry-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .advanced { margin-top: 10px; }
+  .advanced > summary { font-size: 12.5px; color: #555; padding: 4px 0; user-select: none; }
+  .advanced-body { margin-top: 8px; padding-top: 8px; border-top: 1px dashed #ddd; }
+  .sub-entry { border: 1px solid #e5e5e2; border-radius: 6px; padding: 8px; margin-bottom: 6px; background: #fff; display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
+  .sub-entry .field { flex: 1 1 140px; }
   .swatch {
     display: inline-flex; align-items: center; justify-content: center;
     width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0; font-size: 10px;
@@ -64,7 +69,7 @@
 <body>
 <div class="wrap">
   <h1>Daylight &amp; Weather Calendar</h1>
-  <p class="lede">Build the <strong>Calendar Configuration</strong> field visually, test it against real (or pasted) ICS data, and preview colors/badges using TRMNL's actual CSS — then copy the JSON into the plugin's settings. This page runs <code>plugin/src/transform.js</code> directly, unmodified — the same code that runs on TRMNL.</p>
+  <p class="lede">Build the <strong>Calendar Configuration</strong> field visually, test it against real (fetched, uploaded, or pasted) ICS data, and preview colors/badges using TRMNL's actual CSS — then copy the JSON into the plugin's settings. This page runs <code>plugin/src/transform.js</code> directly, unmodified — the same code that runs on TRMNL.</p>
 
   <h2>Import existing configuration <span class="muted">(optional)</span></h2>
   <div class="card">
@@ -80,9 +85,10 @@
   <div id="calendars"></div>
   <button id="addCalendar">+ Add calendar</button>
 
-  <h2>People <span class="muted">(optional — recolor/rename/badge events across every calendar)</span></h2>
+  <h2>People <span class="muted">(optional — just names + colors/badges; who a badge/color applies to is set per calendar above, under each calendar's Advanced section)</span></h2>
   <div id="people"></div>
   <button id="addPerson">+ Add person</button>
+  <datalist id="peopleNames"></datalist>
 
   <h2>Generated Configuration</h2>
   <div class="card">
@@ -146,7 +152,19 @@
 (function () {
   "use strict";
 
+  // Mirrors HUES/GRAY_SHADES/colorClass/foregroundFor in plugin/src/transform.js — kept as a
+  // second copy (not shared code) since this is a plain <script> tag, not a module; if those
+  // ever change over there, update these too.
   var HUES = ["blue", "green", "orange", "purple", "red", "cyan", "pink", "lime", "violet", "yellow"];
+  var GRAY_SHADES = [10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70];
+  var VALID_COLORS = HUES.concat(GRAY_SHADES.map(function (n) { return "gray-" + n; }));
+
+  function colorClass(color) { return HUES.indexOf(color) !== -1 ? color + "-65" : color; }
+  function foregroundFor(color) {
+    var m = /^gray-(\d+)$/.exec(color || "");
+    if (!m) return "black";
+    return parseInt(m[1], 10) < 45 ? "white" : "black";
+  }
 
   function el(tag, attrs, children) {
     var e = document.createElement(tag);
@@ -161,65 +179,74 @@
 
   function hueSelect(id, value, includeAuto) {
     var sel = el("select", { id: id });
-    if (includeAuto) sel.appendChild(el("option", { value: "" }, [document.createTextNode("(auto)")]));
-    else sel.appendChild(el("option", { value: "" }, [document.createTextNode("(none)")]));
+    sel.appendChild(el("option", { value: "" }, [document.createTextNode(includeAuto ? "(auto)" : "(none)")]));
+    var hueGroup = el("optgroup", { label: "Colors" });
     HUES.forEach(function (h) {
       var opt = el("option", { value: h }, [document.createTextNode(h)]);
       if (h === value) opt.setAttribute("selected", "selected");
-      sel.appendChild(opt);
+      hueGroup.appendChild(opt);
     });
+    sel.appendChild(hueGroup);
+    // Most real TRMNL devices are grayscale panels, not the color ones — an explicit gray
+    // shade gives direct control over exactly how light/dark a calendar/person reads there,
+    // rather than relying on a hue's automatic (but less predictable) grayscale fallback.
+    var grayGroup = el("optgroup", { label: "Grays (10=darkest .. 70=lightest)" });
+    GRAY_SHADES.forEach(function (n) {
+      var v = "gray-" + n;
+      var opt = el("option", { value: v }, [document.createTextNode(v)]);
+      if (v === value) opt.setAttribute("selected", "selected");
+      grayGroup.appendChild(opt);
+    });
+    sel.appendChild(grayGroup);
     return sel;
   }
 
-  function swatchFor(hue) {
-    var s = el("span", { class: "swatch " + (hue ? "bg--" + hue + "-65 text--black" : ""), style: hue ? "" : "border:1px dashed #bbb;" });
+  function swatchFor(color) {
+    var cls = color ? "bg--" + colorClass(color) + " text--" + foregroundFor(color) : "";
+    var s = el("span", { class: "swatch " + cls, style: color ? "" : "border:1px dashed #bbb;" });
     return s;
   }
 
   // ------------------------------------------------------------------- state
 
-  var calendars = [
-    { url: "", color: "", exclude: "", id: "" },
-  ];
-  var people = [];
-
   function uid() { return Math.random().toString(36).slice(2, 9); }
-  calendars.forEach(function (c) { c._id = uid(); });
+  function newCalendar() { return { _id: uid(), url: "", id: "", color: "", excludes: [""], defaultPerson: "", personRules: [] }; }
+  function newPersonRule() { return { _id: uid(), match: "", person: "", rename: true }; }
+  function newPerson() { return { _id: uid(), name: "", color: "", badge: "" }; }
 
-  // Label + ref (id if set, else url) for a calendar, used both in the "link to calendar"
-  // checkboxes below and to resolve what string actually gets stored in people[].calendars —
-  // must match what transform.js's parseConfig looks up against (calendar.id || calendar.url).
-  function calendarRef(c) { return c.id.trim() || c.url.trim(); }
-  function calendarLabel(c, idx) {
-    if (c.id.trim()) return c.id.trim();
-    if (c.url.trim()) return c.url.trim().length > 40 ? c.url.trim().slice(0, 37) + "…" : c.url.trim();
-    return "Calendar " + (idx + 1) + " (no URL yet)";
-  }
+  var calendars = [newCalendar()];
+  var people = [];
 
   // -------------------------------------------------------------- calendars UI
 
+  function personDatalist() {
+    var dl = document.getElementById("peopleNames");
+    dl.innerHTML = "";
+    people.forEach(function (p) {
+      if (p.name.trim()) dl.appendChild(el("option", { value: p.name.trim() }));
+    });
+  }
+
   function renderCalendars() {
+    personDatalist();
     var wrap = document.getElementById("calendars");
     wrap.innerHTML = "";
     calendars.forEach(function (c, idx) {
       var urlInput = el("input", { type: "text", class: "field-url", placeholder: "https://.../calendar.ics", value: c.url });
-      urlInput.addEventListener("input", function () { c.url = urlInput.value; renderJson(); renderIcsSources(); renderPeople(); });
+      urlInput.addEventListener("input", function () { c.url = urlInput.value; renderJson(); renderIcsSources(); });
 
-      var idInput = el("input", { type: "text", class: "field-narrow", placeholder: "(optional, for linking people)", value: c.id });
-      idInput.addEventListener("input", function () { c.id = idInput.value; renderJson(); renderPeople(); });
+      var idInput = el("input", { type: "text", class: "field-narrow", placeholder: "(optional label)", value: c.id });
+      idInput.addEventListener("input", function () { c.id = idInput.value; renderJson(); });
 
       var colorSel = hueSelect("cal-color-" + c._id, c.color, true);
       colorSel.addEventListener("change", function () { c.color = colorSel.value; renderJson(); swatch.replaceWith(swatchFor(c.color)); swatch = wrap.querySelector("#swatch-" + c._id); });
       var swatch = swatchFor(c.color);
       swatch.id = "swatch-" + c._id;
 
-      var excludeInput = el("input", { type: "text", class: "field-regex", placeholder: "exclude regex (optional)", value: c.exclude });
-      excludeInput.addEventListener("input", function () { c.exclude = excludeInput.value; renderJson(); });
-
       var removeBtn = el("button", { class: "small danger" }, [document.createTextNode("Remove")]);
       removeBtn.addEventListener("click", function () {
         calendars = calendars.filter(function (x) { return x._id !== c._id; });
-        renderCalendars(); renderJson(); renderIcsSources(); renderPeople();
+        renderCalendars(); renderJson(); renderIcsSources();
       });
 
       var head = el("div", { class: "entry-head" }, [
@@ -230,54 +257,89 @@
         el("div", { style: "flex:1 1 320px;" }, [el("label", { text: "ICS URL" }), urlInput]),
         el("div", {}, [el("label", { text: "ID (optional)" }), idInput]),
         el("div", {}, [el("label", { text: "Color" }), el("div", { class: "row", style: "gap:6px;" }, [colorSel, swatch])]),
-        el("div", { style: "flex:1 1 260px;" }, [el("label", { text: "Exclude (regex, optional)" }), excludeInput]),
       ]);
-      wrap.appendChild(el("div", { class: "entry" }, [head, body]));
+
+      wrap.appendChild(el("div", { class: "entry" }, [head, body, advancedBlockFor(c)]));
     });
   }
 
+  function advancedBlockFor(c) {
+    var body = el("div", { class: "advanced-body" });
+
+    // Exclude patterns (repeatable) ------------------------------------------------
+    var excludesWrap = el("div", {});
+    function renderExcludes() {
+      excludesWrap.innerHTML = "";
+      c.excludes.forEach(function (val, i) {
+        var input = el("input", { type: "text", class: "field-regex", placeholder: "exclude regex", value: val });
+        input.addEventListener("input", function () { c.excludes[i] = input.value; renderJson(); });
+        var rm = el("button", { class: "small danger" }, [document.createTextNode("×")]);
+        rm.addEventListener("click", function () {
+          c.excludes.splice(i, 1);
+          if (!c.excludes.length) c.excludes.push("");
+          renderExcludes(); renderJson();
+        });
+        excludesWrap.appendChild(el("div", { class: "row", style: "margin-top:4px;" }, [input, rm]));
+      });
+    }
+    renderExcludes();
+    var addExclude = el("button", { class: "small" }, [document.createTextNode("+ Add exclude pattern")]);
+    addExclude.addEventListener("click", function () { c.excludes.push(""); renderExcludes(); });
+
+    // Default person -----------------------------------------------------------------
+    var defaultPersonInput = el("input", { type: "text", class: "field-narrow", list: "peopleNames", placeholder: "(none)", value: c.defaultPerson });
+    defaultPersonInput.addEventListener("input", function () { c.defaultPerson = defaultPersonInput.value; renderJson(); });
+
+    // Person rules (repeatable) -------------------------------------------------------
+    var rulesWrap = el("div", {});
+    function renderRules() {
+      rulesWrap.innerHTML = "";
+      c.personRules.forEach(function (r, i) {
+        var matchInput = el("input", { type: "text", class: "field field-regex", placeholder: "match regex, e.g. \\bL6\\b", value: r.match });
+        matchInput.addEventListener("input", function () { r.match = matchInput.value; renderJson(); });
+
+        var personInput = el("input", { type: "text", class: "field field-narrow", list: "peopleNames", placeholder: "person", value: r.person });
+        personInput.addEventListener("input", function () { r.person = personInput.value; renderJson(); });
+
+        var renameChk = el("input", { type: "checkbox" });
+        renameChk.checked = r.rename !== false;
+        renameChk.addEventListener("change", function () { r.rename = renameChk.checked; renderJson(); });
+        var renameLbl = el("label", { style: "display:flex;align-items:center;gap:4px;margin:0;font-size:12px;color:#333;white-space:nowrap;" }, [renameChk, document.createTextNode("rename")]);
+
+        var rm = el("button", { class: "small danger" }, [document.createTextNode("Remove")]);
+        rm.addEventListener("click", function () { c.personRules.splice(i, 1); renderRules(); renderJson(); });
+
+        rulesWrap.appendChild(el("div", { class: "sub-entry" }, [matchInput, personInput, renameLbl, rm]));
+      });
+    }
+    renderRules();
+    var addRule = el("button", { class: "small" }, [document.createTextNode("+ Add person rule")]);
+    addRule.addEventListener("click", function () { c.personRules.push(newPersonRule()); renderRules(); });
+
+    body.appendChild(el("div", {}, [el("label", { text: "Exclude events (regex, one or more)" }), excludesWrap, addExclude]));
+    body.appendChild(el("div", { style: "margin-top:12px;" }, [el("label", { text: "Default person (applied when no rule below matches)" }), defaultPersonInput]));
+    body.appendChild(el("div", { style: "margin-top:12px;" }, [el("label", { text: "Person rules (checked in order; a match's color/badge wins over Default person)" }), rulesWrap, addRule]));
+
+    var details = el("details", { class: "advanced" }, [
+      el("summary", { text: "Advanced (exclude, default person, person rules)" }),
+      body,
+    ]);
+    return details;
+  }
+
   document.getElementById("addCalendar").addEventListener("click", function () {
-    calendars.push({ _id: uid(), url: "", color: "", exclude: "", id: "" });
-    renderCalendars(); renderJson(); renderIcsSources(); renderPeople();
+    calendars.push(newCalendar());
+    renderCalendars(); renderJson(); renderIcsSources();
   });
 
   // ----------------------------------------------------------------- people UI
 
-  function calendarLinksControl(p) {
-    if (!calendars.length) {
-      return el("p", { class: "muted", text: "(add a calendar above to link this person to it)" });
-    }
-    var box = el("div", { class: "row", style: "gap:10px;" });
-    calendars.forEach(function (c, idx) {
-      var ref = calendarRef(c);
-      var chk = el("input", { type: "checkbox" });
-      chk.checked = ref ? p.calendars.indexOf(ref) !== -1 : false;
-      chk.disabled = !ref;
-      chk.addEventListener("change", function () {
-        p.calendars = p.calendars.filter(function (r) { return r !== ref; });
-        if (chk.checked && ref) p.calendars.push(ref);
-        renderJson();
-      });
-      var lbl = el("label", { style: "display:flex;align-items:center;gap:4px;margin:0;font-size:12px;color:#333;" }, [chk, document.createTextNode(calendarLabel(c, idx))]);
-      box.appendChild(lbl);
-    });
-    return box;
-  }
-
   function renderPeople() {
     var wrap = document.getElementById("people");
     wrap.innerHTML = "";
-    // Drop link references to calendars that no longer resolve to anything (removed, or
-    // never got a URL/id) so stale checkboxes can't silently linger unchecked-but-stored.
-    var validRefs = calendars.map(calendarRef).filter(Boolean);
-    people.forEach(function (p) { p.calendars = p.calendars.filter(function (r) { return validRefs.indexOf(r) !== -1; }); });
-
     people.forEach(function (p, idx) {
-      var nameInput = el("input", { type: "text", class: "field-narrow", placeholder: "Aiko", value: p.name });
-      nameInput.addEventListener("input", function () { p.name = nameInput.value; renderJson(); });
-
-      var matchInput = el("input", { type: "text", class: "field-regex", placeholder: "\\bL6\\b", value: p.match });
-      matchInput.addEventListener("input", function () { p.match = matchInput.value; renderJson(); });
+      var nameInput = el("input", { type: "text", class: "field-narrow", placeholder: "Kato", value: p.name });
+      nameInput.addEventListener("input", function () { p.name = nameInput.value; renderJson(); renderCalendars(); });
 
       var colorSel = hueSelect("p-color-" + p._id, p.color, false);
       colorSel.addEventListener("change", function () { p.color = colorSel.value; renderJson(); swatch.replaceWith(swatchFor(p.color)); swatch = wrap.querySelector("#pswatch-" + p._id); });
@@ -287,14 +349,10 @@
       var badgeInput = el("input", { type: "text", class: "field-narrow", placeholder: "(auto: first letter)", value: p.badge, maxlength: "3" });
       badgeInput.addEventListener("input", function () { p.badge = badgeInput.value; renderJson(); });
 
-      var renameChk = el("input", { type: "checkbox" });
-      renameChk.checked = p.rename !== false;
-      renameChk.addEventListener("change", function () { p.rename = renameChk.checked; renderJson(); });
-
       var removeBtn = el("button", { class: "small danger" }, [document.createTextNode("Remove")]);
       removeBtn.addEventListener("click", function () {
         people = people.filter(function (x) { return x._id !== p._id; });
-        renderPeople(); renderJson();
+        renderPeople(); renderJson(); renderCalendars();
       });
 
       var head = el("div", { class: "entry-head" }, [
@@ -303,22 +361,16 @@
       ]);
       var body = el("div", { class: "row" }, [
         el("div", {}, [el("label", { text: "Name" }), nameInput]),
-        el("div", { style: "flex:1 1 260px;" }, [el("label", { text: "Match (regex)" }), matchInput]),
         el("div", {}, [el("label", { text: "Color" }), el("div", { class: "row", style: "gap:6px;" }, [colorSel, swatch])]),
         el("div", {}, [el("label", { text: "Badge" }), badgeInput]),
-        el("div", {}, [el("label", { text: "Rename matches" }), renameChk]),
       ]);
-      var linkRow = el("div", { style: "margin-top:8px;" }, [
-        el("label", { text: "Linked calendars (blank = applies to every calendar)" }),
-        calendarLinksControl(p),
-      ]);
-      wrap.appendChild(el("div", { class: "entry" }, [head, body, linkRow]));
+      wrap.appendChild(el("div", { class: "entry" }, [head, body]));
     });
   }
 
   document.getElementById("addPerson").addEventListener("click", function () {
-    people.push({ _id: uid(), name: "", match: "", color: "", badge: "", rename: true, calendars: [] });
-    renderPeople(); renderJson();
+    people.push(newPerson());
+    renderPeople(); renderJson(); renderCalendars();
   });
 
   // ------------------------------------------------------------------ JSON out
@@ -330,16 +382,29 @@
       var entry = { url: c.url.trim() };
       if (c.id.trim()) entry.id = c.id.trim();
       if (c.color) entry.color = c.color;
-      if (c.exclude.trim()) entry.exclude = c.exclude.trim();
+
+      var excludes = c.excludes.map(function (x) { return x.trim(); }).filter(Boolean);
+      if (excludes.length === 1) entry.exclude = excludes[0];
+      else if (excludes.length > 1) entry.exclude = excludes;
+
+      if (c.defaultPerson.trim()) entry.defaultPerson = c.defaultPerson.trim();
+
+      var rules = c.personRules
+        .filter(function (r) { return r.match.trim() && r.person.trim(); })
+        .map(function (r) {
+          var re = { match: r.match.trim(), person: r.person.trim() };
+          if (r.rename === false) re.rename = false;
+          return re;
+        });
+      if (rules.length) entry.personRules = rules;
+
       cfg.calendars.push(entry);
     });
     people.forEach(function (p) {
-      if (!p.name.trim() || !p.match.trim()) return;
-      var entry = { name: p.name.trim(), match: p.match.trim() };
+      if (!p.name.trim()) return;
+      var entry = { name: p.name.trim() };
       if (p.color) entry.color = p.color;
       if (p.badge.trim()) entry.badge = p.badge.trim();
-      if (p.rename === false) entry.rename = false;
-      if (p.calendars && p.calendars.length) entry.calendars = p.calendars.slice();
       cfg.people.push(entry);
     });
     return cfg;
@@ -372,29 +437,34 @@
     var newCalendars = (Array.isArray(data.calendars) ? data.calendars : [])
       .filter(function (c) { return c && typeof c === "object" && typeof c.url === "string" && c.url.trim(); })
       .map(function (c) {
+        var excludes = Array.isArray(c.exclude)
+          ? c.exclude.filter(function (x) { return typeof x === "string"; })
+          : typeof c.exclude === "string" && c.exclude.trim() ? [c.exclude] : [];
+        var personRules = (Array.isArray(c.personRules) ? c.personRules : [])
+          .filter(function (r) { return r && typeof r === "object" && typeof r.match === "string" && typeof r.person === "string"; })
+          .map(function (r) { return { _id: uid(), match: r.match, person: r.person.trim(), rename: r.rename !== false }; });
         return {
           _id: uid(),
           url: c.url.trim(),
           id: typeof c.id === "string" ? c.id.trim() : "",
-          color: typeof c.color === "string" && HUES.indexOf(c.color.toLowerCase()) !== -1 ? c.color.toLowerCase() : "",
-          exclude: typeof c.exclude === "string" ? c.exclude : "",
+          color: typeof c.color === "string" && VALID_COLORS.indexOf(c.color.toLowerCase()) !== -1 ? c.color.toLowerCase() : "",
+          excludes: excludes.length ? excludes : [""],
+          defaultPerson: typeof c.defaultPerson === "string" ? c.defaultPerson.trim() : "",
+          personRules: personRules,
         };
       });
     var newPeople = (Array.isArray(data.people) ? data.people : [])
-      .filter(function (p) { return p && typeof p === "object" && typeof p.name === "string" && p.name.trim() && typeof p.match === "string" && p.match.trim(); })
+      .filter(function (p) { return p && typeof p === "object" && typeof p.name === "string" && p.name.trim(); })
       .map(function (p) {
         return {
           _id: uid(),
           name: p.name.trim(),
-          match: p.match.trim(),
-          color: typeof p.color === "string" && HUES.indexOf(p.color.toLowerCase()) !== -1 ? p.color.toLowerCase() : "",
+          color: typeof p.color === "string" && VALID_COLORS.indexOf(p.color.toLowerCase()) !== -1 ? p.color.toLowerCase() : "",
           badge: typeof p.badge === "string" ? p.badge.trim() : "",
-          rename: p.rename !== false,
-          calendars: Array.isArray(p.calendars) ? p.calendars.filter(function (r) { return typeof r === "string" && r.trim(); }).map(function (r) { return r.trim(); }) : [],
         };
       });
 
-    calendars = newCalendars.length ? newCalendars : [{ _id: uid(), url: "", color: "", exclude: "", id: "" }];
+    calendars = newCalendars.length ? newCalendars : [newCalendar()];
     people = newPeople;
     renderCalendars(); renderPeople(); renderJson(); renderIcsSources();
     status.textContent = "Loaded " + newCalendars.length + " calendar(s) and " + newPeople.length + " person/people.";
@@ -421,9 +491,9 @@
   // --------------------------------------------------------------- ICS sources
 
   // For each configured calendar, this page will try a direct fetch() first (works when the
-  // host happens to send permissive CORS headers) and otherwise let you paste the ICS text
-  // instead — routing a private calendar URL through a third-party CORS proxy would leak its
-  // secret token, so that's deliberately not offered here.
+  // host happens to send permissive CORS headers) and otherwise let you upload or paste the
+  // ICS content instead — routing a private calendar URL through a third-party CORS proxy
+  // would leak its secret token, so that's deliberately not offered here.
   var icsOverrides = {}; // url -> pasted text
 
   function renderIcsSources() {
@@ -437,7 +507,7 @@
     withUrls.forEach(function (c) {
       var url = c.url.trim();
       var statusSpan = el("span", { class: "status" });
-      var textarea = el("textarea", { rows: "4", placeholder: "Paste this calendar's raw .ics content here if direct fetch fails (CORS)…" });
+      var textarea = el("textarea", { rows: "4", placeholder: "Paste this calendar's raw .ics content here, or use the file picker above, if direct fetch fails (CORS)…" });
       textarea.value = icsOverrides[url] || "";
       textarea.addEventListener("input", function () {
         if (textarea.value.trim()) icsOverrides[url] = textarea.value;
@@ -454,12 +524,34 @@
           statusSpan.textContent = "Fetched " + text.length + " bytes directly — no need to paste.";
           statusSpan.className = "status ok";
         }).catch(function (e) {
-          statusSpan.textContent = "Direct fetch failed (" + e.message + ") — likely CORS. Paste the ICS content below instead.";
+          statusSpan.textContent = "Direct fetch failed (" + e.message + ") — likely CORS. Upload or paste the ICS content below instead.";
           statusSpan.className = "status err";
         });
       });
+
+      // Upload: reads a local .ics file (e.g. one already downloaded from the calendar app,
+      // or exported manually) straight into the same override the pasted textarea uses — no
+      // network request at all, so it sidesteps CORS entirely rather than working around it.
+      var fileInput = el("input", { type: "file", accept: ".ics,text/calendar" });
+      fileInput.addEventListener("change", function () {
+        var file = fileInput.files && fileInput.files[0];
+        if (!file) return;
+        var reader = new FileReader();
+        reader.onload = function () {
+          textarea.value = String(reader.result || "");
+          icsOverrides[url] = textarea.value;
+          statusSpan.textContent = "Loaded " + file.name + " (" + textarea.value.length + " bytes).";
+          statusSpan.className = "status ok";
+        };
+        reader.onerror = function () {
+          statusSpan.textContent = "Couldn't read " + file.name + ".";
+          statusSpan.className = "status err";
+        };
+        reader.readAsText(file);
+      });
+
       wrap.appendChild(el("div", { class: "entry" }, [
-        el("div", { class: "entry-head" }, [el("strong", { text: url }), tryBtn]),
+        el("div", { class: "entry-head" }, [el("strong", { text: url }), el("div", { class: "row" }, [tryBtn, fileInput])]),
         textarea,
         el("div", { style: "margin-top:4px;" }, [statusSpan]),
       ]));
@@ -536,7 +628,7 @@
       if (day.allday && day.allday.length) {
         var adWrap = el("div", { class: "preview-allday" });
         day.allday.forEach(function (a) {
-          adWrap.appendChild(chipFor(a.title, a.hue, a.badge));
+          adWrap.appendChild(chipFor(a.title, a.hue, a.fg, a.badge));
         });
         dayEl.appendChild(adWrap);
       }
@@ -546,7 +638,7 @@
       (day.events || []).forEach(function (ev) {
         ev.lanes.forEach(function (lane) {
           anyEvents = true;
-          evWrap.appendChild(chipFor(lane.title, lane.hue, lane.badge, true));
+          evWrap.appendChild(chipFor(lane.title, lane.hue, lane.fg, lane.badge, true));
         });
       });
       if (!anyEvents) evWrap.appendChild(el("p", { class: "muted", text: "No timed events." }));
@@ -556,10 +648,13 @@
     });
   }
 
-  function chipFor(title, hue, badge, isEvent) {
+  function chipFor(title, hue, fg, badge, isEvent) {
+    // hue/fg arrive already fully resolved from run()'s own output (see colorClass/
+    // foregroundFor in transform.js) — hue is the complete bg-- suffix, fg the matching
+    // foreground, so this just applies them as-is rather than recomputing anything.
     var chip = el("div", { class: isEvent ? "preview-event" : "preview-chip", style: "" });
-    chip.classList.add("bg--" + hue + "-65");
-    chip.classList.add("text--black");
+    chip.classList.add("bg--" + hue);
+    chip.classList.add("text--" + fg);
     if (badge) {
       chip.appendChild(el("span", {
         class: "text--white bg--black rounded--full",
