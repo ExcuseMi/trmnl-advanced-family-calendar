@@ -25,9 +25,6 @@ variables:
   allday_row_pct: 12
   grid_pct: 64
   footer_pct: 9
-  title_bar_pct: 0
-  show_title_bar: false
-  title_text: Daylight & Weather Calendar
   hour_rows:
   - hour: 0
     pct: 2
@@ -137,9 +134,13 @@ variables:
     - title: Verjaardag Alex
       hue: pink-65
       fg: black
-      badge: A
-      icon:
-        first: https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/cake/default/24px.svg
+      bar: pink-45
+      badges:
+      - kind: icon
+        src: https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/cake/default/24px.svg
+      - kind: photo
+        src: https://i.pravatar.cc/150?img=5
+      display: text
       continues_before: false
       continues_after: false
     segments:
@@ -256,10 +257,12 @@ variables:
       hue: blue-65
       bar: violet-45
       fg: black
-      badge: null
-      icon:
-        first: https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/work/default/24px.svg
-        second: https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/home/default/24px.svg
+      badges:
+      - kind: icon
+        src: https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/work/default/24px.svg
+      - kind: icon
+        src: https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/home/default/24px.svg
+      display: text
     - top_pct: 55.2941
       height_pct: 11.7647
       lane_index: 0
@@ -268,9 +271,10 @@ variables:
       hue: pink-65
       bar: pink-45
       fg: black
-      badge: null
-      icon:
-        first: https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/cake/default/24px.svg
+      badges:
+      - kind: icon
+        src: https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/cake/default/24px.svg
+      display: text
     now_marker:
       top_pct: 89.9439
       night: false
@@ -396,9 +400,12 @@ variables:
       hue: green-65
       bar: green-45
       fg: black
-      badge: A
-      icon:
-        first: https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/pool/default/24px.svg
+      badges:
+      - kind: icon
+        src: https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/pool/default/24px.svg
+      - kind: photo
+        src: https://i.pravatar.cc/150?img=12
+      display: image
     now_marker: null
   - label: Ma 6 Juli
     label_short: Ma 6 Jul
@@ -522,8 +529,8 @@ variables:
       hue: gray-25
       bar: gray-15
       fg: white
-      badge: null
-      icon: null
+      badges: []
+      display: text
     now_marker: null
   generated_at: 1783192907
   tz: Europe/Brussels

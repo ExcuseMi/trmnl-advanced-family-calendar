@@ -25,13 +25,20 @@ plain browser tab — see [Configuration Editor](#configuration-editor) below.
 - **People**: tag specific events (by regex, across every calendar) with a person's own color
   and a small badge circle next to the event — e.g. give a kid their own color and initial,
   independent of which calendar their events land on, optionally renaming a class code to their
-  actual name at the same time.
-- **Categories**: every event gets a small color "meaning" bar down its left edge — a darker
+  actual name at the same time. A photo/avatar URL can replace that badge circle's letter with
+  their actual picture instead, and a shared event can tag more than one person at once (e.g. a
+  family trip) — every matched, declared person gets their own badge, up to the 2 slots
+  available.
+- **Categories**: every event gets a small color "meaning" rail down its left edge — a darker
   shade of its own color by default, or a Category's own color when one matches (by regex,
-  across every calendar, independent of People). A category can also swap the badge circle for
-  an icon (up to two, e.g. a briefcase + a house for "Work From Home") — reused from
-  [Google's Material Symbols](https://fonts.google.com/icons) by plain name, searchable live in
-  the [Configuration Editor](#configuration-editor); a custom image URL works too.
+  across every calendar, independent of People). That rail also hosts up to 2 badge circles: a
+  Category's own icon (reused from [Google's Material Symbols](https://fonts.google.com/icons)
+  or [Tabler Icons](https://tabler.io/icons) — the latter for sport/activity coverage Material
+  Symbols lacks, like yoga or pilates — by plain name, searchable live in the
+  [Configuration Editor](#configuration-editor); a custom image URL works too) takes the front
+  slot(s), and any matched person's badge/photo fills whatever's left. A Category can also be
+  set to show as just that badge — icon and/or photo filling the whole chip, no title text — for
+  the kind of recurring event an icon alone already says everything about.
 - **Public holidays**: the Configuration Editor has a one-click "Add public holidays" picker (50
   countries) that adds a real Google-hosted holiday ICS feed as a normal calendar, with color and
   a flag icon pre-filled — nothing holiday-specific in the plugin itself, it's just a calendar
@@ -60,20 +67,24 @@ plain browser tab — see [Configuration Editor](#configuration-editor) below.
      Leave blank to hide sun times and weather, and emphasize hours by meetings alone.
    - **Temperature Unit**: Celsius or Fahrenheit (requires Location above).
    - **Days to Show**: 1, 2, 3, 5 days, or a full week.
-   - **Title Bar**: off by default, shows this plugin instance's name across the top.
 
 ## Configuration Editor
 
 **[excusemi.github.io/trmnl-daylight-ics-calendar-plugin/tools/config-editor.html](https://excusemi.github.io/trmnl-daylight-ics-calendar-plugin/tools/config-editor.html)**
 — a static page (`tools/config-editor.html`, served via GitHub Pages) for building the Calendar
 Configuration field visually instead of hand-writing JSON: add calendars, people, and categories
-through a form (categories' icons are searchable live against
-[Google's Material Symbols](https://fonts.google.com/icons), no spelling guesses needed), add a
+through a form (categories' icons are searchable live against both
+[Google's Material Symbols](https://fonts.google.com/icons) and [Tabler Icons](https://tabler.io/icons),
+no spelling guesses needed), add a
 public holiday calendar for your country in one click, test against real ICS data (direct fetch
 when the host allows CORS, or paste the `.ics` text otherwise — a private calendar URL is never
 routed through a third-party proxy), and preview the actual colors/badges/icons using TRMNL's
 real CSS classes. Copy the generated JSON into the plugin's Calendar Configuration field when
 you're happy with it.
+
+For the full field-by-field reference see [CONFIG.md](CONFIG.md); having an LLM write the JSON
+for you instead works too — point it at [LLM.md](LLM.md), a compact version of the same schema
+sized for that.
 
 The JSON shape it produces:
 
@@ -110,23 +121,35 @@ The JSON shape it produces:
 - `calendars[].exclude` — optional regex, or array of them (case-insensitive). Matching events
   from *that* calendar are hidden entirely, before `people`/`categories` ever see them.
 - `calendars[].personRules` — optional array of `{ match, person, rename }`, checked in order
-  against every surviving event on *that* calendar. `person` names who it belongs to (doesn't
-  need to already exist in `people[]`, but only a declared one contributes color/badge);
-  `rename` (default `true`) controls whether the matched text is replaced with `person`'s name.
-- `calendars[].defaultPerson` — optional, applied when no `personRules` matched.
+  against every surviving event on *that* calendar. `person` names who it belongs to — one name,
+  or an array of them for a shared event (e.g. `["Alex", "Jordan"]` for a family trip); doesn't
+  need to already exist in `people[]`, but only a declared name contributes a badge. `rename`
+  (default `true`) controls whether the matched text is replaced with the name(s), joined with
+  " & " when there's more than one.
+- `calendars[].defaultPerson` — optional, applied when no `personRules` matched. Same shape as
+  `personRules[].person` above (one name or an array).
 - `people[].name` — required, the lookup key `personRules[].person`/`defaultPerson` reference.
   `people[].color` / `people[].badge` — optional; overrides that event's chip color and/or
-  attaches a small badge circle (defaults to `name`'s first letter).
+  attaches a small badge circle (defaults to `name`'s first letter). `people[].image` —
+  optional, a direct photo/avatar URL shown in that same circle instead of the badge letter
+  (a matched category icon still takes the slot in front of it, same as with a plain badge; a
+  photo wins over the letter if both are set).
 - `categories[].match` — required, a regex or array of them (case-insensitive). Unlike
   `people`/`personRules`, a category isn't scoped to one calendar — it's tested against every
   surviving event's title, from any calendar, in array order (later matches win for color/icon).
 - `categories[].color` — optional, overrides the event's calendar/person color (a category wins
-  over both — it's the most specific signal). Every event always gets a left-edge color bar; a
-  matched category's color applies there too, independent of the chip's own fill color.
+  over both — it's the most specific signal). Every event always gets a left-edge "meaning" rail;
+  a matched category's color applies there too, independent of the chip's own fill color.
 - `categories[].icon` — optional, a [Material Symbols](https://fonts.google.com/icons) name
-  (e.g. `"cake"`) or a custom image URL, or an array of up to two of either (rendered as two
-  small overlapping badge circles, e.g. `["work", "home"]`). Replaces the person-badge letter in
-  the same corner slot.
+  (e.g. `"cake"`), a [Tabler Icons](https://tabler.io/icons) name prefixed `tabler:` (e.g.
+  `"tabler:yoga"` — a second set for the sport/activity coverage Material Symbols lacks), or a
+  custom image URL, or an array of up to two of any of those (rendered as two small circles
+  stacked in that left rail, e.g. `["work", "home"]`). Takes the rail's front slot(s); any
+  matched person's badge/photo fills whatever's left, up to 2 slots total.
+- `categories[].display` — optional, `"image"` drops the title text entirely and lets whatever's
+  in the rail (icon and/or badge/photo) fill the whole chip instead — for the kind of recurring
+  event an icon alone already says everything about. Falls back to the normal text chip if
+  nothing real ended up in a slot.
 - `categories[].calendars` / `categories[].excludeCalendars` — optional, both by
   `calendars[].id` (or `.url` for a calendar with no id). `calendars` is a whitelist (only those
   calendars); `excludeCalendars` is a blacklist (every calendar except those). Omit both for the
@@ -156,7 +179,7 @@ exercise `run()`/`transform.js` itself against real data, use the
 |------|---------|
 | `plugin/src/transform.js` | Serverless code: fetch ICS, expand recurrences, compute layout, fetch sun times. Runs on TRMNL (Node) and in `tools/config-editor.html` (browser) unmodified. |
 | `plugin/src/shared.liquid` | The `main` template for all four view sizes (`full`/`half_*`/`quadrant`) |
-| `plugin/src/settings.yml` | Custom fields (Calendar Configuration, time zone, time format, location, days to show, title bar) |
+| `plugin/src/settings.yml` | Custom fields (Calendar Configuration, time zone, time format, location, days to show) |
 | `plugin/.trmnlp.yml` | Local mock data for `trmnlp serve` |
 | `tools/config-editor.html` | Standalone config builder + real-data tester — see above |
 

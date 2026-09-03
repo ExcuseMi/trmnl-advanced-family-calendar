@@ -71,6 +71,11 @@
     display: flex; align-items: center; justify-content: center; overflow: hidden;
   }
   .icon-preview img { width: 16px; height: 16px; filter: invert(1); }
+  .photo-preview {
+    width: 26px; height: 26px; border-radius: 50%; background: #1a1a1a; flex-shrink: 0;
+    overflow: hidden;
+  }
+  .photo-preview img { width: 100%; height: 100%; object-fit: cover; }
   .icon-suggest {
     position: absolute; top: 100%; left: 0; right: 0; z-index: 5; margin-top: 2px;
     max-height: 220px; overflow-y: auto; background: #fff; border: 1px solid #ccc;
@@ -241,18 +246,33 @@
     return parseInt(m[1], 10) < 45 ? "white" : "black";
   }
 
-  // ------------------------------------------------------------- category icons (Material Symbols)
+  // ------------------------------------------------------------- category icons (Material Symbols + Tabler)
   //
   // Mirrors resolveIcon() in plugin/src/transform.js: an icon is referenced by plain name (e.g.
   // "cake"), resolved to Google's own hosted static SVG URL — nothing about the icon set is
   // bundled into this repo, this page just links to it, same as the plugin does at render time.
+  // A SECOND set, Tabler Icons (https://tabler.io/icons), is reachable via a "tabler:" prefix —
+  // added for sport/activity coverage Material Symbols is missing entirely (no "pilates",
+  // "yoga", "meditation", etc.) — kept as a distinct namespace rather than merged into the same
+  // bare-name lookup since both sets reuse short generic words ("home") and a bare name staying
+  // Material Symbols keeps every config written before this existed meaning exactly what it did.
   var MATERIAL_ICON_BASE = "https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/";
   var MATERIAL_ICON_SUFFIX = "/default/24px.svg";
   function materialIconUrl(name) { return MATERIAL_ICON_BASE + name + MATERIAL_ICON_SUFFIX; }
+  // Pinned version — see the matching constant/comment in plugin/src/transform.js, kept in sync
+  // by hand; bump both together if a newer Tabler icon is wanted.
+  var TABLER_ICON_BASE = "https://cdn.jsdelivr.net/npm/@tabler/icons@3.46.0/icons/outline/";
+  var TABLER_ICON_SUFFIX = ".svg";
+  function tablerIconUrl(name) { return TABLER_ICON_BASE + name + TABLER_ICON_SUFFIX; }
   function iconUrlFor(ref) {
     ref = (ref || "").trim();
     if (!ref) return null;
     if (/^https?:\/\//i.test(ref)) return ref;
+    var tablerMatch = /^tabler:(.+)$/i.exec(ref);
+    if (tablerMatch) {
+      var tname = tablerMatch[1].toLowerCase().replace(/[^a-z0-9-]/g, "");
+      return tname ? tablerIconUrl(tname) : null;
+    }
     var name = ref.toLowerCase().replace(/[^a-z0-9_]/g, "");
     return name ? materialIconUrl(name) : null;
   }
@@ -268,6 +288,16 @@
       materialIconNames = text.split("\n").map(function (line) { return line.split(" ")[0]; }).filter(Boolean).sort();
     })
     .catch(function () { materialIconNames = []; });
+
+  // Tabler's own name list, fetched from the SAME pinned package version the URL builder above
+  // uses (not Google/Iconify's separately-versioned mirror of the set) — guarantees every name
+  // this page suggests actually resolves at TABLER_ICON_BASE. icons.json ships tags/categories
+  // too; only the keys (icon names) are kept, the rest is dropped right after parsing.
+  var tablerIconNames = [];
+  var tablerIconNamesReady = fetch("https://cdn.jsdelivr.net/npm/@tabler/icons@3.46.0/icons.json")
+    .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+    .then(function (json) { tablerIconNames = Object.keys(json).sort(); })
+    .catch(function () { tablerIconNames = []; });
 
   // ---------------------------------------------------------- public holiday calendars (Google)
   //
@@ -355,10 +385,10 @@
   // ------------------------------------------------------------------- state
 
   function uid() { return Math.random().toString(36).slice(2, 9); }
-  function newCalendar() { return { _id: uid(), url: "", id: "", color: "", icon: "", excludes: [""], defaultPerson: "", personRules: [] }; }
-  function newPersonRule() { return { _id: uid(), match: "", person: "", rename: true }; }
-  function newPerson() { return { _id: uid(), name: "", color: "", badge: "" }; }
-  function newCategory() { return { _id: uid(), name: "", matches: [""], icons: [""], color: "", calendarScope: "", calendarIds: [] }; }
+  function newCalendar() { return { _id: uid(), url: "", id: "", color: "", icon: "", excludes: [""], defaultPerson: [], personRules: [] }; }
+  function newPersonRule() { return { _id: uid(), match: "", person: [], rename: true }; }
+  function newPerson() { return { _id: uid(), name: "", color: "", badge: "", image: "" }; }
+  function newCategory() { return { _id: uid(), name: "", matches: [""], icons: [""], color: "", display: "", calendarScope: "", calendarIds: [] }; }
 
   var calendars = [newCalendar()];
   var people = [];
@@ -376,19 +406,37 @@
   // rather than free text — `value` is preserved as the selection if it still matches a
   // declared name, otherwise falls back to the placeholder/empty option so a rename or
   // removal in People doesn't leave a select silently pointing at a name that's gone.
-  function personSelect(value, allowNone) {
-    var sel = el("select", { class: "field-narrow" });
+  // Multi-select: personRules[].person and defaultPerson each accept one name OR several (a
+  // shared event tagging more than one person — see applyCalendarPerson in transform.js), so
+  // this always returns/accepts an ARRAY, even for a single pick. Native <select multiple>
+  // rather than a custom checkbox widget — ctrl/cmd-click (or shift-click for a range) is a
+  // standard-enough pattern and this is far less code than building one, for a field that's
+  // usually just one person anyway. size caps at 4 rows so it doesn't dominate the form when
+  // there's a long people[] list — still fully scrollable for more.
+  function personMultiSelect(values) {
+    var sel = el("select", { class: "field-narrow", multiple: "multiple", size: String(Math.max(2, Math.min(4, people.length || 1))) });
     var names = people.map(function (p) { return p.name.trim(); }).filter(Boolean);
-    if (allowNone || !names.length) {
-      sel.appendChild(el("option", { value: "" }, [document.createTextNode(names.length ? "(none)" : "(add a person below first)")]));
+    if (!names.length) {
+      sel.appendChild(el("option", { value: "", disabled: "disabled" }, [document.createTextNode("(add a person below first)")]));
+      sel.disabled = true;
+      return sel;
     }
     names.forEach(function (n) {
       var opt = el("option", { value: n }, [document.createTextNode(n)]);
-      if (n === value) opt.setAttribute("selected", "selected");
+      if (values.indexOf(n) !== -1) opt.setAttribute("selected", "selected");
       sel.appendChild(opt);
     });
-    sel.disabled = !names.length;
     return sel;
+  }
+  function selectedValues(sel) {
+    return Array.from(sel.selectedOptions).map(function (o) { return o.value; }).filter(Boolean);
+  }
+  // Mirrors normalizeNameList() in plugin/src/transform.js: personRules[].person/defaultPerson
+  // accept one name (string) or several (array) on import — always normalized to an array here
+  // (possibly empty) so this editor's own model only ever deals with one shape.
+  function normalizeNames(raw) {
+    var list = Array.isArray(raw) ? raw : typeof raw === "string" ? [raw] : [];
+    return list.filter(function (n) { return typeof n === "string" && n.trim(); }).map(function (n) { return n.trim(); });
   }
 
   function renderCalendars() {
@@ -452,9 +500,9 @@
     var addExclude = el("button", { class: "small" }, [document.createTextNode("+ Add exclude pattern")]);
     addExclude.addEventListener("click", function () { c.excludes.push(""); renderExcludes(); });
 
-    // Default person -----------------------------------------------------------------
-    var defaultPersonInput = personSelect(c.defaultPerson, true);
-    defaultPersonInput.addEventListener("change", function () { c.defaultPerson = defaultPersonInput.value; renderJson(); });
+    // Default person (one or more — ctrl/cmd-click for multiple) ---------------------
+    var defaultPersonInput = personMultiSelect(c.defaultPerson);
+    defaultPersonInput.addEventListener("change", function () { c.defaultPerson = selectedValues(defaultPersonInput); renderJson(); });
 
     // Person rules (repeatable) -------------------------------------------------------
     var rulesWrap = el("div", {});
@@ -464,9 +512,9 @@
         var matchInput = el("input", { type: "text", class: "field field-regex", placeholder: "match regex, e.g. \\bL6\\b", value: r.match });
         matchInput.addEventListener("input", function () { r.match = matchInput.value; renderJson(); });
 
-        var personInput = personSelect(r.person, false);
+        var personInput = personMultiSelect(r.person);
         personInput.classList.add("field");
-        personInput.addEventListener("change", function () { r.person = personInput.value; renderJson(); });
+        personInput.addEventListener("change", function () { r.person = selectedValues(personInput); renderJson(); });
 
         var renameChk = el("input", { type: "checkbox" });
         renameChk.checked = r.rename !== false;
@@ -537,6 +585,26 @@
       var badgeInput = el("input", { type: "text", class: "field-narrow", placeholder: "(auto: first letter)", value: p.badge, maxlength: "3" });
       badgeInput.addEventListener("input", function () { p.badge = badgeInput.value; renderJson(); });
 
+      // Photo/avatar: fills the SAME corner circle the badge letter above would otherwise
+      // occupy — shown instead of it, not alongside it (see resolveIcon/applyCalendarPerson
+      // in transform.js). Plain URL input rather than the icon picker widget: there's no
+      // name-search set to browse for a personal photo the way there is for an icon.
+      var photoPreview = el("div", { class: "photo-preview" });
+      function updatePhotoPreview() {
+        photoPreview.innerHTML = "";
+        var url = p.image.trim();
+        if (!url) return;
+        var img = el("img", { src: url, alt: "" });
+        img.addEventListener("error", function () { img.remove(); });
+        photoPreview.appendChild(img);
+      }
+      updatePhotoPreview();
+      var imageInput = el("input", {
+        type: "text", class: "field-narrow", style: "width:100%;box-sizing:border-box;",
+        placeholder: "optional: https://... photo URL", value: p.image,
+      });
+      imageInput.addEventListener("input", function () { p.image = imageInput.value; updatePhotoPreview(); renderJson(); });
+
       var removeBtn = el("button", { class: "small danger" }, [document.createTextNode("Remove")]);
       removeBtn.addEventListener("click", function () {
         people = people.filter(function (x) { return x._id !== p._id; });
@@ -551,6 +619,7 @@
         el("div", {}, [el("label", { text: "Name" }), nameInput]),
         el("div", {}, [el("label", { text: "Color" }), el("div", { class: "row", style: "gap:6px;" }, [colorSel, swatch])]),
         el("div", {}, [el("label", { text: "Badge" }), badgeInput]),
+        el("div", { style: "flex:1 1 220px;" }, [el("label", { text: "Photo (replaces badge letter)" }), el("div", { class: "row", style: "gap:6px;align-items:center;" }, [photoPreview, imageInput])]),
       ]);
       wrap.appendChild(el("div", { class: "entry" }, [head, body]));
     });
@@ -563,13 +632,17 @@
 
   // -------------------------------------------------------------- categories UI
 
-  // A small searchable icon picker: a text input (accepts either a Material Symbols name or a
-  // full image URL) with a live black-circle preview, plus a dropdown of matching names (each
-  // with its own tiny preview) filtered from materialIconNames as you type. Degrades to a plain
-  // freeform input with live preview if the name list never loaded (see materialIconNamesReady).
-  // Generic over WHERE the value lives — getValue()/setValue(v) — so the same picker serves a
-  // category's icons[index] (see renderCategories) and a calendar's single icon field (see
-  // renderCalendars' advanced block) without duplicating this whole widget.
+  // A small searchable icon picker: a text input (accepts a Material Symbols name, a Tabler
+  // name prefixed "tabler:", or a full image URL) with a live black-circle preview, plus a
+  // dropdown of matching names (each with its own tiny preview), filtered from BOTH
+  // materialIconNames and tablerIconNames as you type — a bare query searches both sets at
+  // once (Tabler results shown/inserted with their "tabler:" prefix so it's clear which set
+  // each match came from); a query already typed as "tabler:foo" searches only Tabler, against
+  // "foo". Degrades to a plain freeform input with live preview if a name list never loaded
+  // (see materialIconNamesReady/tablerIconNamesReady). Generic over WHERE the value lives —
+  // getValue()/setValue(v) — so the same picker serves a category's icons[index] (see
+  // renderCategories) and a calendar's single icon field (see renderCalendars' advanced block)
+  // without duplicating this whole widget.
   function iconPickerFor(getValue, setValue) {
     var wrap = el("div", { class: "icon-picker" });
     var preview = el("div", { class: "icon-preview" });
@@ -584,7 +657,7 @@
 
     var input = el("input", {
       type: "text", class: "field-narrow", style: "width:100%;box-sizing:border-box;",
-      placeholder: "search icon name, or paste image URL", value: getValue(),
+      placeholder: "search icon name (or \"tabler:name\"), or paste image URL", value: getValue(),
     });
     var suggest = el("div", { class: "icon-suggest" });
     suggest.hidden = true;
@@ -593,18 +666,30 @@
     function showSuggest() {
       var q = input.value.trim().toLowerCase();
       suggest.innerHTML = "";
-      if (!q || /^https?:\/\//i.test(q) || !materialIconNames.length) { hideSuggest(); return; }
-      var matches = materialIconNames.filter(function (n) { return n.indexOf(q) !== -1; }).slice(0, 40);
+      if (!q || /^https?:\/\//i.test(q)) { hideSuggest(); return; }
+      var matches;
+      var tablerOnly = /^tabler:/.exec(q);
+      if (tablerOnly) {
+        var tq = q.slice(7);
+        matches = tablerIconNames.filter(function (n) { return n.indexOf(tq) !== -1; }).slice(0, 40)
+          .map(function (n) { return { label: "tabler:" + n, value: "tabler:" + n, url: tablerIconUrl(n) }; });
+      } else {
+        var mMatches = materialIconNames.filter(function (n) { return n.indexOf(q) !== -1; }).slice(0, 25)
+          .map(function (n) { return { label: n, value: n, url: materialIconUrl(n) }; });
+        var tMatches = tablerIconNames.filter(function (n) { return n.indexOf(q) !== -1; }).slice(0, 15)
+          .map(function (n) { return { label: "tabler:" + n, value: "tabler:" + n, url: tablerIconUrl(n) }; });
+        matches = mMatches.concat(tMatches);
+      }
       if (!matches.length) { hideSuggest(); return; }
-      matches.forEach(function (name) {
-        var itemPreview = el("div", { class: "icon-preview" }, [el("img", { src: materialIconUrl(name), alt: "" })]);
-        var item = el("div", { class: "icon-suggest-item" }, [itemPreview, el("span", { text: name })]);
+      matches.forEach(function (m) {
+        var itemPreview = el("div", { class: "icon-preview" }, [el("img", { src: m.url, alt: "" })]);
+        var item = el("div", { class: "icon-suggest-item" }, [itemPreview, el("span", { text: m.label })]);
         // mousedown (not click) fires before the input's blur, so the value is applied before
         // hideSuggest()'s blur-triggered timeout would otherwise race it closed first.
         item.addEventListener("mousedown", function (e) {
           e.preventDefault();
-          setValue(name);
-          input.value = name;
+          setValue(m.value);
+          input.value = m.value;
           updatePreview();
           hideSuggest();
           renderJson();
@@ -616,10 +701,11 @@
     input.addEventListener("input", function () { setValue(input.value); updatePreview(); showSuggest(); renderJson(); });
     input.addEventListener("focus", showSuggest);
     input.addEventListener("blur", function () { setTimeout(hideSuggest, 150); });
-    // If the name list is still loading when the user focuses in, show suggestions the moment
-    // it lands (only while still focused — otherwise this would pop the list open unexpectedly
+    // If a name list is still loading when the user focuses in, show suggestions the moment it
+    // lands (only while still focused — otherwise this would pop the list open unexpectedly
     // after the user has already moved on).
     materialIconNamesReady.then(function () { if (document.activeElement === input) showSuggest(); });
+    tablerIconNamesReady.then(function () { if (document.activeElement === input) showSuggest(); });
 
     updatePreview();
     var row = el("div", { class: "icon-picker-row" }, [preview, input]);
@@ -699,10 +785,24 @@
       }
       renderIcons();
 
+      // Display: "text" (default) keeps the normal title + badge-rail chip. "image" drops the
+      // title entirely and lets whatever ended up in the badge rail (this category's icon, or
+      // a person's badge/photo if the icon left a slot free) fill the whole chip instead — for
+      // the kind of recurring event an icon alone already says everything about. Silently
+      // falls back to a normal chip server-side if nothing real ended up in a slot (see run()
+      // in transform.js), so picking this with no icon configured isn't a trap.
+      var displaySel = el("select", {}, [
+        el("option", { value: "" }, [document.createTextNode("Text + badge (default)")]),
+        el("option", { value: "image" }, [document.createTextNode("Image/badge only, no text")]),
+      ]);
+      displaySel.value = cat.display;
+      displaySel.addEventListener("change", function () { cat.display = displaySel.value; renderJson(); });
+
       var body = el("div", { class: "row" }, [
         el("div", {}, [el("label", { text: "Name (for your reference)" }), nameInput]),
         el("div", {}, [el("label", { text: "Color" }), el("div", { class: "row", style: "gap:6px;" }, [colorSel, swatch])]),
         iconWrap,
+        el("div", {}, [el("label", { text: "Display" }), displaySel]),
       ]);
 
       var matchBlock = el("div", { style: "margin-top:10px;" }, [
@@ -810,12 +910,12 @@
       if (excludes.length === 1) entry.exclude = excludes[0];
       else if (excludes.length > 1) entry.exclude = excludes;
 
-      if (c.defaultPerson.trim()) entry.defaultPerson = c.defaultPerson.trim();
+      if (c.defaultPerson.length) entry.defaultPerson = c.defaultPerson.length === 1 ? c.defaultPerson[0] : c.defaultPerson;
 
       var rules = c.personRules
-        .filter(function (r) { return r.match.trim() && r.person.trim(); })
+        .filter(function (r) { return r.match.trim() && r.person.length; })
         .map(function (r) {
-          var re = { match: r.match.trim(), person: r.person.trim() };
+          var re = { match: r.match.trim(), person: r.person.length === 1 ? r.person[0] : r.person };
           if (r.rename === false) re.rename = false;
           return re;
         });
@@ -828,6 +928,7 @@
       var entry = { name: p.name.trim() };
       if (p.color) entry.color = p.color;
       if (p.badge.trim()) entry.badge = p.badge.trim();
+      if (p.image.trim()) entry.image = p.image.trim();
       cfg.people.push(entry);
     });
     cfg.categories = [];
@@ -840,6 +941,7 @@
       if (icons.length === 1) entry.icon = icons[0];
       else if (icons.length > 1) entry.icon = icons;
       if (cat.color) entry.color = cat.color;
+      if (cat.display === "image") entry.display = "image";
       var calIds = cat.calendarIds.filter(Boolean);
       if (cat.calendarScope === "include" && calIds.length) entry.calendars = calIds;
       else if (cat.calendarScope === "exclude" && calIds.length) entry.excludeCalendars = calIds;
@@ -879,8 +981,8 @@
           ? c.exclude.filter(function (x) { return typeof x === "string"; })
           : typeof c.exclude === "string" && c.exclude.trim() ? [c.exclude] : [];
         var personRules = (Array.isArray(c.personRules) ? c.personRules : [])
-          .filter(function (r) { return r && typeof r === "object" && typeof r.match === "string" && typeof r.person === "string"; })
-          .map(function (r) { return { _id: uid(), match: r.match, person: r.person.trim(), rename: r.rename !== false }; });
+          .filter(function (r) { return r && typeof r === "object" && typeof r.match === "string" && (typeof r.person === "string" || Array.isArray(r.person)); })
+          .map(function (r) { return { _id: uid(), match: r.match, person: normalizeNames(r.person), rename: r.rename !== false }; });
         return {
           _id: uid(),
           url: c.url.trim(),
@@ -892,7 +994,7 @@
           // instead of silently vanishing.
           icon: typeof c.icon === "string" ? c.icon.trim() : Array.isArray(c.icon) && typeof c.icon[0] === "string" ? c.icon[0].trim() : "",
           excludes: excludes.length ? excludes : [""],
-          defaultPerson: typeof c.defaultPerson === "string" ? c.defaultPerson.trim() : "",
+          defaultPerson: normalizeNames(c.defaultPerson),
           personRules: personRules,
         };
       });
@@ -904,6 +1006,7 @@
           name: p.name.trim(),
           color: typeof p.color === "string" && VALID_COLORS.indexOf(p.color.toLowerCase()) !== -1 ? p.color.toLowerCase() : "",
           badge: typeof p.badge === "string" ? p.badge.trim() : "",
+          image: typeof p.image === "string" ? p.image.trim() : "",
         };
       });
 
@@ -924,6 +1027,7 @@
           matches: matches.length ? matches : [""],
           icons: icons.length ? icons : [""],
           color: typeof cat.color === "string" && VALID_COLORS.indexOf(cat.color.toLowerCase()) !== -1 ? cat.color.toLowerCase() : "",
+          display: cat.display === "image" ? "image" : "",
           calendarScope: includeIds.length ? "include" : excludeIds.length ? "exclude" : "",
           calendarIds: includeIds.length ? includeIds : excludeIds,
         };
@@ -1061,7 +1165,6 @@
             lat_lon: document.getElementById("tLatLon").value.trim(),
             temperature_unit: "celsius",
             view_days: String(document.getElementById("tDays").value || "3"),
-            show_title_bar: "false",
           },
         },
       },
@@ -1108,7 +1211,7 @@
       if (day.allday && day.allday.length) {
         var adWrap = el("div", { class: "preview-allday" });
         day.allday.forEach(function (a) {
-          adWrap.appendChild(chipFor(a.title, a.hue, a.fg, a.badge, a.icon));
+          adWrap.appendChild(chipFor(a.title, a.hue, a.fg, a.badges, a.display, false, null));
         });
         dayEl.appendChild(adWrap);
       }
@@ -1117,7 +1220,7 @@
       // Each entry in day.events is already one independently-positioned event/lane (see
       // transform.js's layoutNative) — no more nested .lanes sub-array to flatten.
       (day.events || []).forEach(function (ev) {
-        evWrap.appendChild(chipFor(ev.title, ev.hue, ev.fg, ev.badge, ev.icon, true, ev.bar));
+        evWrap.appendChild(chipFor(ev.title, ev.hue, ev.fg, ev.badges, ev.display, true, ev.bar));
       });
       if (!day.events || !day.events.length) evWrap.appendChild(el("p", { class: "muted", text: "No timed events." }));
       dayEl.appendChild(evWrap);
@@ -1126,35 +1229,53 @@
     });
   }
 
-  function chipFor(title, hue, fg, badge, icon, isEvent, bar) {
+  function chipFor(title, hue, fg, badges, display, isEvent, bar) {
     // hue/fg/bar arrive already fully resolved from run()'s own output (see colorClass/
     // foregroundFor/accentColor in transform.js) — hue/bar are complete bg-- suffixes, fg the
     // matching foreground, so this just applies them as-is rather than recomputing anything.
+    // badges (see run()'s badge assembly in transform.js) is an array of up to 2
+    // {kind: "icon"|"photo"|"letter", src|text} entries, already fully resolved server-side —
+    // this preview just renders whatever's in it rather than re-deriving category/person
+    // precedence itself, so it stays honest about what the real Liquid template receives.
+    badges = badges || [];
     var chip = el("div", { class: isEvent ? "preview-event" : "preview-chip" });
     chip.classList.add("bg--" + hue);
     chip.classList.add("text--" + fg);
+    if (display === "image" && badges.length) {
+      // "image" display: same as the real template — badges fill the whole chip, no title.
+      badges.forEach(function (b) {
+        chip.appendChild(badgeSpanFor(b, 22));
+      });
+      return chip;
+    }
     if (bar) {
       // Same "meaning" accent bar the real plugin draws down every event's left edge — a
       // darker/more-saturated step of the fill by default, or a matched Category's own color.
       chip.appendChild(el("span", { class: "bg--" + bar, style: "width:4px;align-self:stretch;border-radius:2px;flex-shrink:0;margin-right:2px;" }));
     }
-    if (icon || badge) {
-      // icon (see resolveIcon in transform.js) is { first, second } (second omitted if there's
-      // only one) or null/undefined — named object keys rather than an array, so this preview
-      // stays honest about what the real Liquid template actually receives (see the shared.
-      // liquid comment on the badge markup for why that distinction matters). One badge circle
-      // per entry present, same as the real plugin.
-      var badgeIcons = icon ? [icon.first, icon.second].filter(Boolean) : [null];
-      badgeIcons.forEach(function (url) {
-        chip.appendChild(el("span", {
-          class: "text--white bg--black rounded--full",
-          style: "display:flex;align-items:center;justify-content:center;width:16px;height:16px;font-size:9px;flex-shrink:0;overflow:hidden;" + (badgeIcons.length > 1 ? "margin-right:-6px;" : ""),
-        }, url ? [el("img", { src: url, style: "width:10px;height:10px;filter:invert(1);", alt: "" })] : [document.createTextNode(badge)]));
-      });
-      if (badgeIcons.length > 1) chip.appendChild(el("span", { style: "width:6px;flex-shrink:0;" }));
-    }
+    badges.forEach(function (b, i) {
+      var span = badgeSpanFor(b, 16);
+      span.style.flexShrink = "0";
+      if (i < badges.length - 1) span.style.marginRight = "-6px";
+      chip.appendChild(span);
+    });
+    if (badges.length) chip.appendChild(el("span", { style: "width:6px;flex-shrink:0;" }));
     chip.appendChild(el("span", { text: title }));
     return chip;
+  }
+
+  // One badge-rail circle (icon/photo/letter), sized `d`px — mirrors the real template's badge
+  // rendering (see shared.liquid) closely enough for a preview: icon = inverted line art,
+  // photo = object-fit:cover, letter = the plain text.
+  function badgeSpanFor(b, d) {
+    var content;
+    if (b.kind === "icon") content = [el("img", { src: b.src, style: "width:65%;height:65%;filter:invert(1);", alt: "" })];
+    else if (b.kind === "photo") content = [el("img", { src: b.src, style: "width:100%;height:100%;object-fit:cover;", alt: "" })];
+    else content = [document.createTextNode(b.text || "")];
+    return el("span", {
+      class: "text--white bg--black rounded--full",
+      style: "display:flex;align-items:center;justify-content:center;width:" + d + "px;height:" + d + "px;font-size:" + Math.round(d * 0.55) + "px;overflow:hidden;",
+    }, content);
   }
 
   // ------------------------------------------------------------------- init

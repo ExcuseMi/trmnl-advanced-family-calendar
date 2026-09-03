@@ -109,15 +109,25 @@ function accentColor(color) {
 
 // ---------------------------------------------------------------------------- category icons
 //
-// Category icons reference Google's Material Symbols (Outlined) set — https://fonts.google.com/
-// icons — by plain name (e.g. "cake", "flight"), same lookup /tools/config-editor.html's search
-// picker uses. Nothing about the icon set is bundled into this repo: resolveIcon() just builds
-// a URL to Google's own hosted static SVG for that name — the exact same "just a URL, no local
-// copy" pattern day.icon already uses above for weather icons — so an unrecognized/misspelled
-// name just fails to load the image rather than breaking the render. A plain http(s) URL works
-// too, for a self-hosted/custom icon. `icon` accepts either one name/URL or an array of up to
-// two — e.g. ["work", "home"] for a "Work From Home" category — rendered as two small
-// overlapping badge circles instead of one (see shared.liquid).
+// Category icons reference an icon by plain name, same lookup /tools/config-editor.html's
+// search picker uses, from one of two sets:
+//   - Google's Material Symbols (Outlined) — https://fonts.google.com/icons — the default,
+//     a bare name with no prefix, e.g. "cake", "flight".
+//   - Tabler Icons (Outline) — https://tabler.io/icons — prefixed "tabler:", e.g.
+//     "tabler:yoga". Added for the sport/activity coverage Material Symbols lacks (no
+//     "pilates"/"yoga"/"meditation" there at all, see resolveIcon below) — a second bare-name
+//     set (rather than folding it into the same lookup) since both sets reuse short generic
+//     words ("home", "run") and a bare name staying Material Symbols keeps every existing
+//     config's meaning unchanged.
+// resolveIcon() just builds a URL to the set's own hosted static SVG for that name — the exact
+// same "just a URL, no local copy" pattern day.icon already uses above for weather icons — so
+// an unrecognized/misspelled name just fails to load the image rather than breaking the
+// render. A plain http(s) URL works too, for a self-hosted/custom icon — this is how a Tabler
+// icon reached this plugin before the "tabler:" prefix existed, and still works identically
+// for any OTHER icon source (a custom image, a different icon set entirely). `icon` accepts
+// either one name/URL or an array of up to two — e.g. ["work", "home"] for a "Work From Home"
+// category — rendered as two small overlapping badge circles instead of one (see
+// shared.liquid).
 //
 // Returns { first, second } (second omitted if there's only one) or null — a plain object with
 // named keys, deliberately NOT a JS array. TRMNL's serverless->Liquid bridge is a black box from
@@ -130,6 +140,12 @@ function accentColor(color) {
 // question entirely instead of relying on it.
 const MATERIAL_ICON_BASE = "https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/";
 const MATERIAL_ICON_SUFFIX = "/default/24px.svg";
+// Pinned to a specific published version (not @latest): a name that resolves today should keep
+// resolving the same way later, even if a future Tabler major renames/drops icons — same
+// reasoning as pinning any other third-party dependency. Bump by hand if a newer icon is
+// wanted (see /tools/config-editor.html's own copy of this constant, kept in sync by hand).
+const TABLER_ICON_BASE = "https://cdn.jsdelivr.net/npm/@tabler/icons@3.46.0/icons/outline/";
+const TABLER_ICON_SUFFIX = ".svg";
 const MAX_CATEGORY_ICONS = 2;
 
 function resolveIcon(ref) {
@@ -141,6 +157,14 @@ function resolveIcon(ref) {
     const v = item.trim();
     if (!v) continue;
     if (/^https?:\/\//i.test(v)) { urls.push(v); continue; }
+    const tablerMatch = /^tabler:(.+)$/i.exec(v);
+    if (tablerMatch) {
+      // Tabler names are dash-separated (e.g. "bike-path", "24-hours") — a different
+      // sanitize charset than Material Symbols' underscore-separated names below.
+      const tname = tablerMatch[1].toLowerCase().replace(/[^a-z0-9-]/g, "");
+      if (tname) urls.push(TABLER_ICON_BASE + tname + TABLER_ICON_SUFFIX);
+      continue;
+    }
     const name = v.toLowerCase().replace(/[^a-z0-9_]/g, "");
     if (name) urls.push(MATERIAL_ICON_BASE + name + MATERIAL_ICON_SUFFIX);
   }
@@ -162,14 +186,11 @@ async function run(input) {
   const location = cf(input, "lat_lon");
   const fahrenheit = cf(input, "temperature_unit").trim().toLowerCase() === "fahrenheit";
   const daysN = toInt(cf(input, "view_days"), DEFAULT_DAYS, 1, 7);
-  const showTitleBar = ["true", "yes", "1"].includes(cf(input, "show_title_bar").trim().toLowerCase());
-  const titleBarPct = showTitleBar ? TITLE_BAR_PCT : 0;
-  const titleTextVal = titleText(input);
 
   const tz = resolveTz(tzname, input);
 
   if (!calendars.length) {
-    return emptyResult(tzname, tz, locale, daysN, "No ICS URL configured", showTitleBar, titleBarPct, titleTextVal);
+    return emptyResult(tzname, tz, locale, daysN, "No ICS URL configured");
   }
 
   const nowEpoch = Date.now();
@@ -212,17 +233,36 @@ async function run(input) {
     const r = applyCalendarPerson(e.title, calendars[e.calIdx], people);
     e.title = r.title;
     e.hueOverride = r.hue;
-    e.badge = r.badge;
     // Categories are matched against the FINAL (post-rename) title, by default across every
     // calendar (unless scoped — see categories[].calendars/excludeCalendars in parseConfig) —
-    // a category's own color wins over a person's (more specific signal), and its icon replaces
-    // the person badge letter in the same corner slot (see shared.liquid). Falls back to the
+    // a category's own color wins over a person's (more specific signal). Falls back to the
     // calendar's own default icon (calendars[].icon, e.g. a flag for a public holiday calendar
     // the Configuration Editor's country picker added) when no category matched — same "most
     // specific signal wins" precedence used for color throughout this file.
     const c = applyCategory(e.title, categories, e.calIdx);
     if (c.color) e.hueOverride = c.color;
-    e.icon = c.icon || calendars[e.calIdx].icon || null;
+    const catIcon = c.icon || calendars[e.calIdx].icon || null;
+
+    // The badge rail (see shared.liquid) has exactly 2 slots, same budget as before this
+    // supported more than one person or a real image mode. A category icon takes the front
+    // slot(s) first (the more specific "what kind" signal) — one icon leaves a slot free, two
+    // fill the rail outright — and person badges/photos ("whose") fill whatever's left, one
+    // per matched+declared person, in personRules/defaultPerson order, silently dropping any
+    // that don't fit rather than growing the rail unpredictably.
+    const badges = [];
+    if (catIcon) {
+      badges.push({ kind: "icon", src: catIcon.first });
+      if (catIcon.second) badges.push({ kind: "icon", src: catIcon.second });
+    }
+    for (const pb of r.badges) {
+      if (badges.length >= 2) break;
+      badges.push(pb);
+    }
+    e.badges = badges;
+    // "image" display mode only actually takes effect once there's a real badge to show as
+    // the image — a category set to image mode that matched an event with no icon and no
+    // taggable person falls back to the normal text chip instead of rendering an empty rail.
+    e.display = c.display === "image" && badges.length > 0 ? "image" : "text";
   }
 
   // Bucket occurrences into day columns, split into timed vs all-day.
@@ -248,8 +288,8 @@ async function run(input) {
           title: e.title,
           calIdx: e.calIdx,
           hueOverride: e.hueOverride,
-          badge: e.badge,
-          icon: e.icon,
+          badges: e.badges,
+          display: e.display,
           label: fmtTime(vs, tz, is12h) + "–" + fmtTime(ve, tz, is12h),
         });
       }
@@ -263,8 +303,8 @@ async function run(input) {
       allday: allday.slice(0, 3).map((a) => ({
         title: a.title,
         hue: a.hueOverride || hueOf(a.calIdx, calendarColors),
-        badge: a.badge || null,
-        icon: a.icon || null,
+        badges: a.badges,
+        display: a.display,
         // Lets the template draw multi-day all-day events as one continuous banner (square
         // off the edge that's mid-span) instead of a separate fully-rounded pill repeating
         // in every day column it touches.
@@ -286,12 +326,19 @@ async function run(input) {
 
   // The shown range is the configured default hours (Calendar Configuration's "hours", see
   // parseConfig — 7-21 unless overridden), automatically widened to also cover sunrise, the
-  // first/last meeting of the visible days, and sunset, whichever push earlier/later — so
-  // daylight hours and every actual event are always visible, never hidden along with the
-  // rest of an otherwise-empty hour. Floor the start / ceil the end so a meeting or sunrise/
-  // sunset falling mid-hour still pulls its whole hour in. Hours left outside this final
-  // range are hidden entirely (see layoutNative) rather than shown compressed — by
-  // construction they contain neither the default range nor any real event/sun mark.
+  // first/last meeting of the visible days, sunset, and the current hour, whichever push
+  // earlier/later — so daylight hours, every actual event, and "now" are always visible,
+  // never hidden along with the rest of an otherwise-empty hour. Floor the start / ceil the
+  // end so a meeting, sunrise/sunset, or the current moment falling mid-hour still pulls its
+  // whole hour in. Hours left outside this final range are hidden entirely (see
+  // layoutNative) rather than shown compressed — by construction they contain neither the
+  // default range nor any real event/sun mark nor the current time.
+  //
+  // nowH specifically: without it, hours are set to their configured default (e.g. 7-21) and
+  // the current time simply falls outside that once it's later than the configured end (21:53
+  // with hours 7-21, say) — the current hour's row, and the "now" marker that's positioned
+  // relative to it, both silently disappear instead of the grid stretching to keep today
+  // visible the same way it already does for a late sunset or a late meeting.
   const daySun = sky.sunMarks[0] || [];
   const sunriseMark = daySun.find((m) => m.kind === "sunrise");
   const sunsetMark = daySun.find((m) => m.kind === "sunset");
@@ -304,13 +351,13 @@ async function run(input) {
     }
   }
   const defaultHours = cfg.hours || DEFAULT_HOURS;
-  const startCandidates = [defaultHours.start, sunriseMark ? sunriseMark.hour : null, ...eventStarts].filter((h) => h !== null && h !== undefined);
-  const endCandidates = [defaultHours.end, sunsetMark ? sunsetMark.hour : null, ...eventEnds].filter((h) => h !== null && h !== undefined);
+  const startCandidates = [defaultHours.start, sunriseMark ? sunriseMark.hour : null, nowH, ...eventStarts].filter((h) => h !== null && h !== undefined);
+  const endCandidates = [defaultHours.end, sunsetMark ? sunsetMark.hour : null, nowH, ...eventEnds].filter((h) => h !== null && h !== undefined);
   const startH = Math.floor(Math.min(...startCandidates));
   let endH = Math.ceil(Math.max(...endCandidates));
   endH = Math.max(endH, startH + 1);
 
-  const grid = layoutNative(rawDays, startH, endH, nowH, sky.sunMarks, sky.hourlyWeather, titleBarPct, calendarColors);
+  const grid = layoutNative(rawDays, startH, endH, nowH, sky.sunMarks, sky.hourlyWeather, calendarColors);
 
   return Object.assign({}, grid, {
     generated_at: Math.floor(nowEpoch / 1000),
@@ -319,8 +366,6 @@ async function run(input) {
     unavailable_label: unavailableText(locale),
     all_day_label: allDayText(locale),
     has_events: rawDays.some((d) => d.timed.length || d.allday.length),
-    show_title_bar: showTitleBar,
-    title_text: titleTextVal,
     weather_error: sky.error,
   });
 }
@@ -345,17 +390,7 @@ function toInt(raw, def, lo, hi) {
   return Math.max(lo, Math.min(hi, Math.trunc(f)));
 }
 
-function titleText(input) {
-  // The instance name the user gave this plugin in TRMNL, shown in the optional title bar.
-  try {
-    const name = input.trmnl.plugin_settings.instance_name;
-    return typeof name === "string" && name.trim() ? name : "Calendar";
-  } catch (e) {
-    return "Calendar";
-  }
-}
-
-function emptyResult(tzname, tz, locale, daysN, msg, showTitleBar, titleBarPct, titleTextVal) {
+function emptyResult(tzname, tz, locale, daysN, msg) {
   const nowEpoch = Date.now();
   const nowCivil = fromEpoch(nowEpoch, tz);
   const winSCivil = { y: nowCivil.y, mo: nowCivil.mo, d: nowCivil.d, h: 0, mi: 0, s: 0 };
@@ -370,7 +405,7 @@ function emptyResult(tzname, tz, locale, daysN, msg, showTitleBar, titleBarPct, 
       allday: [],
     });
   }
-  const grid = layoutNative(days, 8, 22, null, null, null, titleBarPct, null);
+  const grid = layoutNative(days, 8, 22, null, null, null, null);
   return Object.assign({}, grid, {
     generated_at: Math.floor(nowEpoch / 1000),
     tz: tzname,
@@ -378,8 +413,6 @@ function emptyResult(tzname, tz, locale, daysN, msg, showTitleBar, titleBarPct, 
     unavailable_label: unavailableText(locale),
     all_day_label: allDayText(locale),
     has_events: false,
-    show_title_bar: showTitleBar,
-    title_text: titleTextVal,
     weather_error: null,
   });
 }
@@ -407,23 +440,26 @@ function emptyResult(tzname, tz, locale, daysN, msg, showTitleBar, titleBarPct, 
 // earlier/later, so nothing real ever gets hidden; hours left outside the final range are
 // hidden entirely rather than shown compressed (see layoutNative).
 // `people[]` holds ONLY formatting — `name` (required, also the lookup key), `color`
-// (optional, one of HUES or "gray-10".."gray-70" in steps of 5) and `badge` (optional short
-// text for the small circle next to an event, defaults to `name`'s first letter). It carries
-// no matching logic: which events
-// belong to a person is entirely a property of the CALENDAR they're on, via two mechanisms
-// that combine per calendar:
+// (optional, one of HUES or "gray-10".."gray-70" in steps of 5), `badge` (optional short text
+// for the small circle next to an event, defaults to `name`'s first letter), and `image`
+// (optional http(s) URL to a photo/avatar — fills that same circle instead of the badge
+// letter when set). It carries no matching logic: which events belong to a person is entirely
+// a property of the CALENDAR they're on, via two mechanisms that combine per calendar:
 //   - `calendars[].personRules`: an array of `{ match, person, rename }`. `match` (regex,
 //     case-insensitive) is tested against every surviving event on THAT calendar, in array
-//     order — a later rule's rename builds on an earlier one's output, and its color/badge
-//     wins if it also matches (last match wins, same as color pinning). `person` names who
-//     the event belongs to (rename target text too) — it doesn't need to already exist in
-//     `people[]`, but only a declared person contributes color/badge. `rename` (default
-//     true) controls whether the matched text is actually replaced with `person`; set it
-//     false to tag/color without renaming.
-//   - `calendars[].defaultPerson`: a person name applied when NO personRule on that
-//     calendar matched — for a calendar that's already entirely one person's own (like a
-//     personal calendar per family member), this avoids needing a `personRules` entry at
-//     all. Never overrides an actual personRules match.
+//     order — a later rule's rename builds on an earlier one's output, and its color/badges
+//     win if it also matches (last match wins, same as color pinning). `person` names who the
+//     event belongs to (rename target text too) — either one name or an array of them (e.g.
+//     `["Alex", "Jordan"]` for a shared event), joined with " & " when renaming. A name
+//     doesn't need to already exist in `people[]`, but only a declared person contributes a
+//     badge — an undeclared name still renames, just with no styling. `rename` (default true)
+//     controls whether the matched text is actually replaced; set it false to tag/color
+//     without renaming.
+//   - `calendars[].defaultPerson`: a person name (or array of names, same as personRules[].
+//     person above) applied when NO personRule on that calendar matched — for a calendar
+//     that's already entirely one person's own (like a personal calendar per family member),
+//     this avoids needing a `personRules` entry at all. Never overrides an actual personRules
+//     match.
 // `calendars[].id` is optional — a short label `personRules[].person`/`defaultPerson` values
 // double as (see above); calendars are otherwise unrelated to it. `calendars[].color` is
 // optional, one of HUES or "gray-10".."gray-70", pins that calendar's own default color
@@ -477,7 +513,13 @@ function parseConfig(raw) {
     if (!name) continue;
     const color = typeof item.color === "string" && isValidColor(item.color.toLowerCase()) ? item.color.toLowerCase() : "";
     const badge = typeof item.badge === "string" && item.badge.trim() ? item.badge.trim() : name[0].toUpperCase();
-    people[name.toLowerCase()] = { name, color, badge };
+    // A photo/avatar URL fills the same corner slot the plain badge letter would otherwise
+    // occupy (see shared.liquid) — shown instead of the letter, not alongside it, since
+    // there's only one slot for "whose event" the way there's only two for "what kind" (a
+    // category's icon(s)). Same bare-URL validation as resolveIcon's http(s) branch; a
+    // name/emoji/anything-else here is silently ignored rather than treated as a broken image.
+    const image = typeof item.image === "string" && /^https?:\/\//i.test(item.image.trim()) ? item.image.trim() : null;
+    people[name.toLowerCase()] = { name, color, badge, image };
   }
 
   const calendars = [];
@@ -487,38 +529,47 @@ function parseConfig(raw) {
     const color = typeof item.color === "string" && isValidColor(item.color.toLowerCase()) ? item.color.toLowerCase() : null;
     const icon = resolveIcon(item.icon);
     const exclude = compileRegexList(item.exclude);
-    const defaultPerson = typeof item.defaultPerson === "string" && item.defaultPerson.trim() ? item.defaultPerson.trim() : null;
+    // `defaultPerson` (like `personRules[].person` below) accepts either one name or an array
+    // of them — a shared event (a family trip, a joint appointment) can tag more than one
+    // person at once instead of forcing a single "whose event is this really" choice.
+    // Normalized to an array-or-null here so every consumer downstream (applyCalendarPerson)
+    // only has to handle one shape.
+    const defaultPerson = normalizeNameList(item.defaultPerson);
 
     const personRules = [];
     for (const rule of Array.isArray(item.personRules) ? item.personRules : []) {
       if (!rule || typeof rule !== "object") continue;
       const matchSrc = typeof rule.match === "string" ? rule.match : "";
-      const person = typeof rule.person === "string" ? rule.person.trim() : "";
-      if (!matchSrc || !person) continue;
+      const people_ = normalizeNameList(rule.person) || [];
+      if (!matchSrc || !people_.length) continue;
       let rx;
       try {
         rx = new RegExp(matchSrc, "i");
       } catch (e) {
         continue;
       }
-      personRules.push({ rx, person, rename: rule.rename !== false });
+      personRules.push({ rx, people: people_, rename: rule.rename !== false });
     }
 
     calendars.push({ id, url: item.url.trim(), color, icon, exclude, defaultPerson, personRules });
   }
 
-  // Optional top-level "categories": [{ name, match, icon, color }] — unlike people[], which
-  // is only ever applied per-calendar (via personRules/defaultPerson), a category is matched
-  // against every surviving event's title regardless of which calendar it came from — meant for
-  // "kind of event" (Birthday, Work, Medical...) rather than "whose event", so it doesn't need
-  // per-calendar wiring by default. See applyCategory. `match` (required) is a regex, or an
-  // array of them (case-insensitive, any match applies) — same shape as calendars[].exclude.
-  // `icon` is a Material Symbols name (see resolveIcon above) or an http(s) URL to a custom
-  // image, OR an array of up to two of either — e.g. ["work", "home"] for a "Work From Home"
-  // category — rendered as two small overlapping badge circles instead of one. `color` is one
-  // of HUES or "gray-10".."gray-75", "black", or "white". Both icon and color are optional
-  // independently — a color-only category just recolors the chip, an icon-only category just
-  // swaps the badge.
+  // Optional top-level "categories": [{ name, match, icon, color, display }] — unlike people[],
+  // which is only ever applied per-calendar (via personRules/defaultPerson), a category is
+  // matched against every surviving event's title regardless of which calendar it came from —
+  // meant for "kind of event" (Birthday, Work, Medical...) rather than "whose event", so it
+  // doesn't need per-calendar wiring by default. See applyCategory. `match` (required) is a
+  // regex, or an array of them (case-insensitive, any match applies) — same shape as
+  // calendars[].exclude. `icon` is a Material Symbols name, a Tabler Icons name prefixed
+  // "tabler:" (see resolveIcon above), or an http(s) URL to a custom image, OR an array of up
+  // to two of any of those — e.g. ["work", "home"] for a "Work From Home" category — filling
+  // the badge rail's slot(s) (see run()'s badge assembly and shared.liquid). `color` is one of
+  // HUES or "gray-10".."gray-75", "black", or "white". `display: "image"` drops the title text
+  // entirely and lets whatever ended up in the badge rail (this category's icon, or a person's
+  // badge/photo if the icon left a slot free) fill the whole chip instead — meant for the kind
+  // of recurring event an icon alone already says everything about; silently falls back to the
+  // normal text chip if nothing real ended up in a slot (see run()). icon/color/display are
+  // all optional independently — a color-only category just recolors the chip.
   //
   // `calendars` / `excludeCalendars` (both optional) narrow which calendars a category can
   // apply to, by `calendars[].id` (or `.url`, for a calendar with no id) — e.g. a global "Work"
@@ -534,9 +585,14 @@ function parseConfig(raw) {
     const name = typeof item.name === "string" ? item.name.trim() : "";
     const color = typeof item.color === "string" && isValidColor(item.color.toLowerCase()) ? item.color.toLowerCase() : null;
     const icon = resolveIcon(item.icon);
+    // "image" mode: the event renders as just its badge slot(s) — filling most of the chip —
+    // with NO title text at all, for the kind of recurring event an icon alone already says
+    // everything about (see the badge-slot assembly in run() for the actual fallback: this
+    // only takes effect once something real ends up in a slot to show as the image).
+    const display = item.display === "image" ? "image" : null;
     const calIdxWhitelist = calendarIndexesFor(item.calendars, calendars);
     const calIdxBlacklist = calendarIndexesFor(item.excludeCalendars, calendars);
-    categories.push({ name, rx: matchRx, color, icon, calIdxWhitelist, calIdxBlacklist });
+    categories.push({ name, rx: matchRx, color, icon, display, calIdxWhitelist, calIdxBlacklist });
   }
 
   return { calendars, people, hours, categories };
@@ -568,14 +624,25 @@ function calendarIndexesFor(raw, calendars) {
 function applyCategory(title, categories, calIdx) {
   let color = null;
   let icon = null;
+  let display = null;
   for (const cat of categories) {
     if (cat.calIdxWhitelist && !cat.calIdxWhitelist.has(calIdx)) continue;
     if (cat.calIdxBlacklist && cat.calIdxBlacklist.has(calIdx)) continue;
     if (!cat.rx.some((rx) => rx.test(title))) continue;
     if (cat.color) color = cat.color;
     if (cat.icon) icon = cat.icon;
+    if (cat.display) display = cat.display;
   }
-  return { color, icon };
+  return { color, icon, display };
+}
+
+// Accepts one name (string) or several (array of strings) for defaultPerson/personRules[].
+// person — either shape normalizes to an array of trimmed, non-empty names, or null if there's
+// nothing usable, so applyCalendarPerson only ever has to iterate one shape.
+function normalizeNameList(raw) {
+  const list = Array.isArray(raw) ? raw : typeof raw === "string" ? [raw] : [];
+  const names = list.filter((n) => typeof n === "string" && n.trim()).map((n) => n.trim());
+  return names.length ? names : null;
 }
 
 function compileRegex(pattern) {
@@ -604,26 +671,40 @@ function compileRegexList(raw) {
 }
 
 function applyCalendarPerson(title, cal, people) {
-  let personName = null;
+  let personNames = null;
   for (const rule of cal.personRules) {
     if (!rule.rx.test(title)) continue;
     if (rule.rename) {
-      title = title.replace(new RegExp(rule.rx.source, "gi"), rule.person);
+      // Multiple people rename to their names joined with "&" (e.g. "Alex & Jordan") rather
+      // than picking just one — the whole point of tagging more than one person on a shared
+      // event is that neither name should get silently dropped from the title either.
+      title = title.replace(new RegExp(rule.rx.source, "gi"), rule.people.join(" & "));
     }
-    personName = rule.person;
+    personNames = rule.people;
   }
-  if (personName === null) personName = cal.defaultPerson;
+  if (personNames === null) personNames = cal.defaultPerson;
 
+  // hue: the first matched person WITH a color set wins — a single accent color, same as
+  // before this supported more than one person; several different colors on one chip would
+  // read as noise, not signal, so this is deliberately not "blend" or "last wins" here.
+  // badges: one entry per matched, DECLARED person (an undeclared name in personRules/
+  // defaultPerson still renames the title above, it just contributes no badge — same
+  // "declared person required for styling" rule as always), in the order they were listed.
+  // Each entry becomes a badge-rail slot once merged with any category icon (see run()) —
+  // that merge, not this function, enforces the real 2-slot cap, so an event tagged with 3
+  // people still resolves sensibly instead of this function needing to know the budget.
   let hue = null;
-  let badge = null;
-  if (personName) {
-    const p = people[personName.toLowerCase()];
-    if (p) {
-      if (p.color) hue = p.color;
-      badge = p.badge;
+  const badges = [];
+  if (personNames) {
+    for (const personName of personNames) {
+      const p = people[personName.toLowerCase()];
+      if (!p) continue;
+      if (hue === null && p.color) hue = p.color;
+      if (p.image) badges.push({ kind: "photo", src: p.image });
+      else badges.push({ kind: "letter", text: p.badge });
     }
   }
-  return { title, hue, badge };
+  return { title, hue, badges };
 }
 
 // --------------------------------------------------------------------- locale / timezone
@@ -1319,7 +1400,6 @@ const ALLDAY_ROW_PCT = 12; // bumped from 6, then 9 for visual weight (see the a
                            // this value alone couldn't have masked: allday_row_pct wasn't wired
                            // through the view files' {% render %} calls, so the row had no real
                            // height at all in some views regardless of what this constant said).
-const TITLE_BAR_PCT = 6; // optional plugin-name bar at the very top, off by default (see run())
 const MIN_EVENT_PCT = 10; // floor so a block is never a literally invisible sliver — actual font
                            // sizing is handled client-side by the fit-text script (see shared.liquid),
                            // which measures the real rendered box and grows/shrinks text to match.
@@ -1369,13 +1449,13 @@ function round4(x) {
   return Math.round(x * 10000) / 10000;
 }
 
-function layoutNative(days, importantStart, importantEnd, nowH, sunMarks, hourlyWeather, titleBarPct, calendarColors) {
+function layoutNative(days, importantStart, importantEnd, nowH, sunMarks, hourlyWeather, calendarColors) {
   importantStart = Math.max(0, Math.min(23, Math.trunc(importantStart)));
   importantEnd = Math.max(importantStart + 1, Math.min(24, Math.trunc(importantEnd)));
 
   const maxAdRows = days.length ? Math.max(...days.map((d) => d.allday.length)) : 0;
   const alldayPct = Math.min(3, maxAdRows) * ALLDAY_ROW_PCT;
-  const gridBase = HEADER_PCT + alldayPct + titleBarPct;
+  const gridBase = HEADER_PCT + alldayPct;
   const gridPct = 100 - gridBase - FOOTER_PCT;
 
   // Hours outside [importantStart, importantEnd) are hidden entirely (0% height) — that
@@ -1551,8 +1631,8 @@ function layoutNative(days, importantStart, importantEnd, nowH, sunMarks, hourly
         // (see applyCategory) so the bar can carry a second, independent signal from the fill.
         bar: accentColor(color),
         fg: foregroundFor(color),
-        badge: ev.badge || null,
-        icon: ev.icon || null,
+        badges: ev.badges || [],
+        display: ev.display || "text",
       });
     });
 
@@ -1560,12 +1640,13 @@ function layoutNative(days, importantStart, importantEnd, nowH, sunMarks, hourly
       label: d.label, label_short: d.labelShort, is_today: d.isToday,
       temp: d.temp || null, icon: d.icon || null,
       allday: d.allday.map((a) => ({
-        title: a.title, hue: colorClass(a.hue), fg: foregroundFor(a.hue), badge: a.badge, icon: a.icon || null,
+        title: a.title, hue: colorClass(a.hue), fg: foregroundFor(a.hue),
+        badges: a.badges || [], display: a.display || "text",
         continues_before: a.continuesBefore, continues_after: a.continuesAfter,
       })),
       segments, events, now_marker: nowMarker,
     });
   });
 
-  return { header_pct: HEADER_PCT, allday_pct: alldayPct, allday_row_pct: ALLDAY_ROW_PCT, grid_pct: gridPct, footer_pct: FOOTER_PCT, title_bar_pct: titleBarPct, hour_rows: hourRows, days: outDays };
+  return { header_pct: HEADER_PCT, allday_pct: alldayPct, allday_row_pct: ALLDAY_ROW_PCT, grid_pct: gridPct, footer_pct: FOOTER_PCT, hour_rows: hourRows, days: outDays };
 }
