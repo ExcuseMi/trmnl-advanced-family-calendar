@@ -1068,10 +1068,13 @@
       // darker/more-saturated step of the fill by default, or a matched Category's own color.
       chip.appendChild(el("span", { class: "bg--" + bar, style: "width:4px;align-self:stretch;border-radius:2px;flex-shrink:0;margin-right:2px;" }));
     }
-    if ((icon && icon.length) || badge) {
-      // icon (see resolveIcon in transform.js) is always an array (1-2 URLs) or null/undefined
-      // when present — render one badge circle per entry, same as the real plugin.
-      var badgeIcons = icon && icon.length ? icon.slice(0, 2) : [null];
+    if (icon || badge) {
+      // icon (see resolveIcon in transform.js) is { first, second } (second omitted if there's
+      // only one) or null/undefined — named object keys rather than an array, so this preview
+      // stays honest about what the real Liquid template actually receives (see the shared.
+      // liquid comment on the badge markup for why that distinction matters). One badge circle
+      // per entry present, same as the real plugin.
+      var badgeIcons = icon ? [icon.first, icon.second].filter(Boolean) : [null];
       badgeIcons.forEach(function (url) {
         chip.appendChild(el("span", {
           class: "text--white bg--black rounded--full",

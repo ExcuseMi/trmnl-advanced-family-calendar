@@ -7,11 +7,6 @@
    screen--portrait combo the framework's own compiled CSS uses (confirmed via its generated
    selectors, e.g. .screen--lg.screen--portrait .lg\:portrait\:title--xxlarge). */
 .trmnl .screen--lg.screen--portrait .cal-full-daylabel { font-size: 44px; }
-/* Material Symbols' hosted SVGs (see resolveIcon in transform.js) are always solid black —
-   Google's static icon CDN has no fill/color parameter — but every category-icon badge is a
-   solid-black circle, so an un-tinted icon is literally invisible on it. Flips black to white;
-   safe on a flat-color glyph with a transparent background (alpha is untouched by filter). */
-.cal-icon-white { filter: invert(1); }
 </style>
 {%- if view == 4 -%}
   {%- comment -%} quadrant: a quarter of the full-view screen area — needs its own,
@@ -325,7 +320,7 @@ where the axis was already a sane fraction and unchanged. {%- endcomment -%}
                    up visibly different heights depending on which one happened to render
                    first. A fixed height fixes both: a real ceiling fit() can shrink against,
                    and a genuine minimum every row gets regardless of content. -->
-              <div class="h--[{{ allday_row_pct }}cqh] bg--{{ a.hue }} text--{{ a.fg }} w--full pr--2 py--[1px] flex flex--row flex--center-y gap--xsmall cal-fit-box" style="position:relative;overflow:hidden;box-sizing:border-box;padding-left:{% if a.icon.size == 2 %}38px{% elsif a.badge or a.icon %}25px{% else %}4px{% endif %};border-radius:{{ ad_radius }};border-top:2px solid currentColor;border-bottom:2px solid currentColor;{% unless a.continues_before %}border-left:2px solid currentColor;{% endunless %}{% unless a.continues_after %}border-right:2px solid currentColor;{% endunless %}{% if a.continues_before %}margin-left:-4px;{% endif %}{% if a.continues_after %}margin-right:-4px;{% endif %}">
+              <div class="h--[{{ allday_row_pct }}cqh] bg--{{ a.hue }} text--{{ a.fg }} w--full pr--2 py--[1px] flex flex--row flex--center-y gap--xsmall cal-fit-box" style="position:relative;overflow:hidden;box-sizing:border-box;padding-left:{% if a.icon.second %}38px{% elsif a.badge or a.icon %}25px{% else %}4px{% endif %};border-radius:{{ ad_radius }};border-top:2px solid currentColor;border-bottom:2px solid currentColor;{% unless a.continues_before %}border-left:2px solid currentColor;{% endunless %}{% unless a.continues_after %}border-right:2px solid currentColor;{% endunless %}{% if a.continues_before %}margin-left:-4px;{% endif %}{% if a.continues_after %}margin-right:-4px;{% endif %}">
                 {% if a.badge or a.icon %}
                   <!-- Pinned to the top-left corner (like the event badge below) rather than
                        inline before the title — a fixed overlay position instead of one that
@@ -341,22 +336,31 @@ where the axis was already a sane fraction and unchanged. {%- endcomment -%}
                        corner slot instead of the plain person-badge letter — see the event
                        badge below for why only one of the two ever shows. A category can carry
                        UP TO TWO icons (see resolveIcon in transform.js, e.g. ["work","home"] for
-                       "Work From Home") — a.icon is always an array when present, so a second
-                       circle renders offset to the right of the first when there's a second
-                       entry, overlapping slightly rather than needing its own reserved space. -->
+                       "Work From Home") — a.icon is { first, second } (second omitted if
+                       there's only one), deliberately named object keys rather than a JS array:
+                       trmnlp build/serve never actually runs transform.js (see topics/
+                       testing.md), so array-index access on a merge variable that started life
+                       as a JS array was never verified against TRMNL's real serverless->Liquid
+                       bridge, only against locally hand-shaped mock YAML — dot-notation property
+                       access doesn't carry that same risk. Icon <img> sizing/inversion is
+                       inline style, not classes — filter isn't a utility class this framework
+                       ships, and this badge is exactly the kind of small, easy-to-miss element
+                       where "the CSS should apply" silently not applying is hard to catch
+                       without a real device (see the width:0 boundary-tick lesson elsewhere in
+                       this file). Second circle renders offset to the right of the first,
+                       overlapping slightly rather than needing its own reserved space. -->
                   {% if a.icon %}
                     <span class="text--white bg--black rounded--full flex flex--center-x flex--center-y" style="position:absolute;top:2px;left:2px;width:20px;height:20px;border:1.5px solid currentColor;box-sizing:border-box;z-index:2;overflow:hidden;">
-                      <img class="w--[14px] h--[14px] cal-icon-white" src="{{ a.icon[0] }}" alt="">
+                      <img src="{{ a.icon.first }}" alt="" style="width:14px;height:14px;filter:invert(1);">
                     </span>
-                    {% if a.icon[1] %}
+                    {% if a.icon.second %}
                       <span class="text--white bg--black rounded--full flex flex--center-x flex--center-y" style="position:absolute;top:2px;left:15px;width:20px;height:20px;border:1.5px solid currentColor;box-sizing:border-box;z-index:1;overflow:hidden;">
-                        <img class="w--[14px] h--[14px] cal-icon-white" src="{{ a.icon[1] }}" alt="">
+                        <img src="{{ a.icon.second }}" alt="" style="width:14px;height:14px;filter:invert(1);">
                       </span>
                     {% endif %}
                   {% else %}
                     <span class="text--white bg--black rounded--full flex flex--center-x flex--center-y" style="position:absolute;top:2px;left:2px;width:20px;height:20px;font-size:11px;line-height:1;border:1.5px solid currentColor;box-sizing:border-box;z-index:1;overflow:hidden;">{{ a.badge }}</span>
                   {% endif %}
-                  </span>
                 {% endif %}
                 <!-- cal-fit-text/cal-fit-clip (see fit() below): a static size tier alone —
                      what this used to be, plus a 1-line CSS clamp to ellipsis — truncated
@@ -530,16 +534,19 @@ where the axis was already a sane fraction and unchanged. {%- endcomment -%}
                        instead of the plain person-badge letter when both would otherwise
                        apply — one badge slot, one piece of "what is this" information. A
                        category can carry UP TO TWO icons (see resolveIcon in transform.js,
-                       e.g. ["work","home"] for "Work From Home") — event.icon is always an
-                       array when present, so a second circle renders offset to the right of
-                       the first when there's a second entry. -->
+                       e.g. ["work","home"] for "Work From Home") — event.icon is
+                       { first, second } (second omitted if there's only one), deliberately
+                       named object keys rather than a JS array (see the matching comment on
+                       the all-day badge above for why), so a second circle renders offset to
+                       the right of the first when present. Icon <img> sizing/inversion is
+                       inline style, not classes — see the all-day badge comment for why. -->
                   {% if event.icon %}
                     <span class="text--white bg--black rounded--full flex flex--center-x flex--center-y {{ badge_hide_cls }}" style="position:absolute;top:1px;left:1px;width:20px;height:20px;border:2px solid currentColor;box-sizing:border-box;z-index:2;overflow:hidden;">
-                      <img class="w--[14px] h--[14px] cal-icon-white" src="{{ event.icon[0] }}" alt="">
+                      <img src="{{ event.icon.first }}" alt="" style="width:14px;height:14px;filter:invert(1);">
                     </span>
-                    {% if event.icon[1] %}
+                    {% if event.icon.second %}
                       <span class="text--white bg--black rounded--full flex flex--center-x flex--center-y {{ badge_hide_cls }}" style="position:absolute;top:1px;left:14px;width:20px;height:20px;border:2px solid currentColor;box-sizing:border-box;z-index:1;overflow:hidden;">
-                        <img class="w--[14px] h--[14px] cal-icon-white" src="{{ event.icon[1] }}" alt="">
+                        <img src="{{ event.icon.second }}" alt="" style="width:14px;height:14px;filter:invert(1);">
                       </span>
                     {% endif %}
                   {% else %}

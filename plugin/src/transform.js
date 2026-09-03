@@ -100,8 +100,17 @@ function accentColor(color) {
 // name just fails to load the image rather than breaking the render. A plain http(s) URL works
 // too, for a self-hosted/custom icon. `icon` accepts either one name/URL or an array of up to
 // two — e.g. ["work", "home"] for a "Work From Home" category — rendered as two small
-// overlapping badge circles instead of one (see shared.liquid). Always returns an array (1 or 2
-// resolved URLs) or null, so callers never need to branch on single-vs-multi.
+// overlapping badge circles instead of one (see shared.liquid).
+//
+// Returns { first, second } (second omitted if there's only one) or null — a plain object with
+// named keys, deliberately NOT a JS array. TRMNL's serverless->Liquid bridge is a black box from
+// here (trmnlp build/serve never runs this file at all — see topics/testing.md — so a JS array
+// surviving that specific bridge intact was never actually verified against the real pipeline,
+// only assumed from local mocks shaped to already match). Liquid's own dot-notation property
+// access (`event.icon.first`) is unambiguous across Liquid implementations; numeric bracket
+// indexing on an array-shaped merge variable (`event.icon[0]`) is exactly the kind of thing that
+// can silently come through empty on one bridge and not another. Named keys sidestep the
+// question entirely instead of relying on it.
 const MATERIAL_ICON_BASE = "https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/";
 const MATERIAL_ICON_SUFFIX = "/default/24px.svg";
 const MAX_CATEGORY_ICONS = 2;
@@ -118,7 +127,10 @@ function resolveIcon(ref) {
     const name = v.toLowerCase().replace(/[^a-z0-9_]/g, "");
     if (name) urls.push(MATERIAL_ICON_BASE + name + MATERIAL_ICON_SUFFIX);
   }
-  return urls.length ? urls : null;
+  if (!urls.length) return null;
+  const result = { first: urls[0] };
+  if (urls[1]) result.second = urls[1];
+  return result;
 }
 
 async function run(input) {
