@@ -31,13 +31,6 @@ oauth_expiry_field_name: ''
 oauth_expiry_strategy: ''
 oauth_fixed_expiry_ms: ''
 custom_fields:
-- keyname: ics_url
-  field_type: text
-  name: Calendar ICS URLs
-  description: One ICS link per line to combine several calendars, each gets its own color, auto-assigned in order unless pinned. Most calendar apps have a private ICS link tucked away in settings, e.g. Nextcloud (Calendar → hover a calendar → ⋯ → <strong>Copy private link</strong>) or Google Calendar (Settings → your calendar → <strong>Secret address in iCal format</strong>). <code>webcal://</code> links work too.<br /><br />To pin a calendar's color instead of auto-assigning it, add <code>| colorname</code> after the link, one of&#58; <code>red</code>, <code>orange</code>, <code>yellow</code>, <code>lime</code>, <code>green</code>, <code>cyan</code>, <code>blue</code>, <code>violet</code>, <code>purple</code>, <code>pink</code>. Example&#58;<br /><code>https://cloud.example.com/family.ics | pink</code>
-  placeholder: |-
-    https://cloud.example.com/remote.php/dav/public-calendars/TOKEN1/?export
-    https://cloud.example.com/remote.php/dav/public-calendars/TOKEN2/?export | pink
 - keyname: author_info
   name: About This Plugin
   field_type: author_bio
