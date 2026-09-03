@@ -288,7 +288,7 @@ where the axis was already a sane fraction and unchanged. {%- endcomment -%}
                    between fragments that ad_radius/the negative margins above already work to
                    hide — only the banner's real start/end edges, and always its top/bottom,
                    get one. -->
-              <div class="bg--{{ a.hue }} text--{{ a.fg }} w--full pr--2 py--[2px] flex flex--row flex--center-y gap--xsmall" style="position:relative;overflow:hidden;box-sizing:border-box;padding-left:{% if a.badge %}20px{% else %}4px{% endif %};border-radius:{{ ad_radius }};border-top:2px solid currentColor;border-bottom:2px solid currentColor;{% unless a.continues_before %}border-left:2px solid currentColor;{% endunless %}{% unless a.continues_after %}border-right:2px solid currentColor;{% endunless %}{% if a.continues_before %}margin-left:-4px;{% endif %}{% if a.continues_after %}margin-right:-4px;{% endif %}">
+              <div class="bg--{{ a.hue }} text--{{ a.fg }} w--full pr--2 py--[2px] flex flex--row flex--center-y gap--xsmall cal-fit-box" style="position:relative;overflow:hidden;box-sizing:border-box;padding-left:{% if a.badge %}20px{% else %}4px{% endif %};border-radius:{{ ad_radius }};border-top:2px solid currentColor;border-bottom:2px solid currentColor;{% unless a.continues_before %}border-left:2px solid currentColor;{% endunless %}{% unless a.continues_after %}border-right:2px solid currentColor;{% endunless %}{% if a.continues_before %}margin-left:-4px;{% endif %}{% if a.continues_after %}margin-right:-4px;{% endif %}">
                 {% if a.badge %}
                   <!-- Pinned to the top-left corner (like the event badge below) rather than
                        inline before the title — a fixed overlay position instead of one that
@@ -302,7 +302,19 @@ where the axis was already a sane fraction and unchanged. {%- endcomment -%}
                        padding-left above makes room so the title text doesn't render under it. -->
                   <span class="text--white bg--black rounded--full flex flex--center-x flex--center-y" style="position:absolute;top:1px;left:1px;width:16px;height:16px;font-size:9px;line-height:1;border:1.5px solid currentColor;box-sizing:border-box;z-index:1;">{{ a.badge }}</span>
                 {% endif %}
-                <span class="title {{ chip_title_cls }} text--{{ a.fg }}" data-clamp="1" style="min-width:0;">{{ a.title }}</span>
+                <!-- cal-fit-text/cal-fit-clip (see fit() below): a static size tier alone —
+                     what this used to be, plus a 1-line CSS clamp to ellipsis — truncated
+                     short titles far more aggressively than expected (e.g. "Werk" clipping to
+                     "Wo…") once the badge's reserved space and the full/lg view's larger
+                     title tier both ate into the same narrow chip; a fixed class can't adapt
+                     to that combination the way it can for a specific hand-tuned view. Same
+                     dynamic shrink-to-fit event titles already use, just kept in "clip" mode
+                     (cal-fit-clip, see fit()) since this is a normal-flow box that
+                     contributes real height to the all-day row's own budget — unlike an
+                     event's absolutely-positioned overlay, letting this one grow unclipped
+                     could push the row taller than its allday_pct allocation. chip_title_cls
+                     stays as the fallback size if the JS never runs. -->
+                <span class="title {{ chip_title_cls }} text--{{ a.fg }} cal-fit-text cal-fit-clip" data-fit-min="9" data-fit-max="90" style="min-width:0;">{{ a.title }}</span>
               </div>
             {% endfor %}
           </div>
@@ -473,14 +485,18 @@ where the axis was already a sane fraction and unchanged. {%- endcomment -%}
     if (!box) return null;
     // The axis still needs to clip — an hour number too tall for its row would otherwise
     // auto-expand a flex/grid child and push every later hour off-screen (the box's size
-    // there IS content-driven). Event titles don't have that risk: their box is an
-    // absolutely-positioned overlay with a fixed top/height percentage regardless of
-    // content, so letting an unavoidably-too-small title spill past its pill (matching how
-    // TRMNL's own official calendar plugin handles this — fixed font size, overflow:
-    // visible, see github.com/usetrmnl/plugins lib/calendar) reads far better than either
-    // clipping mid-glyph or hiding the title outright.
-    var isAxis = el.classList.contains('cal-axis-text');
-    box.style.overflow = isAxis ? 'hidden' : 'visible';
+    // there IS content-driven). Same for anything else marked cal-fit-clip: a normal-flow
+    // box (like the all-day chip title) that contributes real height to its row's own
+    // budget, where letting it grow would push that row taller than its allday_pct
+    // allocation and misalign the rest of the grid — not the "harmless" kind of spill event
+    // titles get away with. Event titles DON'T have that risk: their box is an absolutely-
+    // positioned overlay with a fixed top/height percentage regardless of content, so
+    // letting an unavoidably-too-small title spill past its pill (matching how TRMNL's own
+    // official calendar plugin handles this — fixed font size, overflow: visible, see
+    // github.com/usetrmnl/plugins lib/calendar) reads far better than either clipping
+    // mid-glyph or hiding the title outright.
+    var mustClip = el.classList.contains('cal-axis-text') || el.classList.contains('cal-fit-clip');
+    box.style.overflow = mustClip ? 'hidden' : 'visible';
     el.style.overflowWrap = 'anywhere'; // let a single long word break rather than
                                          // overflow a narrow (multi-lane) block sideways
     el.style.display = 'block';         // make width/maxWidth apply predictably
