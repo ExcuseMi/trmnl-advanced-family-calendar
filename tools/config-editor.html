@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Daylight &amp; Weather Calendar — Configuration Editor</title>
+<title>Advanced Family Calendar — Configuration Editor</title>
 <!-- Real TRMNL framework CSS, so every swatch/preview here uses the SAME bg--{hue}-65 /
      text--black / rounded--full classes the plugin itself renders with — what you see here
      is what actually ships, not an approximation of it. -->
@@ -91,7 +91,7 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>Daylight &amp; Weather Calendar</h1>
+  <h1>Advanced Family Calendar</h1>
   <p class="lede">Build the <strong>Calendar Configuration</strong> field visually, test it against real (fetched, uploaded, or pasted) ICS data, and preview colors/badges using TRMNL's actual CSS — then copy the JSON into the plugin's settings. This page runs <code>plugin/src/transform.js</code> directly, unmodified — the same code that runs on TRMNL.</p>
 
   <h2>Import existing configuration <span class="muted">(optional)</span></h2>
@@ -217,6 +217,22 @@
 <script>
 (function () {
   "use strict";
+
+  // This plugin's own backend (see /backend in the repo) — self-hosted, so unlike a
+  // third-party CORS proxy it's already trusted with the same private calendar URLs the
+  // plugin itself fetches at render time. Two jobs: /ics-proxy fetches a calendar
+  // server-side and hands the raw text back with CORS headers, for testing a feed here
+  // that blocks direct browser fetches; /images stores an uploaded photo (cropped to a
+  // 512x512 square) and serves it back at a stable URL TRMNL's render pipeline can
+  // reliably fetch — several public image hosts (imgur confirmed) block that kind of
+  // non-browser hotlinking outright.
+  var BACKEND_BASE_URL = "https://trmnl.bettens.dev/advanced-family-calendar";
+
+  // Captured once, at load time, before anything ever overrides window.fetch (see runTest
+  // below). fetchIcsSmart uses THIS, never the bare `fetch` identifier — a bare call would
+  // resolve to whatever window.fetch currently is, which during a test run is runTest's own
+  // wrapper that calls fetchIcsSmart in the first place, recursing into itself forever.
+  var realFetch = window.fetch.bind(window);
 
   // Mirrors HUES/GRAY_SHADES/BLACK_WHITE/colorClass/foregroundFor in plugin/src/transform.js —
   // kept as a second copy (not shared code) since this is a plain <script> tag, not a module;
@@ -439,6 +455,46 @@
     return list.filter(function (n) { return typeof n === "string" && n.trim(); }).map(function (n) { return n.trim(); });
   }
 
+  // A small "Upload photo" widget: a hidden file input triggered by a button, POSTing to
+  // this plugin's own backend (see BACKEND_BASE_URL above), which center-crops to a
+  // 512x512 square and returns a stable URL — used for both a person's photo and a
+  // category's icon (an uploaded image works anywhere a Material Symbols/Tabler name or
+  // a plain URL does, see resolveIcon in transform.js). onUploaded(url) is called with
+  // the resulting URL on success; the caller decides what to do with it (set a field,
+  // refresh a preview, etc.) rather than this widget knowing about any particular field.
+  function uploadButtonFor(onUploaded) {
+    var fileInput = el("input", { type: "file", accept: "image/*", style: "display:none;" });
+    var btn = el("button", { class: "small", type: "button" }, [document.createTextNode("Upload photo…")]);
+    var status = el("span", { class: "status", style: "margin-left:6px;" });
+    btn.addEventListener("click", function () { fileInput.click(); });
+    fileInput.addEventListener("change", function () {
+      var file = fileInput.files && fileInput.files[0];
+      if (!file) return;
+      status.textContent = "Uploading…";
+      status.className = "status";
+      var form = new FormData();
+      form.append("file", file);
+      realFetch(BACKEND_BASE_URL + "/images", { method: "POST", body: form })
+        .then(function (r) {
+          return r.json().then(function (body) {
+            if (!r.ok) throw new Error(body.error || ("HTTP " + r.status));
+            return body;
+          });
+        })
+        .then(function (body) {
+          status.textContent = "Uploaded (" + body.width + "x" + body.height + ").";
+          status.className = "status ok";
+          onUploaded(body.url);
+        })
+        .catch(function (e) {
+          status.textContent = "Upload failed: " + e.message;
+          status.className = "status err";
+        })
+        .finally(function () { fileInput.value = ""; });
+    });
+    return el("span", { class: "row", style: "gap:0;align-items:center;flex-wrap:nowrap;" }, [fileInput, btn, status]);
+  }
+
   function renderCalendars() {
     var wrap = document.getElementById("calendars");
     wrap.innerHTML = "";
@@ -601,9 +657,15 @@
       updatePhotoPreview();
       var imageInput = el("input", {
         type: "text", class: "field-narrow", style: "width:100%;box-sizing:border-box;",
-        placeholder: "optional: https://... photo URL", value: p.image,
+        placeholder: "optional: https://... photo URL, or upload one", value: p.image,
       });
       imageInput.addEventListener("input", function () { p.image = imageInput.value; updatePhotoPreview(); renderJson(); });
+      var photoUpload = uploadButtonFor(function (url) {
+        p.image = url;
+        imageInput.value = url;
+        updatePhotoPreview();
+        renderJson();
+      });
 
       var removeBtn = el("button", { class: "small danger" }, [document.createTextNode("Remove")]);
       removeBtn.addEventListener("click", function () {
@@ -619,7 +681,7 @@
         el("div", {}, [el("label", { text: "Name" }), nameInput]),
         el("div", {}, [el("label", { text: "Color" }), el("div", { class: "row", style: "gap:6px;" }, [colorSel, swatch])]),
         el("div", {}, [el("label", { text: "Badge" }), badgeInput]),
-        el("div", { style: "flex:1 1 220px;" }, [el("label", { text: "Photo (replaces badge letter)" }), el("div", { class: "row", style: "gap:6px;align-items:center;" }, [photoPreview, imageInput])]),
+        el("div", { style: "flex:1 1 260px;" }, [el("label", { text: "Photo (replaces badge letter)" }), el("div", { class: "row", style: "gap:6px;align-items:center;flex-wrap:wrap;" }, [photoPreview, imageInput, photoUpload])]),
       ]);
       wrap.appendChild(el("div", { class: "entry" }, [head, body]));
     });
@@ -707,10 +769,20 @@
     materialIconNamesReady.then(function () { if (document.activeElement === input) showSuggest(); });
     tablerIconNamesReady.then(function () { if (document.activeElement === input) showSuggest(); });
 
+    var upload = uploadButtonFor(function (url) {
+      setValue(url);
+      input.value = url;
+      updatePreview();
+      hideSuggest();
+      renderJson();
+    });
+    upload.style.marginTop = "4px";
+
     updatePreview();
     var row = el("div", { class: "icon-picker-row" }, [preview, input]);
     wrap.appendChild(row);
     wrap.appendChild(suggest);
+    wrap.appendChild(upload);
     return wrap;
   }
 
@@ -1074,11 +1146,41 @@
 
   // --------------------------------------------------------------- ICS sources
 
-  // For each configured calendar, this page will try a direct fetch() first (works when the
-  // host happens to send permissive CORS headers) and otherwise let you upload or paste the
-  // ICS content instead — routing a private calendar URL through a third-party CORS proxy
-  // would leak its secret token, so that's deliberately not offered here.
-  var icsOverrides = {}; // url -> pasted text
+  // For each configured calendar: try a direct fetch() first (works when the host happens
+  // to send permissive CORS headers), then this plugin's own backend /ics-proxy (fetches
+  // server-side, where CORS doesn't apply — see BACKEND_BASE_URL above), and only then fall
+  // back to letting you upload/paste the ICS content by hand.
+  var icsOverrides = {}; // url -> ICS text, from a successful fetch/proxy/upload/paste
+
+  // Tries direct fetch, then the backend proxy, in that order — resolves with { text, via }
+  // or rejects with an Error carrying both failure messages, so a caller can show exactly
+  // what was tried.
+  function fetchIcsSmart(url) {
+    return realFetch(url).then(function (r) {
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.text();
+    }).then(function (text) {
+      return { text: text, via: "direct fetch" };
+    }).catch(function (directErr) {
+      var proxyUrl = BACKEND_BASE_URL + "/ics-proxy?url=" + encodeURIComponent(url);
+      return realFetch(proxyUrl).then(function (r) {
+        // Body is read exactly once regardless of outcome: raw ICS text on success, a JSON
+        // {error} body on failure — parsing it as JSON only after already having the text
+        // (rather than calling r.json() first) avoids a second, invalid read of the same
+        // already-consumed response stream.
+        return r.text().then(function (bodyText) {
+          if (r.ok) return bodyText;
+          var message = "HTTP " + r.status;
+          try { message = JSON.parse(bodyText).error || message; } catch (e) { /* not JSON, keep default */ }
+          throw new Error(message);
+        });
+      }).then(function (text) {
+        return { text: text, via: "backend proxy" };
+      }).catch(function (proxyErr) {
+        throw new Error("direct fetch failed (" + directErr.message + "); backend proxy also failed (" + proxyErr.message + ")");
+      });
+    });
+  }
 
   function renderIcsSources() {
     var wrap = document.getElementById("icsSources");
@@ -1097,18 +1199,17 @@
         if (textarea.value.trim()) icsOverrides[url] = textarea.value;
         else delete icsOverrides[url];
       });
-      var tryBtn = el("button", { class: "small" }, [document.createTextNode("Try direct fetch")]);
+      var tryBtn = el("button", { class: "small" }, [document.createTextNode("Try fetch")]);
       tryBtn.addEventListener("click", function () {
         statusSpan.textContent = "Fetching…";
         statusSpan.className = "status";
-        fetch(url).then(function (r) {
-          if (!r.ok) throw new Error("HTTP " + r.status);
-          return r.text();
-        }).then(function (text) {
-          statusSpan.textContent = "Fetched " + text.length + " bytes directly — no need to paste.";
+        fetchIcsSmart(url).then(function (result) {
+          icsOverrides[url] = result.text;
+          textarea.value = result.text;
+          statusSpan.textContent = "Fetched " + result.text.length + " bytes via " + result.via + ".";
           statusSpan.className = "status ok";
         }).catch(function (e) {
-          statusSpan.textContent = "Direct fetch failed (" + e.message + ") — likely CORS. Upload or paste the ICS content below instead.";
+          statusSpan.textContent = e.message + " — upload or paste the ICS content below instead.";
           statusSpan.className = "status err";
         });
       });
@@ -1170,13 +1271,27 @@
       },
     };
 
-    // Route configured calendar URLs to their pasted override (if any) instead of the real
-    // network — everything else (Open-Meteo) goes through untouched.
-    var realFetch = window.fetch.bind(window);
+    // Route configured calendar URLs to their pasted/fetched override (if any), or — for a
+    // calendar URL with no override yet — try fetchIcsSmart (direct, then the backend
+    // proxy) automatically rather than making the user click "Try fetch" first. Anything
+    // else (Open-Meteo) goes through untouched, real fetch only. Reuses the module-level
+    // realFetch (captured once at load time, see above) rather than re-binding window.fetch
+    // here — at this point it's already been overridden by THIS wrapper if runTest is
+    // somehow invoked twice without the first call finishing, so re-binding here could
+    // capture the wrapper itself instead of the real thing.
+    var calendarUrls = calendars.map(function (c) { return c.url.trim(); }).filter(Boolean);
     window.fetch = function (url, opts) {
       var key = Object.keys(icsOverrides).find(function (u) { return url === u || url.indexOf(u) === 0; });
       if (key) {
         return Promise.resolve({ ok: true, status: 200, text: function () { return Promise.resolve(icsOverrides[key]); } });
+      }
+      var isCalendarUrl = calendarUrls.some(function (u) { return url === u || url.indexOf(u) === 0; });
+      if (isCalendarUrl) {
+        return fetchIcsSmart(url).then(function (result) {
+          return { ok: true, status: 200, text: function () { return Promise.resolve(result.text); } };
+        }).catch(function () {
+          return { ok: false, status: 0, text: function () { return Promise.resolve(""); } };
+        });
       }
       return realFetch(url, opts);
     };

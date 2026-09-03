@@ -1,15 +1,20 @@
-# TRMNL: Daylight & Weather Calendar
+# TRMNL: Advanced Family Calendar
 
 A [TRMNL](https://usetrmnl.com) private plugin that shows 1 day to a week of any ICS calendar
 feed as a time-grid, with sunrise/sunset and daily weather on the timeline. The grid auto-scales
 so the hours that matter (daylight and your meetings) get more room and quiet hours shrink out
 of the way, with no fixed "business hours" window to configure.
 
-Runs entirely on TRMNL **[Serverless](https://help.trmnl.com/en/articles/14130649-serverless)**,
-no server to host, no middleman service. `plugin/src/transform.js`'s `run()` fetches the ICS
-link(s), expands recurring events for the window, and returns a pre-computed native layout
+The plugin itself runs entirely on TRMNL
+**[Serverless](https://help.trmnl.com/en/articles/14130649-serverless)** — no server involved in
+actually rendering your calendar. `plugin/src/transform.js`'s `run()` fetches the ICS link(s),
+expands recurring events for the window, and returns a pre-computed native layout
 (percent-of-screen heights) to the Liquid template. The same file, unmodified, also runs in a
 plain browser tab — see [Configuration Editor](#configuration-editor) below.
+
+A small self-hosted [`backend/`](#backend) exists purely to support that editor and to host
+person/category photos reliably — see [Backend](#backend) below; it's optional infrastructure
+for building your config, not something the plugin depends on at render time.
 
 ## What it shows
 
@@ -70,16 +75,19 @@ plain browser tab — see [Configuration Editor](#configuration-editor) below.
 
 ## Configuration Editor
 
-**[excusemi.github.io/trmnl-daylight-ics-calendar-plugin/tools/config-editor.html](https://excusemi.github.io/trmnl-daylight-ics-calendar-plugin/tools/config-editor.html)**
+**[excusemi.github.io/trmnl-advanced-family-calendar/tools/config-editor.html](https://excusemi.github.io/trmnl-advanced-family-calendar/tools/config-editor.html)**
 — a static page (`tools/config-editor.html`, served via GitHub Pages) for building the Calendar
 Configuration field visually instead of hand-writing JSON: add calendars, people, and categories
 through a form (categories' icons are searchable live against both
 [Google's Material Symbols](https://fonts.google.com/icons) and [Tabler Icons](https://tabler.io/icons),
-no spelling guesses needed), add a
+no spelling guesses needed, or upload your own photo — see [Backend](#backend)), add a
 public holiday calendar for your country in one click, test against real ICS data (direct fetch
-when the host allows CORS, or paste the `.ics` text otherwise — a private calendar URL is never
-routed through a third-party proxy), and preview the actual colors/badges/icons using TRMNL's
-real CSS classes. Copy the generated JSON into the plugin's Calendar Configuration field when
+when the host allows CORS, automatically falling back to this plugin's own backend — which fetches
+server-side, where CORS doesn't apply, same as TRMNL's own render pipeline already does — and
+only then to pasting the `.ics` text by hand; a private calendar URL is never routed through any
+*third-party* proxy), and
+preview the actual colors/badges/icons using TRMNL's real CSS classes. Copy the generated JSON
+into the plugin's Calendar Configuration field when
 you're happy with it.
 
 For the full field-by-field reference see [CONFIG.md](CONFIG.md); having an LLM write the JSON
@@ -157,6 +165,36 @@ The JSON shape it produces:
   calendar that's already "someone's own" — e.g. a global "Work" category kept off your own
   personal calendar so your own name/badge shows through there instead.
 
+## Backend
+
+`backend/` is a small self-hosted Quart service (Postgres + Redis) that exists for two things
+the plugin itself doesn't need but the [Configuration Editor](#configuration-editor) does:
+
+- **`GET /ics-proxy?url=...`** — fetches a calendar feed server-side and returns the raw text
+  with permissive CORS headers, so the editor can test a real feed that blocks direct browser
+  fetches (most calendar hosts do) without you having to paste the `.ics` content by hand. SSRF-
+  guarded (only public http(s) hosts, redirects re-validated) since it's an internet-facing
+  "fetch this URL for me" endpoint.
+- **`POST /images`** / **`GET /images/<id>`** — upload a photo for a person or category icon;
+  it's center-cropped to a square and downscaled to at most 512×512, stored in Postgres, and
+  served back at a stable URL. This exists because several public image hosts (imgur confirmed)
+  block the kind of non-browser, server-side hotlinking TRMNL's own render pipeline does when it
+  fetches `people[].image`/`categories[].icon` — self-hosting sidesteps that outright.
+
+Both the upload endpoint and the ICS proxy sit behind the same tiered access control TRMNL
+backends in this account use (`ACCESS_MODE=rate_limited` by default — TRMNL's own IPs
+unrestricted, everyone else, including your own browser using the editor, rate limited rather
+than blocked outright). `GET /images/<id>` itself is deliberately unrestricted — that's the URL
+TRMNL's render pipeline fetches on every refresh, so gating it the same way would just recreate
+the hotlink-blocking problem this exists to solve.
+
+```bash
+cp .env.example .env   # fill in real Postgres/Redis passwords
+docker compose up -d --build
+```
+
+See `.env.example` for every setting (rate-limit window, upload size caps, etc.).
+
 ## Local layout development
 
 `run()` doesn't execute inside `trmnlp serve` (it targets `transform.js`, not the mock-data
@@ -182,6 +220,7 @@ exercise `run()`/`transform.js` itself against real data, use the
 | `plugin/src/settings.yml` | Custom fields (Calendar Configuration, time zone, time format, location, days to show) |
 | `plugin/.trmnlp.yml` | Local mock data for `trmnlp serve` |
 | `tools/config-editor.html` | Standalone config builder + real-data tester — see above |
+| `backend/` | CORS-free ICS test proxy + photo upload/hosting for the Configuration Editor — see [Backend](#backend) |
 
 ## Notes & limits
 

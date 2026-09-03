@@ -1,7 +1,7 @@
 # Configuring this plugin as an LLM
 
 You're helping someone write the **Calendar Configuration** JSON for the
-[Daylight & Weather Calendar](https://github.com/ExcuseMi/trmnl-daylight-ics-calendar-plugin) TRMNL
+[Advanced Family Calendar](https://github.com/ExcuseMi/trmnl-advanced-family-calendar) TRMNL
 plugin. This file is a compact reference for that one job. For prose explanations and worked
 examples, see [CONFIG.md](CONFIG.md) in this repo — this file is the terse/structured version of
 the same schema.
@@ -146,7 +146,7 @@ than one kid):
 
 Hand the result to the person to paste into the plugin's **Calendar Configuration** field, or
 build it interactively at
-[the Configuration Editor](https://excusemi.github.io/trmnl-daylight-ics-calendar-plugin/tools/config-editor.html)
+[the Configuration Editor](https://excusemi.github.io/trmnl-advanced-family-calendar/tools/config-editor.html)
 instead — it validates JSON and previews real colors/icons directly; testing against a real ICS
 feed there works via direct fetch when the calendar host allows it (CORS), and by pasting the
 raw `.ics` text otherwise, since this static page can't always reach an arbitrary calendar host

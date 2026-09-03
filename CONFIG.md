@@ -7,7 +7,7 @@ to use the plugin. It's here for when you want to hand-edit the JSON, understand
 setting does, or troubleshoot why an event isn't showing the color/icon you expected.
 
 If you just want to get set up, use the
-**[Configuration Editor](https://excusemi.github.io/trmnl-daylight-ics-calendar-plugin/tools/config-editor.html)**
+**[Configuration Editor](https://excusemi.github.io/trmnl-advanced-family-calendar/tools/config-editor.html)**
 instead — it builds this JSON for you through a form, and lets you test it against your real
 calendars before you save anything.
 

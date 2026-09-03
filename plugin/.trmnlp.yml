@@ -12,7 +12,7 @@ variables:
       locale: nl
       time_zone_iana: Europe/Brussels
     plugin_settings:
-      instance_name: Daylight & Weather Calendar
+      instance_name: Advanced Family Calendar
       strategy: polling
       dark_mode: 'no'
       no_screen_padding: 'yes'

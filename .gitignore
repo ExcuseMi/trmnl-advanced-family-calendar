@@ -221,3 +221,4 @@ __pycache__/
 plugin/_build/
 /.idea
 feedback.md
+calendar-config.json
