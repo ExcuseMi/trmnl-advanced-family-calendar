@@ -186,10 +186,13 @@ async function run(input) {
     e.badge = r.badge;
     // Categories are matched against the FINAL (post-rename) title, globally across every
     // calendar — a category's own color wins over a person's (more specific signal), and its
-    // icon replaces the person badge letter in the same corner slot (see shared.liquid).
+    // icon replaces the person badge letter in the same corner slot (see shared.liquid). Falls
+    // back to the calendar's own default icon (calendars[].icon, e.g. a flag for a public
+    // holiday calendar the Configuration Editor's country picker added) when no category
+    // matched — same "most specific signal wins" precedence used for color throughout this file.
     const c = applyCategory(e.title, categories);
     if (c.color) e.hueOverride = c.color;
-    e.icon = c.icon;
+    e.icon = c.icon || calendars[e.calIdx].icon || null;
   }
 
   // Bucket occurrences into day columns, split into timed vs all-day.
@@ -394,6 +397,13 @@ function emptyResult(tzname, tz, locale, daysN, msg, showTitleBar, titleBarPct, 
 // optional, one of HUES or "gray-10".."gray-70", pins that calendar's own default color
 // instead of auto-cycling through the hues by position (a matched/defaulted person's color,
 // when there is one, still wins over this).
+// `calendars[].icon` is optional (see resolveIcon) — a default icon for every event on that
+// calendar, same shape as categories[].icon (a Material Symbols name, a custom URL, or an
+// array of up to two). A matched Category's own icon still wins over this — this is just the
+// floor a whole calendar falls back to when nothing more specific claimed the badge slot. This
+// plugin has no built-in notion of "holidays" — the Configuration Editor's country picker is
+// just a convenience that adds a normal calendar entry pointing at a public Google-hosted
+// holiday feed, with color/icon pre-filled; nothing here treats it specially.
 // `calendars[].exclude` is optional — a regex, or an array of them (case-insensitive):
 // matching ANY of them hides that event entirely, before personRules/defaultPerson ever see
 // it, only from THAT calendar.
@@ -443,6 +453,7 @@ function parseConfig(raw) {
     if (!item || typeof item !== "object" || typeof item.url !== "string" || !item.url.trim()) continue;
     const id = typeof item.id === "string" && item.id.trim() ? item.id.trim() : null;
     const color = typeof item.color === "string" && isValidColor(item.color.toLowerCase()) ? item.color.toLowerCase() : null;
+    const icon = resolveIcon(item.icon);
     const exclude = compileRegexList(item.exclude);
     const defaultPerson = typeof item.defaultPerson === "string" && item.defaultPerson.trim() ? item.defaultPerson.trim() : null;
 
@@ -461,7 +472,7 @@ function parseConfig(raw) {
       personRules.push({ rx, person, rename: rule.rename !== false });
     }
 
-    calendars.push({ id, url: item.url.trim(), color, exclude, defaultPerson, personRules });
+    calendars.push({ id, url: item.url.trim(), color, icon, exclude, defaultPerson, personRules });
   }
 
   // Optional top-level "categories": [{ name, match, icon, color }] — unlike people[], which
@@ -1216,7 +1227,12 @@ async function fetchSky(location, daysN, fahrenheit) {
 // no layout math itself; it just loops over this pre-baked structure.
 
 const HEADER_PCT = 15; // bumped from 11 to fit a second line (daily high/low) under the day label
-const ALLDAY_ROW_PCT = 6;
+const ALLDAY_ROW_PCT = 9; // bumped from 6 — at 6 the row (~29px on the full/OG device) read as a
+                           // thin sliver next to timed events (which floor at MIN_EVENT_PCT, a
+                           // share of the taller grid_pct budget) even after the badge/icon
+                           // circle grew to 20px in the categories work — the circle nearly
+                           // filled the whole row with almost no margin. 9 gives it real
+                           // presence as a banner instead of a stripe.
 const TITLE_BAR_PCT = 6; // optional plugin-name bar at the very top, off by default (see run())
 const MIN_EVENT_PCT = 10; // floor so a block is never a literally invisible sliver — actual font
                            // sizing is handled client-side by the fit-text script (see shared.liquid),
