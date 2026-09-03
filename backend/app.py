@@ -2,7 +2,7 @@ import logging
 import os
 
 import aiohttp
-from quart import Quart, Response, jsonify, request
+from quart import Quart, Response, jsonify, redirect, request, send_from_directory
 
 from modules.utils.db import delete_image, init_db, load_image, save_image
 from modules.utils.images import InvalidImage, new_image_id, process_to_square
@@ -50,6 +50,34 @@ def _cors(resp: Response) -> Response:
 @app.route('/health')
 async def health():
     return jsonify({'status': 'ok'})
+
+
+# The Configuration Editor is served from here too (same origin as /ics-proxy and
+# /images), not just GitHub Pages — same-origin means the browser never needs a CORS
+# preflight against this backend at all for those calls, only against whatever third-party
+# calendar host the editor is testing (which is exactly what /ics-proxy exists to route
+# around). backend/Dockerfile copies tools/config-editor.html and plugin/src/transform.js
+# into static/ under the same relative layout they have in the repo, so the page's own
+# <script src="../plugin/src/transform.js"> resolves unmodified — those two files stay the
+# single source, this isn't a fork of them.
+
+@app.route('/')
+async def index():
+    # Relative, not absolute-path: Caddy's `handle_path /advanced-family-calendar*` strips
+    # that prefix before this app ever sees the request, so an absolute Location header here
+    # would drop it too — the browser would follow it straight to the wrong (prefix-less)
+    # URL. A relative Location resolves against the request URL the browser actually has.
+    return redirect('tools/config-editor.html')
+
+
+@app.route('/tools/config-editor.html')
+async def editor():
+    return await send_from_directory(app.static_folder, 'tools/config-editor.html')
+
+
+@app.route('/plugin/src/transform.js')
+async def editor_transform_js():
+    return await send_from_directory(app.static_folder, 'plugin/src/transform.js')
 
 
 # ------------------------------------------------------------------ ICS proxy (CORS-free)

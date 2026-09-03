@@ -1,6 +1,8 @@
 services:
   backend:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     container_name: trmnl-advanced-family-calendar-backend
     restart: unless-stopped
     env_file: .env

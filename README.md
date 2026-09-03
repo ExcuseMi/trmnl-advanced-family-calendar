@@ -12,9 +12,10 @@ expands recurring events for the window, and returns a pre-computed native layou
 (percent-of-screen heights) to the Liquid template. The same file, unmodified, also runs in a
 plain browser tab — see [Configuration Editor](#configuration-editor) below.
 
-A small self-hosted [`backend/`](#backend) exists purely to support that editor and to host
-person/category photos reliably — see [Backend](#backend) below; it's optional infrastructure
-for building your config, not something the plugin depends on at render time.
+A small self-hosted [`backend/`](#backend) serves that editor itself, proxies CORS-blocked ICS
+fetches for it, and hosts person/category photos reliably — see [Backend](#backend) below; it's
+optional infrastructure for building your config, not something the plugin depends on at render
+time.
 
 ## What it shows
 
@@ -75,8 +76,12 @@ for building your config, not something the plugin depends on at render time.
 
 ## Configuration Editor
 
-**[excusemi.github.io/trmnl-advanced-family-calendar/tools/config-editor.html](https://excusemi.github.io/trmnl-advanced-family-calendar/tools/config-editor.html)**
-— a static page (`tools/config-editor.html`, served via GitHub Pages) for building the Calendar
+**[trmnl.bettens.dev/advanced-family-calendar](https://trmnl.bettens.dev/advanced-family-calendar/)**
+— `tools/config-editor.html`, served by [the backend](#backend) itself (same origin as
+`/ics-proxy` and `/images`, so calls to those never need CORS at all — only the third-party
+calendar host being tested does, which is exactly what `/ics-proxy` routes around; also mirrored,
+unmodified, on [GitHub Pages](https://excusemi.github.io/trmnl-advanced-family-calendar/tools/config-editor.html))
+for building the Calendar
 Configuration field visually instead of hand-writing JSON: add calendars, people, and categories
 through a form (categories' icons are searchable live against both
 [Google's Material Symbols](https://fonts.google.com/icons) and [Tabler Icons](https://tabler.io/icons),
@@ -167,9 +172,15 @@ The JSON shape it produces:
 
 ## Backend
 
-`backend/` is a small self-hosted Quart service (Postgres + Redis) that exists for two things
-the plugin itself doesn't need but the [Configuration Editor](#configuration-editor) does:
+`backend/` is a small self-hosted Quart service (Postgres + Redis) that exists for the
+[Configuration Editor](#configuration-editor) — the plugin itself never talks to it at render
+time:
 
+- **`GET /`** and **`GET /tools/config-editor.html`** — serve the editor itself (Docker build
+  copies `tools/config-editor.html` and `plugin/src/transform.js` in, at the same relative paths
+  they have in the repo, so the page's own `<script src="../plugin/src/transform.js">` resolves
+  unchanged). Same-origin means its calls to the two endpoints below never trigger a CORS
+  preflight against this backend at all.
 - **`GET /ics-proxy?url=...`** — fetches a calendar feed server-side and returns the raw text
   with permissive CORS headers, so the editor can test a real feed that blocks direct browser
   fetches (most calendar hosts do) without you having to paste the `.ics` content by hand. SSRF-
@@ -219,8 +230,8 @@ exercise `run()`/`transform.js` itself against real data, use the
 | `plugin/src/shared.liquid` | The `main` template for all four view sizes (`full`/`half_*`/`quadrant`) |
 | `plugin/src/settings.yml` | Custom fields (Calendar Configuration, time zone, time format, location, days to show) |
 | `plugin/.trmnlp.yml` | Local mock data for `trmnlp serve` |
-| `tools/config-editor.html` | Standalone config builder + real-data tester — see above |
-| `backend/` | CORS-free ICS test proxy + photo upload/hosting for the Configuration Editor — see [Backend](#backend) |
+| `tools/config-editor.html` | Standalone config builder + real-data tester — see above; served by both `backend/` and GitHub Pages |
+| `backend/` | Serves the Configuration Editor + CORS-free ICS test proxy + photo upload/hosting — see [Backend](#backend) |
 
 ## Notes & limits
 

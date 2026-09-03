@@ -146,8 +146,8 @@ than one kid):
 
 Hand the result to the person to paste into the plugin's **Calendar Configuration** field, or
 build it interactively at
-[the Configuration Editor](https://excusemi.github.io/trmnl-advanced-family-calendar/tools/config-editor.html)
+[the Configuration Editor](https://trmnl.bettens.dev/advanced-family-calendar/)
 instead — it validates JSON and previews real colors/icons directly; testing against a real ICS
-feed there works via direct fetch when the calendar host allows it (CORS), and by pasting the
-raw `.ics` text otherwise, since this static page can't always reach an arbitrary calendar host
-itself.
+feed there works via direct fetch when the calendar host allows it (CORS), falling back to the
+same backend serving the editor itself (which fetches server-side, where CORS doesn't apply),
+and only then to pasting the raw `.ics` text by hand.
