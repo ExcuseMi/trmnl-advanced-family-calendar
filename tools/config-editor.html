@@ -88,7 +88,20 @@
   <h2>People <span class="muted">(optional — just names + colors/badges; who a badge/color applies to is set per calendar above, under each calendar's Advanced section)</span></h2>
   <div id="people"></div>
   <button id="addPerson">+ Add person</button>
-  <datalist id="peopleNames"></datalist>
+
+  <h2>Assign colors for a device <span class="muted">(optional)</span></h2>
+  <div class="card">
+    <p class="muted" style="margin-top:0;">The plugin itself has no notion of "device" — it only ever uses whatever <code>color</code> values end up in the JSON below. This just fills in a sensible one for every calendar/person that doesn't have one pinned yet, picked for the panel you choose: TRMNL OG and TRMNL X are both grayscale-only, and even TRMNL Display Color is a 4-ink Black/White/Red/Yellow panel rather than full color, so most of the 10 named colors would otherwise collapse onto the same result there anyway. Colors already set are left alone; re-run any time after adding more calendars/people.</p>
+    <div class="row">
+      <select id="deviceSelect">
+        <option value="og">TRMNL OG</option>
+        <option value="x">TRMNL X</option>
+        <option value="color">TRMNL Display Color</option>
+      </select>
+      <button id="assignColors">Auto-assign colors</button>
+      <span id="assignStatus" class="status"></span>
+    </div>
+  </div>
 
   <h2>Generated Configuration</h2>
   <div class="card">
@@ -159,6 +172,17 @@
   var GRAY_SHADES = [10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70];
   var VALID_COLORS = HUES.concat(GRAY_SHADES.map(function (n) { return "gray-" + n; }));
 
+  // Device-aware color pools — this tool's own concern, not the plugin's (see run() in
+  // transform.js, which just uses whatever `color` ends up in the JSON). OG/X are both
+  // grayscale-only panels, so a spread of gray shades gives predictable, evenly-spaced
+  // results. TRMNL Display Color is BWRY (Black/White/Red/Yellow) — red and yellow are the
+  // only two inks beyond black/white it actually has, so cycling all 10 hues there would just
+  // mean several silently converge to the same physical ink; extends with grays past 2 for
+  // further, honest distinction.
+  var GRAYSCALE_CYCLE = ["gray-10", "gray-25", "gray-40", "gray-55", "gray-70"];
+  var COLOR_DEVICE_CYCLE = ["red", "yellow", "gray-20", "gray-55"];
+  function cyclePoolFor(device) { return device === "color" ? COLOR_DEVICE_CYCLE : GRAYSCALE_CYCLE; }
+
   function colorClass(color) { return HUES.indexOf(color) !== -1 ? color + "-65" : color; }
   function foregroundFor(color) {
     var m = /^gray-(\d+)$/.exec(color || "");
@@ -219,16 +243,26 @@
 
   // -------------------------------------------------------------- calendars UI
 
-  function personDatalist() {
-    var dl = document.getElementById("peopleNames");
-    dl.innerHTML = "";
-    people.forEach(function (p) {
-      if (p.name.trim()) dl.appendChild(el("option", { value: p.name.trim() }));
+  // A real dropdown of currently-declared people (add them in the People section below)
+  // rather than free text — `value` is preserved as the selection if it still matches a
+  // declared name, otherwise falls back to the placeholder/empty option so a rename or
+  // removal in People doesn't leave a select silently pointing at a name that's gone.
+  function personSelect(value, allowNone) {
+    var sel = el("select", { class: "field-narrow" });
+    var names = people.map(function (p) { return p.name.trim(); }).filter(Boolean);
+    if (allowNone || !names.length) {
+      sel.appendChild(el("option", { value: "" }, [document.createTextNode(names.length ? "(none)" : "(add a person below first)")]));
+    }
+    names.forEach(function (n) {
+      var opt = el("option", { value: n }, [document.createTextNode(n)]);
+      if (n === value) opt.setAttribute("selected", "selected");
+      sel.appendChild(opt);
     });
+    sel.disabled = !names.length;
+    return sel;
   }
 
   function renderCalendars() {
-    personDatalist();
     var wrap = document.getElementById("calendars");
     wrap.innerHTML = "";
     calendars.forEach(function (c, idx) {
@@ -287,8 +321,8 @@
     addExclude.addEventListener("click", function () { c.excludes.push(""); renderExcludes(); });
 
     // Default person -----------------------------------------------------------------
-    var defaultPersonInput = el("input", { type: "text", class: "field-narrow", list: "peopleNames", placeholder: "(none)", value: c.defaultPerson });
-    defaultPersonInput.addEventListener("input", function () { c.defaultPerson = defaultPersonInput.value; renderJson(); });
+    var defaultPersonInput = personSelect(c.defaultPerson, true);
+    defaultPersonInput.addEventListener("change", function () { c.defaultPerson = defaultPersonInput.value; renderJson(); });
 
     // Person rules (repeatable) -------------------------------------------------------
     var rulesWrap = el("div", {});
@@ -298,8 +332,9 @@
         var matchInput = el("input", { type: "text", class: "field field-regex", placeholder: "match regex, e.g. \\bL6\\b", value: r.match });
         matchInput.addEventListener("input", function () { r.match = matchInput.value; renderJson(); });
 
-        var personInput = el("input", { type: "text", class: "field field-narrow", list: "peopleNames", placeholder: "person", value: r.person });
-        personInput.addEventListener("input", function () { r.person = personInput.value; renderJson(); });
+        var personInput = personSelect(r.person, false);
+        personInput.classList.add("field");
+        personInput.addEventListener("change", function () { r.person = personInput.value; renderJson(); });
 
         var renameChk = el("input", { type: "checkbox" });
         renameChk.checked = r.rename !== false;
@@ -371,6 +406,30 @@
   document.getElementById("addPerson").addEventListener("click", function () {
     people.push(newPerson());
     renderPeople(); renderJson(); renderCalendars();
+  });
+
+  // ------------------------------------------------------- device color auto-assignment
+
+  document.getElementById("assignColors").addEventListener("click", function () {
+    var pool = cyclePoolFor(document.getElementById("deviceSelect").value);
+    var idx = 0;
+    var assigned = 0;
+    calendars.forEach(function (c) {
+      if (c.color) return;
+      c.color = pool[idx % pool.length];
+      idx++;
+      assigned++;
+    });
+    people.forEach(function (p) {
+      if (p.color) return;
+      p.color = pool[idx % pool.length];
+      idx++;
+      assigned++;
+    });
+    renderCalendars(); renderPeople(); renderJson();
+    var status = document.getElementById("assignStatus");
+    status.textContent = assigned ? "Filled in " + assigned + " color(s) — review below, still freely editable." : "Nothing to do — every calendar/person already has a color.";
+    status.className = "status ok";
   });
 
   // ------------------------------------------------------------------ JSON out

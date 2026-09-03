@@ -30,8 +30,10 @@
 {%- elsif view == 3 -%}
   {%- comment -%} half_vertical: only ~400px WIDE (3 narrow day columns, ~133px each) —
   width-constrained rather than area-constrained, so it needs a smaller tier than
-  half_horizontal even though both are nominally "half" the full-view area. {%- endcomment -%}
-  {%- assign head_title_cls = "title--base lg:title--large" -%}
+  half_horizontal even though both are nominally "half" the full-view area. Day-label font
+  matches quadrant's (title--small) rather than getting its own tier — same reasoning as
+  quadrant: narrow columns need the compact size regardless of view. {%- endcomment -%}
+  {%- assign head_title_cls = "title--small" -%}
   {%- assign chip_title_cls = "title--small" -%}
   {%- assign axis_cls = "label--base lg:label--large" -%}
   {%- assign event_pad_cls = "pt--0 pb--1 px--1" -%}
@@ -79,6 +81,23 @@ there are more columns than the sizes above were tuned for, regardless of view. 
   {%- assign chip_title_cls = "title--small" -%}
 {%- endif -%}
 
+{%- comment -%} The hour-axis column is a fixed col--span-1 against each day column's
+col--span-4 — with the framework's grid auto-sizing tracks from the SUM of spans actually
+present in the row (repeat(auto-fit, minmax(0,1fr)); confirmed against the compiled CSS, not
+a fixed 12-column grid), the axis's WIDTH SHARE is 1/(1 + 4*days.size): a fine ~7.7% at the
+3-day baseline this was tuned against, but a wildly disproportionate 20% at 1 day (noticeable
+on any device, worse the bigger/wider the panel — reported on TRMNL X). Scale each day
+column's own span up as days.size drops below 3 so the total stays pinned at 13 (1 + 4*3, the
+same baseline ratio) instead of shrinking with it — day_span stays the plain 4 at 3+ days,
+where the axis was already a sane fraction and unchanged. {%- endcomment -%}
+{%- if days.size == 1 -%}
+  {%- assign day_span = 12 -%}
+{%- elsif days.size == 2 -%}
+  {%- assign day_span = 6 -%}
+{%- else -%}
+  {%- assign day_span = 4 -%}
+{%- endif -%}
+
 <div class="layout layout--col gap--none" id="cal-root">
   {% if show_title_bar %}
     <!-- Optional, off by default (see the "Title Bar" setting) — its height comes out of
@@ -102,11 +121,12 @@ there are more columns than the sizes above were tuned for, regardless of view. 
          device — including the larger, portrait, 4-bit TRMNL X — via the framework's
          own container-query system instead of a fixed-aspect picture. -->
 
-    <!-- Abbreviated-month day label for layouts where the full month name is what
-         wraps/overflows: quadrant and half_vertical are narrow regardless of Days to
-         Show (see their branches below), and the wider views get tight once Days to
-         Show pushes past 3-4 columns (see the head_title_cls step-down above). -->
-    {% if view == 3 or view == 4 or days.size >= 4 %}
+    <!-- Abbreviated-month day label. quadrant/half_vertical/half_horizontal always use it
+         (the OG device's own 800x480 hardware, where the header runs noticeably tighter than
+         the multi-device-scaled full view's own tuning assumed), and the wider views get
+         tight once Days to Show pushes past 3-4 columns (see the head_title_cls step-down
+         above). -->
+    {% if view == 2 or view == 3 or view == 4 or days.size >= 4 %}
       {% assign use_short_month = true %}
     {% else %}
       {% assign use_short_month = false %}
@@ -124,7 +144,7 @@ there are more columns than the sizes above were tuned for, regardless of view. 
              today's label is wrapped in an extra div (the black pill) that plain-text days
              don't have, and without a deliberate gap value here the two box shapes ended up
              with visibly different spacing before the temp line below them. -->
-        <div class="col--span-4 flex flex--col flex--center-x flex--center-y gap--xsmall border--v-1">
+        <div class="col--span-{{ day_span }} flex flex--col flex--center-x flex--center-y gap--xsmall border--v-1">
           {% if view == 4 %}
             <!-- Quadrant can also render in a PORTRAIT-oriented slot (much narrower columns
                  than the landscape quadrant this was tuned against), where the plain flex row
@@ -224,7 +244,7 @@ there are more columns than the sizes above were tuned for, regardless of view. 
       <div class="grid gap--none h--[{{ allday_pct }}cqh]">
         <div class="col--span-1"></div>
         {% for day in days %}
-          <div class="col--span-4 flex flex--col gap--xsmall px--[4px] border--v-1">
+          <div class="col--span-{{ day_span }} flex flex--col gap--xsmall px--[4px] border--v-1">
             {% for a in day.allday %}
               <!-- A multi-day all-day event used to repeat as an identical, fully-rounded
                    pill in every day column it touched, which read as several unrelated
@@ -258,13 +278,29 @@ there are more columns than the sizes above were tuned for, regardless of view. 
                    stylesheet) silently wins over a separate pl--N class fighting it for
                    padding-left — named pl--N/pr--N classes each only touch their own side,
                    so they don't conflict with each other. -->
-              <div class="bg--{{ a.hue }} w--full pl--1 pr--2 py--[2px] flex flex--row flex--center-y gap--xsmall" style="overflow:hidden;border-radius:{{ ad_radius }};{% if a.continues_before %}margin-left:-4px;{% endif %}{% if a.continues_after %}margin-right:-4px;{% endif %}">
+              <!-- Outline in currentColor (= a.fg, via the text--{{ a.fg }} class added here
+                   too, not just on the title span below, so the border actually inherits it —
+                   a chip's own background can otherwise sit flush against an equally-light/
+                   dark day-background segment with no visible edge at all, e.g. a light
+                   gray-N pin over today's unshaded (white) daytime band. Suppressed on
+                   whichever side is mid-span for a continuing multi-day banner (see
+                   continues_before/after above) so the outline doesn't reintroduce the seam
+                   between fragments that ad_radius/the negative margins above already work to
+                   hide — only the banner's real start/end edges, and always its top/bottom,
+                   get one. -->
+              <div class="bg--{{ a.hue }} text--{{ a.fg }} w--full pr--2 py--[2px] flex flex--row flex--center-y gap--xsmall" style="position:relative;overflow:hidden;box-sizing:border-box;padding-left:{% if a.badge %}20px{% else %}4px{% endif %};border-radius:{{ ad_radius }};border-top:2px solid currentColor;border-bottom:2px solid currentColor;{% unless a.continues_before %}border-left:2px solid currentColor;{% endunless %}{% unless a.continues_after %}border-right:2px solid currentColor;{% endunless %}{% if a.continues_before %}margin-left:-4px;{% endif %}{% if a.continues_after %}margin-right:-4px;{% endif %}">
                 {% if a.badge %}
-                  <!-- A Person's badge (see the Calendar Configuration field) — solid black/
-                       white regardless of the chip's own hue, same reasoning as the chip text
-                       staying solid black: one fixed pairing that's always legible, rather
-                       than a second per-hue contrast decision on top of the chip's own. -->
-                  <span class="text--white bg--black rounded--full flex flex--center-x flex--center-y" style="width:1.3em;height:1.3em;flex-shrink:0;font-size:0.75em;line-height:1;">{{ a.badge }}</span>
+                  <!-- Pinned to the top-left corner (like the event badge below) rather than
+                       inline before the title — a fixed overlay position instead of one that
+                       shifts with the row's own vertical centering. Solid black fill + white
+                       text regardless of the chip's own hue/gray, same reasoning as the chip
+                       text staying one fixed color: no second per-chip contrast decision
+                       needed. The border uses currentColor (= this span's own white text
+                       color) specifically so the circle itself stays visible even against a
+                       near-black chip (e.g. a dark gray-N pin) it would otherwise blend into —
+                       plain black-on-near-black has ~zero contrast without it. The chip's own
+                       padding-left above makes room so the title text doesn't render under it. -->
+                  <span class="text--white bg--black rounded--full flex flex--center-x flex--center-y" style="position:absolute;top:1px;left:1px;width:16px;height:16px;font-size:9px;line-height:1;border:1.5px solid currentColor;box-sizing:border-box;z-index:1;">{{ a.badge }}</span>
                 {% endif %}
                 <span class="title {{ chip_title_cls }} text--{{ a.fg }}" data-clamp="1" style="min-width:0;">{{ a.title }}</span>
               </div>
@@ -282,7 +318,7 @@ there are more columns than the sizes above were tuned for, regardless of view. 
                locally, but never once showed up on the actual device. A per-hour
                background shade is a large-area fill instead of a 1-2px sliver, so it
                can't fail the same way. -->
-          <div class="h--[{{ row.pct }}cqh] w--full flex flex--row flex--center-x cal-row cal-fit-box {% if row.shade == 1 %}bg--gray-60{% endif %}">
+          <div class="h--[{{ row.pct }}cqh] w--full flex flex--row flex--center-x cal-row cal-fit-box {% if row.shade == 1 %}bg--gray-65{% endif %}">
             <!-- Row height varies a lot with the configured hour range and view size — the
                  emphasized (day_start-day_end-derived) hours get much taller rows than the
                  compressed hours outside it, and that ratio shifts per view too. A fixed
@@ -299,7 +335,7 @@ there are more columns than the sizes above were tuned for, regardless of view. 
         {% endfor %}
       </div>
       {% for day in days %}
-        <div class="col--span-4 flex flex--col gap--none border--v-1" style="position:relative;">
+        <div class="col--span-{{ day_span }} flex flex--col gap--none border--v-1" style="position:relative;">
           <!-- Background bands always render at full per-hour granularity (see
                _layout_native) even where an event is running — events are a separate
                absolutely-positioned overlay (below), painted on top, instead of the
@@ -312,17 +348,22 @@ there are more columns than the sizes above were tuned for, regardless of view. 
                    real grayscale device a 1-3px sliver against an already-striped background
                    was unreadable. Shading the whole night span is a large-area signal instead
                    — same fix as the hour zebra-stripe, applied to day/night. Solid black read
-                   as too harsh; a darker pair of grays keeps the same alternating-stripe
-                   texture as daytime (gray-N: lower number is darker) while staying clearly
-                   darker than the darkest daytime tone (gray-40, used below). -->
-              {% assign seg_bg = "bg--gray-20" %}
-              {% if seg.shade == 1 %}{% assign seg_bg = "bg--gray-30" %}{% endif %}
+                   as too harsh, and so — per direct feedback — did the first pass of grays
+                   picked here (gray-20/30 for night, gray-70/40 for non-today daytime): a
+                   large-area fill at those darker/higher-contrast steps still reads as heavy
+                   across a whole column of hour cells, not just a thin line. Lightened the
+                   whole scale up a couple of steps and narrowed the shaded/unshaded gap
+                   (gray-N: lower number is darker) while keeping the same relative
+                   ordering — night still clearly darker than any daytime tone, today's
+                   shading still a touch lighter than a non-today day's. -->
+              {% assign seg_bg = "bg--gray-30" %}
+              {% if seg.shade == 1 %}{% assign seg_bg = "bg--gray-40" %}{% endif %}
             {% elsif day.is_today %}
               {% assign seg_bg = "" %}
-              {% if seg.shade == 1 %}{% assign seg_bg = "bg--gray-60" %}{% endif %}
+              {% if seg.shade == 1 %}{% assign seg_bg = "bg--gray-65" %}{% endif %}
             {% else %}
               {% assign seg_bg = "bg--gray-70" %}
-              {% if seg.shade == 1 %}{% assign seg_bg = "bg--gray-40" %}{% endif %}
+              {% if seg.shade == 1 %}{% assign seg_bg = "bg--gray-55" %}{% endif %}
             {% endif %}
             <div class="h--[{{ seg.pct }}cqh] w--full cal-row {{ seg_bg }}" style="position:relative;">
               {% if seg.weather %}
@@ -368,8 +409,14 @@ there are more columns than the sizes above were tuned for, regardless of view. 
                 {% for lane in event.lanes %}
                   <!-- lane.hue/lane.fg are computed server-side the same way as the all-day
                        chip above (see colorClass/foregroundFor in transform.js) — lane.hue is
-                       already the full bg-- suffix, lane.fg the matching foreground. -->
-                  <div class="col--span-1 h--full w--full bg--{{ lane.hue }} rounded--small {{ event_pad_cls }} flex flex--col flex--center-y cal-fit-box" style="position:relative;">
+                       already the full bg-- suffix, lane.fg the matching foreground. text--
+                       {{ lane.fg }} is added on this outer div (not just the title span below)
+                       so the currentColor border actually inherits it, same reasoning as the
+                       all-day chip's outline above — gives the chip a visible edge even
+                       against an equally light/dark background band it would otherwise sit
+                       flush against with no boundary at all. box-sizing:border-box keeps the
+                       border from growing the box past its own h--full/w--full allocation. -->
+                  <div class="col--span-1 h--full w--full bg--{{ lane.hue }} text--{{ lane.fg }} rounded--small {{ event_pad_cls }} flex flex--col flex--center-y cal-fit-box" style="position:relative;box-sizing:border-box;border:2px solid currentColor;">
                     {% if lane.badge %}
                       <!-- Absolutely positioned in the corner, deliberately NOT inline with
                            the title: the fit-text script (see run() below) sizes the title
@@ -377,11 +424,15 @@ there are more columns than the sizes above were tuned for, regardless of view. 
                            sibling badge eating horizontal space — an inline badge would let
                            fit() size text too large for the room actually left beside it.
                            An overlay sidesteps that entirely instead of teaching fit() about
-                           a second element. Solid black/white regardless of the chip's own
-                           hue, same reasoning as the chip text staying solid black: one
-                           fixed pairing that's always legible, no per-hue contrast decision
-                           needed for the badge either. -->
-                      <span class="text--white bg--black rounded--full flex flex--center-x flex--center-y" style="position:absolute;top:2px;left:2px;width:14px;height:14px;font-size:9px;line-height:1;z-index:1;">{{ lane.badge }}</span>
+                           a second element. Solid black fill + white text regardless of the
+                           chip's own hue/gray, same reasoning as the chip text staying one
+                           fixed color. The currentColor border (= white, this span's own text
+                           color) keeps the circle visible against a near-black chip (a dark
+                           gray-N pin) it would otherwise blend straight into. Sized larger
+                           than the all-day version above (20px vs. ~1.6em of a typically-
+                           bigger chip title) since event chips run much smaller, especially on
+                           quadrant, and a badge that's hard to read defeats its own purpose. -->
+                      <span class="text--white bg--black rounded--full flex flex--center-x flex--center-y" style="position:absolute;top:1px;left:1px;width:20px;height:20px;font-size:12px;line-height:1;border:2px solid currentColor;box-sizing:border-box;z-index:1;">{{ lane.badge }}</span>
                     {% endif %}
                     <span class="title {{ event_title_cls }} text--{{ lane.fg }} cal-fit-text" data-fit-min="11" data-fit-max="90">{{ lane.title }}</span>
                   </div>
