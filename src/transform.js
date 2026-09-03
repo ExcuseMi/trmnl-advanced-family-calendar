@@ -40,6 +40,14 @@ const WD_MAP = { MO: 0, TU: 1, WE: 2, TH: 3, FR: 4, SA: 5, SU: 6 };
 const HUES = ["blue", "green", "orange", "purple", "red", "cyan", "pink", "lime", "violet", "yellow"];
 const GRAY_SHADES = [10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70];
 
+// This plugin has no notion of "which device" at all — it only ever reads/renders whatever
+// `color` values are already sitting in the config (pinned, or left blank to auto-cycle the
+// 10 named hues by position, same as always). Picking sensible colors for a specific panel
+// (e.g. a grayscale TRMNL OG/X, or the 4-ink Black/White/Red/Yellow TRMNL Display Color,
+// which can't render the other hues as genuinely distinct colors) is entirely
+// /tools/config-editor.html's job at config-BUILD time — it resolves and writes real `color`
+// values into the JSON you paste in here, so this file stays simple and hardware-agnostic.
+
 function isValidColor(v) {
   if (HUES.includes(v)) return true;
   const m = /^gray-(\d+)$/.exec(v);
@@ -1165,21 +1173,23 @@ function layoutNative(days, importantStart, importantEnd, nowH, sunMarks, hourly
     return gridBase + cum;
   }
 
-  // Bold the hour label wherever a timed event starts TODAY specifically, so the axis
-  // doubles as a quick glance of "something happens around here" for the day that matters
-  // most — bolding for every visible day made the axis mostly-bold on a busy week and lost
-  // that at-a-glance signal. Deliberately independent of "now": this marks where today's
-  // events are anchored on the axis, not what's still upcoming.
-  const startHoursToday = new Set();
-  for (const d of days) {
-    if (!d.isToday) continue;
-    for (const e of d.timed) {
-      if (e.h0 >= 0 && e.h0 < 24) startHoursToday.add(Math.trunc(e.h0));
+  // Bold the hour label at the NEXT upcoming timed event today, so the axis doubles as an
+  // at-a-glance "what's coming up" — only ever one hour bold, not every hour anything starts
+  // today (that read as mostly-bold on a busy day and lost the signal), and nothing at all
+  // once today's last event has already started (there's nothing left to point at).
+  let nextEventH0 = null;
+  if (nowH !== null && nowH !== undefined) {
+    for (const d of days) {
+      if (!d.isToday) continue;
+      for (const e of d.timed) {
+        if (e.h0 >= nowH && e.h0 < 24 && (nextEventH0 === null || e.h0 < nextEventH0)) nextEventH0 = e.h0;
+      }
     }
   }
+  const nextHour = nextEventH0 !== null ? Math.trunc(nextEventH0) : null;
   const hourRows = [];
   for (let h = 0; h < 24; h++) {
-    hourRows.push({ hour: h, pct: hourPct[h], shade: h % 2, bold: startHoursToday.has(h), important: importantStart <= h && h < importantEnd });
+    hourRows.push({ hour: h, pct: hourPct[h], shade: h % 2, bold: h === nextHour, important: importantStart <= h && h < importantEnd });
   }
 
   const outDays = [];
