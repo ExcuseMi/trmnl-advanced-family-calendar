@@ -27,6 +27,7 @@
   {%- assign event_pad_cls = "pt--0 pb--1 px--1" -%}
   {%- assign daylabel_pad_cls = "p--2" -%}
   {%- assign event_title_cls = "title--small" -%}
+  {%- assign badge_hide_cls = "" -%}
 {%- elsif view == 3 -%}
   {%- comment -%} half_vertical: only ~400px WIDE (3 narrow day columns, ~133px each) —
   width-constrained rather than area-constrained, so it needs a smaller tier than
@@ -39,6 +40,7 @@
   {%- assign event_pad_cls = "pt--0 pb--1 px--1" -%}
   {%- assign daylabel_pad_cls = "p--2" -%}
   {%- assign event_title_cls = "title--small" -%}
+  {%- assign badge_hide_cls = "" -%}
 {%- elsif view == 2 -%}
   {%- comment -%} half_horizontal: full 800px width but half height — width is ample,
   so it can keep a larger tier than half_vertical. {%- endcomment -%}
@@ -48,6 +50,7 @@
   {%- assign event_pad_cls = "pt--1 pb--2 px--2" -%}
   {%- assign daylabel_pad_cls = "p--2" -%}
   {%- assign event_title_cls = "title--small" -%}
+  {%- assign badge_hide_cls = "" -%}
 {%- else -%}
   {%- comment -%} full / "OG" 800x480 device: the hour axis at xlarge/xxlarge read too big
   in practice — one tier down still reads fine at this size and leaves more room. Rotated to
@@ -66,6 +69,14 @@
   sides reads as too much padding on top specifically. Trim just the top. {%- endcomment -%}
   {%- assign daylabel_pad_cls = "pt--1 pb--2 px--2" -%}
   {%- assign event_title_cls = "title--base" -%}
+  {%- comment -%} Person badges (see the Calendar Configuration field) hidden specifically on
+  the OG device's own full-screen size bucket (screen--lg) in this view — chips are already
+  large enough there for the title/color alone to read clearly, and the badge circle was
+  competing for space with the recent all-day title-truncation fix (see the cal-fit-clip
+  changes) at exactly this size. Only this view/bucket combination — quadrant/half_* and
+  smaller size buckets of the full view all keep badges, where the extra identification
+  matters more against a much smaller chip. {%- endcomment -%}
+  {%- assign badge_hide_cls = "lg:hidden" -%}
 {%- endif -%}
 
 {%- comment -%} Every tier above assumes the original 3-day layout's column width. With
@@ -287,8 +298,19 @@ where the axis was already a sane fraction and unchanged. {%- endcomment -%}
                    continues_before/after above) so the outline doesn't reintroduce the seam
                    between fragments that ad_radius/the negative margins above already work to
                    hide — only the banner's real start/end edges, and always its top/bottom,
-                   get one. -->
-              <div class="bg--{{ a.hue }} text--{{ a.fg }} w--full pr--2 py--[2px] flex flex--row flex--center-y gap--xsmall cal-fit-box" style="position:relative;overflow:hidden;box-sizing:border-box;padding-left:{% if a.badge %}20px{% else %}4px{% endif %};border-radius:{{ ad_radius }};border-top:2px solid currentColor;border-bottom:2px solid currentColor;{% unless a.continues_before %}border-left:2px solid currentColor;{% endunless %}{% unless a.continues_after %}border-right:2px solid currentColor;{% endunless %}{% if a.continues_before %}margin-left:-4px;{% endif %}{% if a.continues_after %}margin-right:-4px;{% endif %}">
+                   get one.
+
+                   h--[{{ allday_row_pct }}cqh]: every all-day row is exactly this height,
+                   period — not content-driven. Without an explicit height here, this box has
+                   no real vertical budget for cal-fit-text/cal-fit-clip to measure against
+                   (a content-driven box's clientHeight just grows to match whatever content
+                   is already there, so the "does it fit?" check downstream in fit() never
+                   actually fails) — the title would silently pick the largest allowed font
+                   regardless of how little text it has, and different days' chips would end
+                   up visibly different heights depending on which one happened to render
+                   first. A fixed height fixes both: a real ceiling fit() can shrink against,
+                   and a genuine minimum every row gets regardless of content. -->
+              <div class="h--[{{ allday_row_pct }}cqh] bg--{{ a.hue }} text--{{ a.fg }} w--full pr--2 py--[1px] flex flex--row flex--center-y gap--xsmall cal-fit-box" style="position:relative;overflow:hidden;box-sizing:border-box;padding-left:{% if a.badge %}20px{% else %}4px{% endif %};border-radius:{{ ad_radius }};border-top:2px solid currentColor;border-bottom:2px solid currentColor;{% unless a.continues_before %}border-left:2px solid currentColor;{% endunless %}{% unless a.continues_after %}border-right:2px solid currentColor;{% endunless %}{% if a.continues_before %}margin-left:-4px;{% endif %}{% if a.continues_after %}margin-right:-4px;{% endif %}">
                 {% if a.badge %}
                   <!-- Pinned to the top-left corner (like the event badge below) rather than
                        inline before the title — a fixed overlay position instead of one that
@@ -459,7 +481,7 @@ where the axis was already a sane fraction and unchanged. {%- endcomment -%}
                        than the all-day version above (20px vs. ~1.6em of a typically-
                        bigger chip title) since event chips run much smaller, especially on
                        quadrant, and a badge that's hard to read defeats its own purpose. -->
-                  <span class="text--white bg--black rounded--full flex flex--center-x flex--center-y" style="position:absolute;top:1px;left:1px;width:20px;height:20px;font-size:12px;line-height:1;border:2px solid currentColor;box-sizing:border-box;z-index:1;">{{ event.badge }}</span>
+                  <span class="text--white bg--black rounded--full flex flex--center-x flex--center-y {{ badge_hide_cls }}" style="position:absolute;top:1px;left:1px;width:20px;height:20px;font-size:12px;line-height:1;border:2px solid currentColor;box-sizing:border-box;z-index:1;">{{ event.badge }}</span>
                 {% endif %}
                 <span class="title {{ event_title_cls }} text--{{ event.fg }} cal-fit-text" data-fit-min="11" data-fit-max="90">{{ event.title }}</span>
               </div>
