@@ -21,9 +21,9 @@ variables:
         time_zone: Europe/Brussels
         view_days: '3'
   header_pct: 15
-  allday_pct: 6
-  allday_row_pct: 6
-  grid_pct: 79
+  allday_pct: 9
+  allday_row_pct: 9
+  grid_pct: 76
   title_bar_pct: 0
   show_title_bar: false
   title_text: Daylight & Weather Calendar
