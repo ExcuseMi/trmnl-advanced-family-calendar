@@ -23,7 +23,8 @@ variables:
   header_pct: 15
   allday_pct: 12
   allday_row_pct: 12
-  grid_pct: 73
+  grid_pct: 64
+  footer_pct: 9
   title_bar_pct: 0
   show_title_bar: false
   title_text: Daylight & Weather Calendar
@@ -136,7 +137,7 @@ variables:
     - title: Verjaardag Alex
       hue: pink-65
       fg: black
-      badge: null
+      badge: A
       icon:
         first: https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/cake/default/24px.svg
       continues_before: false
@@ -396,7 +397,8 @@ variables:
       bar: green-45
       fg: black
       badge: A
-      icon: null
+      icon:
+        first: https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/pool/default/24px.svg
     now_marker: null
   - label: Ma 6 Juli
     label_short: Ma 6 Jul

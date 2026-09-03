@@ -1302,7 +1302,18 @@ async function fetchSky(location, daysN, fahrenheit) {
 // the same numbers render correctly on any device, including the larger TRMNL X. Liquid does
 // no layout math itself; it just loops over this pre-baked structure.
 
-const HEADER_PCT = 15; // bumped from 11 to fit a second line (daily high/low) under the day label
+const HEADER_PCT = 15; // day label only, one line. Tried dropping this back toward 11 once
+                       // the daily high/low moved out to its own footer zone (see FOOTER_PCT)
+                       // and stopped sharing this bar as a second line, on the assumption
+                       // that a single line needs less room — measured wrong: half_horizontal
+                       // alone uses a title--large tier whose real rendered line-height (36px
+                       // at that view's own 240px-tall screen) already needs the full 15% on
+                       // its own, pill padding or not. Kept at 15; the footer's own cost comes
+                       // entirely out of gridPct instead (see below).
+const FOOTER_PCT = 9; // weather icon + daily high/low, its own zone at the bottom of the
+                      // screen (see shared.liquid) rather than a second header line — kept
+                      // out of gridBase (the hourly grid's own top-offset math) since it sits
+                      // AFTER the grid, not before it; only gridPct's own size shrinks for it.
 const ALLDAY_ROW_PCT = 12; // bumped from 6, then 9 for visual weight (see the all-day chip's
                            // own h--[Ncqh] comment in shared.liquid for a real, since-fixed bug
                            // this value alone couldn't have masked: allday_row_pct wasn't wired
@@ -1365,7 +1376,7 @@ function layoutNative(days, importantStart, importantEnd, nowH, sunMarks, hourly
   const maxAdRows = days.length ? Math.max(...days.map((d) => d.allday.length)) : 0;
   const alldayPct = Math.min(3, maxAdRows) * ALLDAY_ROW_PCT;
   const gridBase = HEADER_PCT + alldayPct + titleBarPct;
-  const gridPct = 100 - gridBase;
+  const gridPct = 100 - gridBase - FOOTER_PCT;
 
   // Hours outside [importantStart, importantEnd) are hidden entirely (0% height) — that
   // range is always at least the configured default hours (see DEFAULT_HOURS/run()),
@@ -1556,5 +1567,5 @@ function layoutNative(days, importantStart, importantEnd, nowH, sunMarks, hourly
     });
   });
 
-  return { header_pct: HEADER_PCT, allday_pct: alldayPct, allday_row_pct: ALLDAY_ROW_PCT, grid_pct: gridPct, title_bar_pct: titleBarPct, hour_rows: hourRows, days: outDays };
+  return { header_pct: HEADER_PCT, allday_pct: alldayPct, allday_row_pct: ALLDAY_ROW_PCT, grid_pct: gridPct, footer_pct: FOOTER_PCT, title_bar_pct: titleBarPct, hour_rows: hourRows, days: outDays };
 }

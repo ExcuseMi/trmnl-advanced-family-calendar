@@ -110,7 +110,7 @@ at least one calendar, the plugin has nothing to display.
 | Field | Type | Required | Default | Notes |
 |---|---|---|---|---|
 | `url` | text | **yes** | — | The ICS feed's address. `webcal://` links are converted to `https://` automatically. |
-| `id` | text | no | — | A label purely for your own reference — it has **no effect on rendering** and isn't matched against anything. Only useful to keep your own JSON readable. |
+| `id` | text | no | — | A short label. Doesn't affect rendering directly, but it's what [`categories[].calendars`/`excludeCalendars`](#categories) reference to scope a category to (or away from) this calendar. |
 | `color` | [color name](#colors) | no | auto-assigned | Pins this calendar's color. Without it, calendars are colored in the order they appear, cycling through 10 colors. |
 | `icon` | [icon](#icons) | no | none | A default icon shown on every event from this calendar, unless a [category](#categories) claims a more specific one. |
 | `exclude` | regex, or list of regex | no | — | Any event whose title matches **hides it entirely**, only from this calendar. See [regex primer](#a-quick-primer-on-regex). |
@@ -272,6 +272,12 @@ For the **badge circle** (bottom-most to top-most):
 3. The **calendar's own default `icon`**, if it has one — this replaces the letter.
 4. A **matched category's `icon`** — this wins over everything above.
 
+A category only ever reaches step 3 (color) or step 4 (icon) for an event if it's actually
+allowed to see that event's calendar in the first place — see
+[`calendars`/`excludeCalendars`](#categories) above. A category scoped away from a calendar
+behaves, for that calendar, as if it didn't exist — the color/icon chain falls straight through
+to whatever the calendar/person alone would have produced.
+
 ### Worked example
 
 ```json
@@ -362,8 +368,11 @@ Either:
 - **A single backslash in a regex.** `\bL6\b` in raw JSON is invalid — it needs to be `\\bL6\\b`.
   If your pattern silently doesn't match anything, this is the first thing to check. (The
   Configuration Editor's form fields avoid this entirely — only matters if hand-editing JSON.)
-- **Expecting `id` to do something.** It's a label for you, not a lookup key — renaming or
-  matching always happens through `personRules`/`defaultPerson`/`categories[].match`, never `id`.
+- **Expecting `id` to rename or match events on its own.** It doesn't — renaming/matching always
+  happens through `personRules`/`defaultPerson`/`categories[].match`, never `id` directly. `id`
+  *is* used as the reference for `categories[].calendars`/`excludeCalendars` though (see
+  [`categories[]`](#categories)) — get the spelling exactly right there, it's a plain string
+  match, not a regex.
 - **A person with no color pinned still needing to look different.** If you want Alex's events
   to visually stand out, `people[].color` has to actually be set — otherwise their events just
   keep whatever color the calendar itself uses, with only the badge circle to tell them apart.

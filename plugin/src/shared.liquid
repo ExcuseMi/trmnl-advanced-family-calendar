@@ -25,7 +25,6 @@
   {%- assign chip_title_cls = "title--small" -%}
   {%- assign axis_cls = "label--small" -%}
   {%- assign event_pad_cls = "pt--0 pb--1 px--1" -%}
-  {%- assign daylabel_pad_cls = "p--2" -%}
   {%- assign event_title_cls = "title--small" -%}
   {%- assign bar_w = 3 -%}
 {%- elsif view == 3 -%}
@@ -38,7 +37,6 @@
   {%- assign chip_title_cls = "title--small" -%}
   {%- assign axis_cls = "label--base lg:label--large" -%}
   {%- assign event_pad_cls = "pt--0 pb--1 px--1" -%}
-  {%- assign daylabel_pad_cls = "p--2" -%}
   {%- assign event_title_cls = "title--small" -%}
   {%- assign bar_w = 3 -%}
 {%- elsif view == 2 -%}
@@ -48,7 +46,6 @@
   {%- assign chip_title_cls = "title--small lg:title--base" -%}
   {%- assign axis_cls = "label--base lg:label--large" -%}
   {%- assign event_pad_cls = "pt--1 pb--2 px--2" -%}
-  {%- assign daylabel_pad_cls = "p--2" -%}
   {%- assign event_title_cls = "title--small" -%}
   {%- assign bar_w = 4 -%}
 {%- else -%}
@@ -64,10 +61,6 @@
   {%- assign chip_title_cls = "title--base lg:title--large lg:portrait:title--xlarge" -%}
   {%- assign axis_cls = "label--large lg:label--xxlarge" -%}
   {%- assign event_pad_cls = "pt--1 pb--2 px--2" -%}
-  {%- comment -%} The day-label pill's text sits visually low inside it — this font's
-  line-height carries more empty space above the glyphs than below, so an even p--2 on all
-  sides reads as too much padding on top specifically. Trim just the top. {%- endcomment -%}
-  {%- assign daylabel_pad_cls = "pt--1 pb--2 px--2" -%}
   {%- assign event_title_cls = "title--base" -%}
   {%- assign bar_w = 5 -%}
 {%- endif -%}
@@ -132,125 +125,39 @@ where the axis was already a sane fraction and unchanged. {%- endcomment -%}
          device — including the larger, portrait, 4-bit TRMNL X — via the framework's
          own container-query system instead of a fixed-aspect picture. -->
 
-    <!-- Header gets its own visual "zone" — a light background fill plus a solid bottom rule
-         (border--h-1, a real framework border utility: a themed 1px line, black by default,
-         confirmed against the compiled CSS at trmnl.com/css/latest/plugins.css) — so it reads
-         as a deliberate header bar instead of day labels just floating on the same white as
-         the grid below with nothing marking where one ends and the other begins.
-         flex-shrink:0/flex-grow:0 + a duplicated inline height alongside the h--[Ncqh] class:
-         same defensive fix as the all-day row below (see its comment) — this is also a flex
-         child of #cal-root's flex--col, so it's exposed to the identical class of bug even
-         though it wasn't the one actually reported shrinking. -->
-    <div class="grid gap--none h--[{{ header_pct }}cqh] bg--gray-70 border--h-1" style="flex-shrink:0;flex-grow:0;height:{{ header_pct }}cqh;min-height:{{ header_pct }}cqh;">
+    <!-- Header gets its own visual "zone" — solid black, so it reads as a deliberate header
+         bar instead of day labels just floating on the same white as the grid below with
+         nothing marking where one ends and the other begins. Day label only now — the
+         weather icon/high-low that used to share this bar as a second line moved to its own
+         footer zone below the grid instead (see FOOTER_PCT in transform.js and the footer
+         block further down). header_pct itself stays the same size regardless (see HEADER_PCT
+         in transform.js for why: half_horizontal's own title--large tier already needs the
+         full amount just for one line, pill padding or not) — the footer's cost comes out of
+         gridPct instead. flex-shrink:0/flex-grow:0 + a duplicated inline height alongside the
+         h--[Ncqh] class: same defensive fix as the all-day row below (see its comment) — this
+         is also a flex child of #cal-root's flex--col, so it's exposed to the identical class
+         of bug even though it wasn't the one actually reported shrinking. -->
+    <div class="grid gap--none h--[{{ header_pct }}cqh] bg--black" style="flex-shrink:0;flex-grow:0;height:{{ header_pct }}cqh;min-height:{{ header_pct }}cqh;">
       <div class="col--span-1"></div>
       {% for day in days %}
         {% assign dlabel = day.label_short %}
-        <!-- gap--xsmall is explicit rather than relying on the framework's default flex gap:
-             today's label is wrapped in an extra div (the black pill) that plain-text days
-             don't have, and without a deliberate gap value here the two box shapes ended up
-             with visibly different spacing before the temp line below them. -->
-        <div class="col--span-{{ day_span }} flex flex--col flex--center-x flex--center-y gap--xsmall border--v-1">
-          {% if view == 4 %}
-            <!-- Quadrant can also render in a PORTRAIT-oriented slot (much narrower columns
-                 than the landscape quadrant this was tuned against), where the plain flex row
-                 below shrink-wrapped to the label's full natural width and overflowed sideways
-                 into the next day's column instead of truncating — needs real width constraints
-                 the landscape-only case below doesn't. w--full gives the row something concrete
-                 to truncate the label against (the day column's own width); min-width:0 on the
-                 label wrapper undoes the flex default of min-width:auto (natural content width),
-                 which otherwise silently defeats overflow/ellipsis truncation on the child. -->
-            <div class="flex flex--row flex--center-y gap--xsmall w--full">
-              {% if day.is_today %}
-                <div class="bg--black rounded--small px--[10px] py--[2px]" style="min-width:0;overflow:hidden;">
-                  <span class="title {{ head_title_cls }} {{ daylabel_pad_cls }} text--white" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;">{{ dlabel }}</span>
-                </div>
-              {% else %}
-                <div class="rounded--small px--[10px] py--[2px]" style="min-width:0;overflow:hidden;">
-                  <span class="title {{ head_title_cls }} {{ daylabel_pad_cls }}" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;">{{ dlabel }}</span>
-                </div>
-              {% endif %}
-              {% if day.icon %}
-                <!-- Hidden in portrait (quadrant can render in a much narrower portrait slot,
-                     see above) and on the smallest screen bucket — the day label alone is
-                     already tight there; adding the icon back in just re-creates the same
-                     crowding, only now with an image squeezed in too. -->
-                <img class="w--[26px] sm:hidden portrait:hidden" style="flex-shrink:0;" src="{{ day.icon }}">
-              {% endif %}
-            </div>
-          {% elsif view == 2 %}
-            <!-- half_horizontal is short (header_pct is shared across all four views) but not
-                 narrow — full 800px width plenty for day-label + icon on one line — so it
-                 keeps the original, simpler markup rather than the width-constrained version
-                 quadrant needs; that version's min-width:0 caused it to truncate more
-                 aggressively than necessary here, where it already fit fine. -->
-            <div class="flex flex--row flex--center-y gap--xsmall">
-              {% if day.is_today %}
-                <div class="bg--black rounded--small px--[10px] py--[2px]">
-                  <span class="title {{ head_title_cls }} {{ daylabel_pad_cls }} text--white">{{ dlabel }}</span>
-                </div>
-              {% else %}
-                <div class="rounded--small px--[10px] py--[2px]">
-                  <span class="title {{ head_title_cls }} {{ daylabel_pad_cls }}">{{ dlabel }}</span>
-                </div>
-              {% endif %}
-              {% if day.icon %}
-                <!-- Same reasoning as quadrant above: hidden in portrait or on the smallest
-                     screen bucket, where this view is tight even before adding an icon. -->
-                <img class="w--[26px] sm:hidden portrait:hidden" src="{{ day.icon }}">
-              {% endif %}
-            </div>
-          {% else %}
-            <!-- Shared label markup for half_vertical (view 3) and full — see the max-width:100%
-                 reasoning below. half_vertical additionally never shows the icon/temp row: at
-                 only ~133px per day column there isn't room for it alongside the label without
-                 wrapping, so it's full-view only (see the view == 3 check further down). -->
-            <!-- Same wrapper div/padding for both branches — otherwise the pill's own
-                 padding adds height the plain-text case doesn't have, so the identical
-                 gap below still ends up looking different since it starts from a
-                 different total label-block height. max-width:100% (not w--full — that
-                 would stretch the black pill's background across the whole column instead
-                 of just hugging the text, changing the look even when there's plenty of
-                 room) caps it at the column's real width only when needed: full/half_vertical
-                 can ALSO end up in a portrait slot (the "OG" 800x480 device rotated), where
-                 day columns get much narrower than the landscape case this tier was tuned
-                 against, and a plain flex--col child has no upper bound on its content-based
-                 width by default — it just overflows sideways into the next column instead
-                 of clamping to one line. -->
-            {% if day.is_today %}
-              <div class="bg--black rounded--small px--[10px] py--[2px]" style="max-width:100%;overflow:hidden;">
-                <span class="title {{ head_title_cls }} {{ daylabel_pad_cls }} text--white{% unless view == 3 %} cal-full-daylabel{% endunless %}" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;">{{ dlabel }}</span>
-              </div>
-            {% else %}
-              <div class="rounded--small px--[10px] py--[2px]" style="max-width:100%;overflow:hidden;">
-                <span class="title {{ head_title_cls }} {{ daylabel_pad_cls }}{% unless view == 3 %} cal-full-daylabel{% endunless %}" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;">{{ dlabel }}</span>
-              </div>
-            {% endif %}
-            {% if day.icon and view != 3 %}
-              <!-- A plain divider between the day label and the temp row below it — same
-                   border--h-1 utility as the header's own outer bottom rule (see above),
-                   applied here to one thin, full-width, zero-content div rather than to
-                   either real content element, so it doesn't interfere with either one's own
-                   sizing/centering. w--full is required (not optional): the day column is
-                   flex--col with align-items:center (see the "w--full" note on the all-day
-                   badge markup elsewhere in this file for the same underlying reason), so a
-                   bare content-less div would otherwise shrink-wrap to zero width and the
-                   line would never actually show. -->
-              <div class="w--full border--h-1" style="height:1px;"></div>
-              <!-- max-width:100%/overflow:hidden on the row (same treatment as the day label
-                   above) — without it, the lg:portrait: size bump on chip_title_cls made this
-                   row wider than the narrow portrait column and it bled into the next day's
-                   column instead of clipping to its own. min-width:0 on the span undoes the
-                   flex default of min-width:auto, which otherwise silently blocks its own
-                   ellipsis from ever kicking in. -->
-              <div class="flex flex--row flex--center-y gap--xsmall" style="max-width:100%;overflow:hidden;">
-                <!-- height:1.6em ties the icon to whatever chip_title_cls's font-size
-                     resolves to (so it still grows/shrinks with the temp text across view
-                     tiers) while rendering noticeably larger than the text itself. -->
-                <img class="{{ chip_title_cls }}" style="height:1.6em;width:auto;flex-shrink:0;" src="{{ day.icon }}">
-                <span class="label {{ chip_title_cls }}" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;">{{ day.temp.high }}° / {{ day.temp.low }}°</span>
-              </div>
-            {% endif %}
-          {% endif %}
+        <div class="col--span-{{ day_span }} flex flex--col flex--center-x flex--center-y border--v-1">
+          <!-- min-width:0 undoes the flex default of min-width:auto (natural content width),
+               which otherwise silently defeats overflow/ellipsis truncation on the child —
+               needed at 5-7 day columns, or in quadrant's narrower portrait slot, where the
+               label can genuinely run out of room. color:white inline, not a text--white
+               class: .title sets its own explicit color (not currentColor), so it wouldn't
+               pick up an ancestor's text--white by inheritance — same class of gotcha as
+               border--h-1's fixed color noted elsewhere in this file. No padding class on
+               the span itself (there used to be one, sized for the old today-pill's
+               background) — now that there's no pill, that padding just added dead space
+               on top of the font's own line-height, tall enough to blow past header_pct's
+               box in the shorter views (half_horizontal/quadrant) and get vertically
+               clipped; the wrapper div's own small px--[10px] py--[2px] is enough breathing
+               room against the header's edges. -->
+          <div class="rounded--small px--[10px] py--[2px]" style="max-width:100%;min-width:0;overflow:hidden;">
+            <span class="title {{ head_title_cls }}{% if view != 4 and view != 2 and view != 3 %} cal-full-daylabel{% endif %}" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;color:white;">{{ dlabel }}</span>
+          </div>
         </div>
       {% endfor %}
     </div>
@@ -346,9 +253,9 @@ where the axis was already a sane fraction and unchanged. {%- endcomment -%}
                    flex-shrink:0/flex-grow:0 and the duplicated inline height below are kept as
                    cheap extra insurance (a fixed-size row should never be flex-resized by its
                    container regardless of cause) but were not themselves the fix. -->
-              <div class="h--[{{ allday_row_pct }}cqh] bg--{{ a.hue }} text--{{ a.fg }} w--full pr--2 py--[1px] flex flex--row flex--center-y gap--xsmall cal-fit-box" style="position:relative;overflow:hidden;box-sizing:border-box;height:{{ allday_row_pct }}cqh;min-height:{{ allday_row_pct }}cqh;flex-shrink:0;flex-grow:0;padding-left:{% if a.icon.second %}38px{% elsif a.badge or a.icon %}25px{% else %}4px{% endif %};border-radius:{{ ad_radius }};border-top:2px solid currentColor;border-bottom:2px solid currentColor;{% unless a.continues_before %}border-left:2px solid currentColor;{% endunless %}{% unless a.continues_after %}border-right:2px solid currentColor;{% endunless %}{% if a.continues_before %}margin-left:-4px;{% endif %}{% if a.continues_after %}margin-right:-4px;{% endif %}">
+              <div class="h--[{{ allday_row_pct }}cqh] bg--{{ a.hue }} text--{{ a.fg }} w--full pl--1 py--[1px] flex flex--row flex--center-y gap--xsmall cal-fit-box" style="position:relative;overflow:hidden;box-sizing:border-box;height:{{ allday_row_pct }}cqh;min-height:{{ allday_row_pct }}cqh;flex-shrink:0;flex-grow:0;padding-right:{% if a.icon.second %}48px{% elsif a.icon and a.badge %}48px{% elsif a.badge or a.icon %}30px{% else %}4px{% endif %};border-radius:{{ ad_radius }};border-top:2px solid currentColor;border-bottom:2px solid currentColor;{% unless a.continues_before %}border-left:2px solid currentColor;{% endunless %}{% unless a.continues_after %}border-right:2px solid currentColor;{% endunless %}{% if a.continues_before %}margin-left:-4px;{% endif %}{% if a.continues_after %}margin-right:-4px;{% endif %}">
                 {% if a.badge or a.icon %}
-                  <!-- Pinned to the top-left corner (like the event badge below) rather than
+                  <!-- Pinned to the top-right corner (like the event badge below) rather than
                        inline before the title — a fixed overlay position instead of one that
                        shifts with the row's own vertical centering. Solid black fill + white
                        text regardless of the chip's own hue/gray, same reasoning as the chip
@@ -358,12 +265,17 @@ where the axis was already a sane fraction and unchanged. {%- endcomment -%}
                        near-black chip (e.g. a dark gray-N pin) it would otherwise blend into —
                        plain black-on-near-black has ~zero contrast without it. The chip's own
                        padding-left above makes room so the title text doesn't render under it.
-                       A Category icon (see the Calendar Configuration field) takes this same
-                       corner slot instead of the plain person-badge letter — see the event
-                       badge below for why only one of the two ever shows. A category can carry
-                       UP TO TWO icons (see resolveIcon in transform.js, e.g. ["work","home"] for
-                       "Work From Home") — a.icon is { first, second } (second omitted if
-                       there's only one), deliberately named object keys rather than a JS array:
+                       A Category icon (see the Calendar Configuration field) takes the first
+                       slot instead of the plain person-badge letter — but doesn't necessarily
+                       replace it: if there's a person badge too AND the category only used one
+                       of its two icon slots, the badge letter fills the second slot instead of
+                       being dropped, so a category and a person's own identity can show
+                       together (icon = what kind of event, badge = whose). A category's own
+                       SECOND icon (see resolveIcon in transform.js, e.g. ["work","home"] for
+                       "Work From Home") still takes priority over the badge for that second
+                       slot when both are configured — only two slots total, same as everywhere
+                       else in this file. a.icon is { first, second } (second omitted if there's
+                       only one), deliberately named object keys rather than a JS array:
                        trmnlp build/serve never actually runs transform.js (see topics/
                        testing.md), so array-index access on a merge variable that started life
                        as a JS array was never verified against TRMNL's real serverless->Liquid
@@ -373,19 +285,21 @@ where the axis was already a sane fraction and unchanged. {%- endcomment -%}
                        ships, and this badge is exactly the kind of small, easy-to-miss element
                        where "the CSS should apply" silently not applying is hard to catch
                        without a real device (see the width:0 boundary-tick lesson elsewhere in
-                       this file). Second circle renders offset to the right of the first,
+                       this file). Second circle renders offset to the left of the first,
                        overlapping slightly rather than needing its own reserved space. -->
                   {% if a.icon %}
-                    <span class="text--white bg--black rounded--full flex flex--center-x flex--center-y" style="position:absolute;top:2px;left:2px;width:20px;height:20px;border:1.5px solid currentColor;box-sizing:border-box;z-index:2;overflow:hidden;">
-                      <img src="{{ a.icon.first }}" alt="" style="width:14px;height:14px;filter:invert(1);">
+                    <span class="text--white bg--black rounded--full flex flex--center-x flex--center-y" style="position:absolute;top:2px;right:2px;width:24px;height:24px;border:1.5px solid currentColor;box-sizing:border-box;z-index:2;overflow:hidden;">
+                      <img src="{{ a.icon.first }}" alt="" style="width:17px;height:17px;filter:invert(1);">
                     </span>
                     {% if a.icon.second %}
-                      <span class="text--white bg--black rounded--full flex flex--center-x flex--center-y" style="position:absolute;top:2px;left:15px;width:20px;height:20px;border:1.5px solid currentColor;box-sizing:border-box;z-index:1;overflow:hidden;">
-                        <img src="{{ a.icon.second }}" alt="" style="width:14px;height:14px;filter:invert(1);">
+                      <span class="text--white bg--black rounded--full flex flex--center-x flex--center-y" style="position:absolute;top:2px;right:20px;width:24px;height:24px;border:1.5px solid currentColor;box-sizing:border-box;z-index:1;overflow:hidden;">
+                        <img src="{{ a.icon.second }}" alt="" style="width:17px;height:17px;filter:invert(1);">
                       </span>
+                    {% elsif a.badge %}
+                      <span class="text--white bg--black rounded--full flex flex--center-x flex--center-y" style="position:absolute;top:2px;right:20px;width:24px;height:24px;font-size:13px;line-height:1;border:1.5px solid currentColor;box-sizing:border-box;z-index:1;overflow:hidden;">{{ a.badge }}</span>
                     {% endif %}
                   {% else %}
-                    <span class="text--white bg--black rounded--full flex flex--center-x flex--center-y" style="position:absolute;top:2px;left:2px;width:20px;height:20px;font-size:11px;line-height:1;border:1.5px solid currentColor;box-sizing:border-box;z-index:1;overflow:hidden;">{{ a.badge }}</span>
+                    <span class="text--white bg--black rounded--full flex flex--center-x flex--center-y" style="position:absolute;top:2px;right:2px;width:24px;height:24px;font-size:13px;line-height:1;border:1.5px solid currentColor;box-sizing:border-box;z-index:1;overflow:hidden;">{{ a.badge }}</span>
                   {% endif %}
                 {% endif %}
                 <!-- cal-fit-text/cal-fit-clip (see fit() below): a static size tier alone —
@@ -552,37 +466,76 @@ where the axis was already a sane fraction and unchanged. {%- endcomment -%}
                        hue/gray, same reasoning as the chip text staying one fixed color.
                        The currentColor border (= white, this span's own text color) keeps
                        the circle visible against a near-black chip (a dark gray-N pin) it
-                       would otherwise blend straight into. Sized larger than the all-day
-                       version above (20px vs. ~1.6em of a typically-bigger chip title)
-                       since event chips run much smaller, especially on quadrant, and a
-                       badge that's hard to read defeats its own purpose. A Category icon
-                       (see the Calendar Configuration field) takes this same corner slot
-                       instead of the plain person-badge letter when both would otherwise
-                       apply — one badge slot, one piece of "what is this" information. A
-                       category can carry UP TO TWO icons (see resolveIcon in transform.js,
-                       e.g. ["work","home"] for "Work From Home") — event.icon is
-                       { first, second } (second omitted if there's only one), deliberately
-                       named object keys rather than a JS array (see the matching comment on
-                       the all-day badge above for why), so a second circle renders offset to
-                       the right of the first when present. Icon <img> sizing/inversion is
-                       inline style, not classes — see the all-day badge comment for why. -->
+                       would otherwise blend straight into. Same 24px circle size as the
+                       all-day version above, deliberately not scaled down for event chips
+                       even though they run much smaller overall, especially on quadrant —
+                       a badge that's hard to read defeats its own purpose. The two-circle
+                       stack offsets by 18-19px (not the full 24px) for a deliberate slight
+                       overlap — enough to read as "one badge cluster" rather than two
+                       separate dots, without hiding either icon/letter the way the previous,
+                       tighter 13px offset did. A Category icon
+                       (see the Calendar Configuration field) takes the first corner slot
+                       instead of the plain person-badge letter — but doesn't necessarily
+                       replace it: if there's a person badge too AND the category only used
+                       one of its two icon slots, the badge letter fills the second slot
+                       instead of being dropped, so a category and a person's own identity can
+                       show together (icon = what kind of event, badge = whose). A category's
+                       own SECOND icon (see resolveIcon in transform.js, e.g. ["work","home"]
+                       for "Work From Home") still takes priority over the badge for that
+                       second slot when both are configured — only two slots total, same as
+                       everywhere else in this file. event.icon is { first, second } (second
+                       omitted if there's only one), deliberately named object keys rather
+                       than a JS array (see the matching comment on the all-day badge above
+                       for why), so a second circle renders offset to the left of the first
+                       when present. Icon <img> sizing/inversion is inline style, not classes
+                       — see the all-day badge comment for why. -->
                   {% if event.icon %}
-                    <span class="text--white bg--black rounded--full flex flex--center-x flex--center-y" style="position:absolute;top:1px;left:1px;width:20px;height:20px;border:2px solid currentColor;box-sizing:border-box;z-index:2;overflow:hidden;">
-                      <img src="{{ event.icon.first }}" alt="" style="width:14px;height:14px;filter:invert(1);">
+                    <span class="text--white bg--black rounded--full flex flex--center-x flex--center-y" style="position:absolute;top:1px;right:1px;width:24px;height:24px;border:2px solid currentColor;box-sizing:border-box;z-index:2;overflow:hidden;">
+                      <img src="{{ event.icon.first }}" alt="" style="width:17px;height:17px;filter:invert(1);">
                     </span>
                     {% if event.icon.second %}
-                      <span class="text--white bg--black rounded--full flex flex--center-x flex--center-y" style="position:absolute;top:1px;left:14px;width:20px;height:20px;border:2px solid currentColor;box-sizing:border-box;z-index:1;overflow:hidden;">
-                        <img src="{{ event.icon.second }}" alt="" style="width:14px;height:14px;filter:invert(1);">
+                      <span class="text--white bg--black rounded--full flex flex--center-x flex--center-y" style="position:absolute;top:1px;right:19px;width:24px;height:24px;border:2px solid currentColor;box-sizing:border-box;z-index:1;overflow:hidden;">
+                        <img src="{{ event.icon.second }}" alt="" style="width:17px;height:17px;filter:invert(1);">
                       </span>
+                    {% elsif event.badge %}
+                      <span class="text--white bg--black rounded--full flex flex--center-x flex--center-y" style="position:absolute;top:1px;right:19px;width:24px;height:24px;font-size:14px;line-height:1;border:2px solid currentColor;box-sizing:border-box;z-index:1;overflow:hidden;">{{ event.badge }}</span>
                     {% endif %}
                   {% else %}
-                    <span class="text--white bg--black rounded--full flex flex--center-x flex--center-y" style="position:absolute;top:1px;left:1px;width:20px;height:20px;font-size:12px;line-height:1;border:2px solid currentColor;box-sizing:border-box;z-index:1;overflow:hidden;">{{ event.badge }}</span>
+                    <span class="text--white bg--black rounded--full flex flex--center-x flex--center-y" style="position:absolute;top:1px;right:1px;width:24px;height:24px;font-size:14px;line-height:1;border:2px solid currentColor;box-sizing:border-box;z-index:1;overflow:hidden;">{{ event.badge }}</span>
                   {% endif %}
                 {% endif %}
                 <span class="title {{ event_title_cls }} text--{{ event.fg }} cal-fit-text" data-fit-min="11" data-fit-max="90">{{ event.title }}</span>
               </div>
             </div>
           {% endfor %}
+        </div>
+      {% endfor %}
+    </div>
+
+    <!-- Footer: daily weather (icon + high/low), its own black zone below the grid — used
+         to be a second line squeezed into the header alongside the day label (see header_pct/
+         FOOTER_PCT in transform.js), pulled out here instead so the header stays one line and
+         the weather gets a deliberate zone of its own rather than competing for space at the
+         top. Same col--span-1 gutter + col--span-{{ day_span }} per-day-column shape as the
+         header above, so the icon/temp under each day line up with that day's own column
+         exactly. flex-shrink:0/flex-grow:0 + duplicated inline height: same defensive fix as
+         every other fixed-size zone in this file (see the all-day row's own comment for why). -->
+    <div class="grid gap--none h--[{{ footer_pct }}cqh] bg--black" style="flex-shrink:0;flex-grow:0;height:{{ footer_pct }}cqh;min-height:{{ footer_pct }}cqh;">
+      <div class="col--span-1"></div>
+      {% for day in days %}
+        <div class="col--span-{{ day_span }} flex flex--row flex--center-x flex--center-y gap--xsmall border--v-1" style="overflow:hidden;">
+          {% if day.icon %}
+            <!-- height:1.6em ties the icon to whatever chip_title_cls's font-size resolves
+                 to (so it still grows/shrinks across view tiers) while rendering noticeably
+                 larger than the text itself. filter:invert(1): plain black line art (same
+                 SVGs used elsewhere against a light background) would otherwise vanish
+                 against this footer's black fill. -->
+            <img class="{{ chip_title_cls }}" style="height:1.6em;width:auto;flex-shrink:0;filter:invert(1);" src="{{ day.icon }}">
+            <!-- color:white inline, not a text--white class: .label sets its own explicit
+                 color (not currentColor), so it wouldn't pick up an ancestor's text--white
+                 by inheritance — same gotcha as .title on the day label above. -->
+            <span class="label {{ chip_title_cls }}" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;color:white;">{{ day.temp.high }}° / {{ day.temp.low }}°</span>
+          {% endif %}
         </div>
       {% endfor %}
     </div>
