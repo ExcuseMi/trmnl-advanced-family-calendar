@@ -295,6 +295,7 @@ function emptyResult(tzname, tz, locale, daysN, msg, showTitleBar, titleBarPct, 
 //
 // The "Calendar Configuration" field is one JSON object:
 //   {
+//     "hours": { "start": 7, "end": 21 },
 //     "calendars": [
 //       { "id": "Kato", "url": "https://.../kato.ics", "defaultPerson": "Kato" },
 //       { "id": "School", "url": "https://.../school.ics", "exclude": "regex",
@@ -308,6 +309,10 @@ function emptyResult(tzname, tz, locale, daysN, msg, showTitleBar, titleBarPct, 
 //       { "name": "Nala", "color": "blue" }
 //     ]
 //   }
+// `hours` is optional (defaults to DEFAULT_HOURS, 7-21) — the default hour range to show.
+// It's always widened to also cover sunrise, every actual event, and sunset, whichever push
+// earlier/later, so nothing real ever gets hidden; hours left outside the final range are
+// hidden entirely rather than shown compressed (see layoutNative).
 // `people[]` holds ONLY formatting — `name` (required, also the lookup key), `color`
 // (optional, one of HUES or "gray-10".."gray-70" in steps of 5) and `badge` (optional short
 // text for the small circle next to an event, defaults to `name`'s first letter). It carries

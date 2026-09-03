@@ -81,6 +81,21 @@
     </div>
   </div>
 
+  <h2>Hours to show <span class="muted">(optional)</span></h2>
+  <div class="card">
+    <p class="muted" style="margin-top:0;">The default hour range the grid shows — always widened automatically to also cover sunrise, every actual event, and sunset, whichever push earlier/later, so nothing real ever gets hidden. Hours left outside the final range are hidden entirely rather than shown compressed.</p>
+    <div class="row">
+      <div>
+        <label>Start hour</label>
+        <input type="number" id="hoursStart" min="0" max="23" value="7" class="field-narrow" style="flex:0 0 80px;">
+      </div>
+      <div>
+        <label>End hour</label>
+        <input type="number" id="hoursEnd" min="1" max="24" value="21" class="field-narrow" style="flex:0 0 80px;">
+      </div>
+    </div>
+  </div>
+
   <h2>Calendars</h2>
   <div id="calendars"></div>
   <button id="addCalendar">+ Add calendar</button>
@@ -435,7 +450,14 @@
   // ------------------------------------------------------------------ JSON out
 
   function buildConfig() {
-    var cfg = { calendars: [], people: [] };
+    var cfg = {};
+    var hStart = parseInt(document.getElementById("hoursStart").value, 10);
+    var hEnd = parseInt(document.getElementById("hoursEnd").value, 10);
+    if (Number.isFinite(hStart) && Number.isFinite(hEnd) && hStart >= 0 && hStart < hEnd && hEnd <= 24 && (hStart !== 7 || hEnd !== 21)) {
+      cfg.hours = { start: hStart, end: hEnd };
+    }
+    cfg.calendars = [];
+    cfg.people = [];
     calendars.forEach(function (c) {
       if (!c.url.trim()) return;
       var entry = { url: c.url.trim() };
@@ -525,6 +547,17 @@
 
     calendars = newCalendars.length ? newCalendars : [newCalendar()];
     people = newPeople;
+    if (data.hours && typeof data.hours === "object") {
+      var hs = Math.trunc(Number(data.hours.start));
+      var he = Math.trunc(Number(data.hours.end));
+      if (Number.isFinite(hs) && Number.isFinite(he) && hs >= 0 && hs < he && he <= 24) {
+        document.getElementById("hoursStart").value = hs;
+        document.getElementById("hoursEnd").value = he;
+      }
+    } else {
+      document.getElementById("hoursStart").value = 7;
+      document.getElementById("hoursEnd").value = 21;
+    }
     renderCalendars(); renderPeople(); renderJson(); renderIcsSources();
     status.textContent = "Loaded " + newCalendars.length + " calendar(s) and " + newPeople.length + " person/people.";
     status.className = "status ok";
@@ -533,6 +566,9 @@
   function renderJson() {
     document.getElementById("jsonOut").value = JSON.stringify(buildConfig(), null, 2);
   }
+
+  document.getElementById("hoursStart").addEventListener("input", renderJson);
+  document.getElementById("hoursEnd").addEventListener("input", renderJson);
 
   document.getElementById("copyJson").addEventListener("click", function () {
     var ta = document.getElementById("jsonOut");
@@ -693,14 +729,12 @@
       }
 
       var evWrap = el("div", { class: "preview-events" });
-      var anyEvents = false;
+      // Each entry in day.events is already one independently-positioned event/lane (see
+      // transform.js's layoutNative) — no more nested .lanes sub-array to flatten.
       (day.events || []).forEach(function (ev) {
-        ev.lanes.forEach(function (lane) {
-          anyEvents = true;
-          evWrap.appendChild(chipFor(lane.title, lane.hue, lane.fg, lane.badge, true));
-        });
+        evWrap.appendChild(chipFor(ev.title, ev.hue, ev.fg, ev.badge, true));
       });
-      if (!anyEvents) evWrap.appendChild(el("p", { class: "muted", text: "No timed events." }));
+      if (!day.events || !day.events.length) evWrap.appendChild(el("p", { class: "muted", text: "No timed events." }));
       dayEl.appendChild(evWrap);
 
       wrap.appendChild(dayEl);
