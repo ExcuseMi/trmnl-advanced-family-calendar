@@ -1,10 +1,16 @@
 {% comment %}
-{% template %} blocks cannot nest inside another {% template %} block — TRMNL's TemplateTag
-just scans for the first literal "{% endtemplate %}" token and treats everything before it as
-the block's body, with no awareness of nesting, so a {% template %} defined inside "main"'s own
-body would prematurely close "main" at its own {% endtemplate %} instead. These three stay
-top-level siblings of "main", {% render %}ed from inside its body instead (see badge_content/
-badge_image_row/chip_body's own call sites further down).
+A "template" block cannot nest inside another one — TRMNL's TemplateTag just scans for the
+first literal closing token and treats everything before it as the block's body, with no
+awareness of nesting, so a template defined inside "main"'s own body would prematurely close
+"main" at its own closing token instead. These are top-level siblings of "main", rendered from
+inside its body instead (see badge_content/badge_image_row/chip_body's own call sites further
+down). NOTE: this comment deliberately never spells out the actual curly-brace-percent tag
+delimiters for "template"/"endtemplate"/"render" as literal text, even in prose, even inside
+this very comment block — Liquid's tokenizer splits the WHOLE raw file on those delimiters
+before any tag's own semantics run (comment or not), so writing them out here would itself get
+parsed as a real, malformed tag and corrupt everything after it — which is exactly the bug that
+broke this file's rendering entirely the first time this comment (and two similarly-worded ones
+elsewhere below) were written the obvious way, with the delimiters spelled out.
 {% endcomment %}
 
 {% template badge_content %}
@@ -35,7 +41,7 @@ badge_image_row/chip_body's own call sites further down).
 
 {% template chip_body %}
   {%- comment -%} The left "meaning" rail (plain color accent, or 1-2 badge circles) plus the
-  title — every all-day and timed-event chip {% render %}s this SAME template instead of each
+  title — every all-day and timed-event chip renders this SAME template instead of each
   carrying its own copy. Badges sit SIDE BY SIDE (flex--row), not stacked — a stacked pair used
   to force each circle down to half the available height, so a solo badge (the common case) and
   a paired one ended up different, smaller-than-necessary sizes; laid out side by side, one
@@ -66,6 +72,47 @@ badge_image_row/chip_body's own call sites further down).
     {%- assign chip_pad_left = bar_w | plus: 8 -%}
   {%- endif -%}
   <span class="title {{ title_cls }} text--{{ fg }} cal-fit-text{% if clip %} cal-fit-clip{% endif %}" data-fit-min="{{ fit_min }}" data-fit-max="90" style="min-width:0;padding-left:{{ chip_pad_left }}px;padding-right:{{ pad_right }}px;">{{ title }}</span>
+{% endtemplate %}
+
+{% template chip %}
+  {%- comment -%}
+  The WHOLE event/all-day chip box — fill, border, radius, and (via chip_body/badge_image_row)
+  its content — one render call for both chip types instead of two hand-kept-in-sync
+  copies of the outer <div> too (chip_body alone still left that outer box duplicated, which is
+  exactly how bar: ended up missing for all-day chips only — two copies of "the same" code
+  drift). What's left as real parameters is only what's structurally forced to differ, never
+  just historical accident:
+    - size_class/size_style: HOW the box gets its size. An all-day chip is a normal-flow row
+      that contributes real height to a shared budget (see allday_row_pct), so it needs an
+      explicit h--[Ncqh] class + inline height/flex-shrink; a timed event is sized entirely by
+      its own absolutely-positioned ancestor (top_pct/height_pct in shared.liquid's day-column
+      loop), so it just fills that with h--full/w--full and nothing else.
+    - flex_dir: flex--row vs flex--col. Purely cosmetic-internal (the framework's
+      flex--center-y/-x classes are direction-aware, so either produces the same visual
+      centering here) — kept as whatever each caller already had rather than risking an
+      unrelated layout shift for zero visible benefit.
+    - pad_cls: top/bottom breathing room. All-day rows are short and fixed-height (py--[1px]);
+      a timed event has real slack to spend and uses its own view tier's pt/pb
+      (event_pad_cls in "main").
+    - box_radius/border_left/border_right/margin_left/margin_right: only an all-day chip can be
+      one fragment of a multi-day banner (continues_before/after) needing a squared-off
+      mid-span edge and no outline there; a timed event never spans across day columns, so it
+      always passes the full radius and every border side.
+  Params: hue, fg, bar, title, badges, display, flex_dir, size_class, size_style, pad_cls,
+  box_radius, border_left, border_right, margin_left, margin_right, title_cls, fit_min, clip,
+  pad_right, rail_radius, bar_w, badge_d, image_d.
+  {%- endcomment -%}
+  <div class="{{ size_class }} bg--{{ hue }} text--{{ fg }} w--full {{ pad_cls }} flex {{ flex_dir }} flex--center-y cal-fit-box" style="position:relative;overflow:hidden;box-sizing:border-box;{{ size_style }}border-radius:{{ box_radius }};border-top:2px solid currentColor;border-bottom:2px solid currentColor;{% if border_left %}border-left:2px solid currentColor;{% endif %}{% if border_right %}border-right:2px solid currentColor;{% endif %}{% if margin_left %}margin-left:-4px;{% endif %}{% if margin_right %}margin-right:-4px;{% endif %}">
+    {%- if display == "image" -%}
+      {%- comment -%} "image" display mode (see categories[].display in transform.js): the
+      badge rail is skipped entirely — the badge(s) become the chip's whole content instead of
+      a strip down the side. Only ever set once at least one real badge resolved (see run()'s
+      badge assembly in transform.js), so this never renders an empty chip. {%- endcomment -%}
+      {%- render "badge_image_row", badges: badges, image_d: image_d -%}
+    {%- else -%}
+      {%- render "chip_body", badges: badges, bar: bar, title: title, fg: fg, title_cls: title_cls, fit_min: fit_min, clip: clip, pad_right: pad_right, radius: rail_radius, bar_w: bar_w, badge_d: badge_d -%}
+    {%- endif -%}
+  </div>
 {% endtemplate %}
 
 {% template main %}
@@ -164,7 +211,7 @@ badge_image_row/chip_body's own call sites further down).
 {%- endif -%}
 
 {%- comment -%} Left "meaning" rail on every event/all-day chip — see the chip_body template
-below, {% render %}ed identically by both chip types instead of each having its own bespoke
+below, rendered identically by both chip types instead of each having its own bespoke
 treatment. bar_w: how wide the rail is with NO badges in it — just the plain color accent it's
 always been. badge_d: how big each circle is once the rail is actually hosting badges — ONE
 size regardless of count, since chip_body lays badges out SIDE BY SIDE rather than stacking
@@ -293,6 +340,20 @@ where the axis was already a sane fraction and unchanged. {%- endcomment -%}
               {% else %}
                 {% assign ad_radius = "7px" %}
               {% endif %}
+              <!-- Whichever edge is mid-span gets no outline at all there (see ad_radius just
+                   above — same continues_before/after check), so the seam ad_radius/the
+                   negative margins already hide doesn't get reintroduced by a border crossing
+                   it. Fed into the shared "chip" template as border_left/border_right. -->
+              {% assign allday_border_left = true %}
+              {% if a.continues_before %}{% assign allday_border_left = false %}{% endif %}
+              {% assign allday_border_right = true %}
+              {% if a.continues_after %}{% assign allday_border_right = false %}{% endif %}
+              <!-- size_class/size_style: how THIS chip type gets its height — see the "chip"
+                   template's own comment for why that has to stay a real parameter (an all-day
+                   row is normal-flow and needs an explicit height; a timed event is sized by
+                   its absolutely-positioned ancestor instead). -->
+              {% capture allday_size_class %}h--[{{ allday_row_pct }}cqh]{% endcapture %}
+              {% capture allday_size_style %}height:{{ allday_row_pct }}cqh;min-height:{{ allday_row_pct }}cqh;flex-shrink:0;flex-grow:0;{% endcapture %}
               <!-- a.hue/a.fg are computed server-side (see colorClass/foregroundFor in
                    transform.js): a.hue is already the full bg-- suffix (a chromatic hue's
                    fixed pastel step, e.g. "pink-65", or an explicit "gray-N" pin), and a.fg
@@ -352,34 +413,25 @@ where the axis was already a sane fraction and unchanged. {%- endcomment -%}
               <!-- rail_radius mirrors ad_radius's LEFT side only — the rail sits flush against
                    the chip's own left edge, so it needs to be square exactly when the chip's
                    own left edge is (continues_before, a mid-span multi-day fragment), and
-                   rounded to match otherwise. Passed into chip_body below rather than computed
-                   there since a timed event (see chip_body's own call further down) has no
-                   "which corner is mid-span" question to answer — only an all-day chip can
-                   continue across a day boundary. -->
+                   rounded to match otherwise. Passed into the shared "chip" template below
+                   rather than computed there since a timed event (see its own call further
+                   down) has no "which corner is mid-span" question to answer — only an all-day
+                   chip can continue across a day boundary. -->
               {% if a.continues_before %}
-                {% assign rail_radius = "0" %}
+                {% assign this_rail_radius = "0" %}
               {% else %}
-                {% assign rail_radius = "7px 0 0 7px" %}
+                {% assign this_rail_radius = "7px 0 0 7px" %}
               {% endif %}
-              <div class="h--[{{ allday_row_pct }}cqh] bg--{{ a.hue }} text--{{ a.fg }} w--full py--[1px] flex flex--row flex--center-y cal-fit-box" style="position:relative;overflow:hidden;box-sizing:border-box;height:{{ allday_row_pct }}cqh;min-height:{{ allday_row_pct }}cqh;flex-shrink:0;flex-grow:0;border-radius:{{ ad_radius }};border-top:2px solid currentColor;border-bottom:2px solid currentColor;{% unless a.continues_before %}border-left:2px solid currentColor;{% endunless %}{% unless a.continues_after %}border-right:2px solid currentColor;{% endunless %}{% if a.continues_before %}margin-left:-4px;{% endif %}{% if a.continues_after %}margin-right:-4px;{% endif %}">
-                {% if a.display == "image" %}
-                  <!-- "image" display (see categories[].display in transform.js): the badge
-                       rail below is skipped entirely — the badge(s) become the chip's whole
-                       content instead of a strip down the side, for a recurring event an icon
-                       alone already says everything about. Only ever set once at least one
-                       real badge resolved (see run()), so this never renders an empty chip. -->
-                  {% render "badge_image_row", badges: a.badges, image_d: image_d %}
-                {% else %}
-                  <!-- Left "meaning" rail + title — see the chip_body template above for what
-                       it renders and why it's shared verbatim with the timed-event chip below
-                       instead of each having its own bespoke treatment. fit_min=9/clip=true
-                       match this row's own real height budget (see the h--[Ncqh] comment
-                       above): unlike a timed event's absolutely-positioned overlay, an
-                       oversized title here needs cal-fit-clip to keep it from growing the row
-                       past its allday_pct allocation. -->
-                  {% render "chip_body", badges: a.badges, bar: a.bar, title: a.title, fg: a.fg, title_cls: chip_title_cls, fit_min: 9, clip: true, pad_right: pad_right, radius: rail_radius, bar_w: bar_w, badge_d: badge_d %}
-                {% endif %}
-              </div>
+              <!-- The whole chip — fill/border/radius/badges/title — is one render of
+                   the shared "chip" template (see its own definition above for the full
+                   parameter rundown and why: this used to be its own hand-written <div>, which
+                   is exactly how the all-day accent bar (bar:, see transform.js) ended up
+                   missing entirely for a while — two copies of "the same" markup drift apart
+                   silently. size_class/size_style give this row its real height (see the
+                   h--[Ncqh] comment above); fit_min=9/clip=true match that: unlike a timed
+                   event's absolutely-positioned overlay, an oversized title here needs
+                   cal-fit-clip to keep it from growing the row past its allday_pct allocation. -->
+              {% render "chip", hue: a.hue, fg: a.fg, bar: a.bar, title: a.title, badges: a.badges, display: a.display, flex_dir: "flex--row", size_class: allday_size_class, size_style: allday_size_style, pad_cls: "py--[1px]", box_radius: ad_radius, border_left: allday_border_left, border_right: allday_border_right, margin_left: a.continues_before, margin_right: a.continues_after, title_cls: chip_title_cls, fit_min: 9, clip: true, pad_right: pad_right, rail_radius: this_rail_radius, bar_w: bar_w, badge_d: badge_d, image_d: image_d %}
             {% endfor %}
           </div>
         {% endfor %}
@@ -507,35 +559,19 @@ where the axis was already a sane fraction and unchanged. {%- endcomment -%}
                    (see run() below, needed for the axis/background rows whose size actually
                    is content-driven) which would re-clip a too-tall title right back after
                    fit() just set this event's own cal-fit-box to overflow:visible below. -->
-              <!-- No inline padding-left here any more — chip_body's own title span carries
-                   it now (see chip_body above), the same way the all-day chip's does, instead
-                   of this outer div overriding event_pad_cls's own px--N component the way it
-                   used to. event_pad_cls (top/bottom only now, see the per-tier assigns above)
-                   still supplies the baseline top/bottom padding. -->
-              <div class="h--full w--full bg--{{ event.hue }} text--{{ event.fg }} rounded--small {{ event_pad_cls }} flex flex--col flex--center-y cal-fit-box" style="position:relative;box-sizing:border-box;border:2px solid currentColor;">
-                {% if event.display == "image" %}
-                  <!-- "image" display (see categories[].display in transform.js): same
-                       treatment as the all-day chip's own image mode above — the badge rail
-                       below is skipped and the badge(s) fill the whole chip instead, no title
-                       at all. Only ever set once at least one real badge resolved (see run()'s
-                       badge assembly), so this never renders an empty chip. -->
-                  {% render "badge_image_row", badges: event.badges, image_d: image_d %}
-                {% else %}
-                  <!-- Left "meaning" rail + title — see the chip_body template above for what
-                       it renders and why it's shared verbatim with the all-day chip instead of
-                       each having its own bespoke treatment (this used to be a separate,
-                       inset-by-2px copy with its own rounded--small class rather than a
-                       matching corner radius — flush + radius-matched, like the all-day chip
-                       always was, is the more correct fix for the "square corners poking past
-                       the chip's own rounded corners" problem described below, not just a more
-                       consistent one). fit_min=11/clip=false (vs. the all-day call's 9/true):
-                       a timed event is an absolutely-positioned overlay, not a normal-flow box
-                       contributing height to a shared row budget, so fit() can safely leave an
-                       oversized title visible-overflow here instead of needing cal-fit-clip to
-                       protect a row height. -->
-                  {% render "chip_body", badges: event.badges, bar: event.bar, title: event.title, fg: event.fg, title_cls: event_title_cls, fit_min: 11, clip: false, pad_right: pad_right, radius: timed_rail_radius, bar_w: bar_w, badge_d: badge_d %}
-                {% endif %}
-              </div>
+              <!-- The whole chip — fill/border/radius/badges/title — is the SAME render
+                   of the shared "chip" template the all-day chip above uses (see its own
+                   definition for the full parameter rundown). size_class "h--full w--full"
+                   instead of an explicit height: this box is sized entirely by its own
+                   absolutely-positioned ancestor (top_pct/height_pct just above), not by a
+                   normal-flow row budget the way an all-day chip is — that's also why
+                   fit_min=11/clip=false here (vs. the all-day call's 9/true): fit() can safely
+                   leave an oversized title visible-overflow on this overlay instead of needing
+                   cal-fit-clip to protect a shared row height. box_radius "7px" (matching
+                   rounded--small's real compiled value) and border_left/border_right both true
+                   unconditionally: a timed event never spans across day columns, so it has no
+                   "which corner is mid-span" question to answer the way an all-day chip does. -->
+              {% render "chip", hue: event.hue, fg: event.fg, bar: event.bar, title: event.title, badges: event.badges, display: event.display, flex_dir: "flex--col", size_class: "h--full w--full", size_style: "", pad_cls: event_pad_cls, box_radius: "7px", border_left: true, border_right: true, margin_left: false, margin_right: false, title_cls: event_title_cls, fit_min: 11, clip: false, pad_right: pad_right, rail_radius: timed_rail_radius, bar_w: bar_w, badge_d: badge_d, image_d: image_d %}
             </div>
           {% endfor %}
         </div>
