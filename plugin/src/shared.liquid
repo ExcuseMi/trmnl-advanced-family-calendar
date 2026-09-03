@@ -7,6 +7,11 @@
    screen--portrait combo the framework's own compiled CSS uses (confirmed via its generated
    selectors, e.g. .screen--lg.screen--portrait .lg\:portrait\:title--xxlarge). */
 .trmnl .screen--lg.screen--portrait .cal-full-daylabel { font-size: 44px; }
+/* Material Symbols' hosted SVGs (see resolveIcon in transform.js) are always solid black —
+   Google's static icon CDN has no fill/color parameter — but every category-icon badge is a
+   solid-black circle, so an un-tinted icon is literally invisible on it. Flips black to white;
+   safe on a flat-color glyph with a transparent background (alpha is untouched by filter). */
+.cal-icon-white { filter: invert(1); }
 </style>
 {%- if view == 4 -%}
   {%- comment -%} quadrant: a quarter of the full-view screen area — needs its own,
@@ -28,6 +33,7 @@
   {%- assign daylabel_pad_cls = "p--2" -%}
   {%- assign event_title_cls = "title--small" -%}
   {%- assign badge_hide_cls = "" -%}
+  {%- assign bar_w = 3 -%}
 {%- elsif view == 3 -%}
   {%- comment -%} half_vertical: only ~400px WIDE (3 narrow day columns, ~133px each) —
   width-constrained rather than area-constrained, so it needs a smaller tier than
@@ -41,6 +47,7 @@
   {%- assign daylabel_pad_cls = "p--2" -%}
   {%- assign event_title_cls = "title--small" -%}
   {%- assign badge_hide_cls = "" -%}
+  {%- assign bar_w = 3 -%}
 {%- elsif view == 2 -%}
   {%- comment -%} half_horizontal: full 800px width but half height — width is ample,
   so it can keep a larger tier than half_vertical. {%- endcomment -%}
@@ -51,6 +58,7 @@
   {%- assign daylabel_pad_cls = "p--2" -%}
   {%- assign event_title_cls = "title--small" -%}
   {%- assign badge_hide_cls = "" -%}
+  {%- assign bar_w = 4 -%}
 {%- else -%}
   {%- comment -%} full / "OG" 800x480 device: the hour axis at xlarge/xxlarge read too big
   in practice — one tier down still reads fine at this size and leaves more room. Rotated to
@@ -69,6 +77,7 @@
   sides reads as too much padding on top specifically. Trim just the top. {%- endcomment -%}
   {%- assign daylabel_pad_cls = "pt--1 pb--2 px--2" -%}
   {%- assign event_title_cls = "title--base" -%}
+  {%- assign bar_w = 5 -%}
   {%- comment -%} Person badges (see the Calendar Configuration field) hidden specifically on
   the OG device's own full-screen size bucket (screen--lg) in this view — chips are already
   large enough there for the title/color alone to read clearly, and the badge circle was
@@ -78,6 +87,12 @@
   matters more against a much smaller chip. {%- endcomment -%}
   {%- assign badge_hide_cls = "lg:hidden" -%}
 {%- endif -%}
+
+{%- comment -%} Left accent bar on every event (see the "meaning" bar in shared.liquid's event
+markup below) — bar_w is the tiered width set per-view above; bar_pad is how far the title/
+badge content needs to sit clear of it (bar's own left inset + width + a small breathing gap).
+{%- endcomment -%}
+{%- assign bar_pad = bar_w | plus: 7 -%}
 
 {%- comment -%} Every tier above assumes the original 3-day layout's column width. With
 Days to Show now configurable, the SAME day columns get much narrower at 5 or 7 days —
@@ -310,8 +325,8 @@ where the axis was already a sane fraction and unchanged. {%- endcomment -%}
                    up visibly different heights depending on which one happened to render
                    first. A fixed height fixes both: a real ceiling fit() can shrink against,
                    and a genuine minimum every row gets regardless of content. -->
-              <div class="h--[{{ allday_row_pct }}cqh] bg--{{ a.hue }} text--{{ a.fg }} w--full pr--2 py--[1px] flex flex--row flex--center-y gap--xsmall cal-fit-box" style="position:relative;overflow:hidden;box-sizing:border-box;padding-left:{% if a.badge %}20px{% else %}4px{% endif %};border-radius:{{ ad_radius }};border-top:2px solid currentColor;border-bottom:2px solid currentColor;{% unless a.continues_before %}border-left:2px solid currentColor;{% endunless %}{% unless a.continues_after %}border-right:2px solid currentColor;{% endunless %}{% if a.continues_before %}margin-left:-4px;{% endif %}{% if a.continues_after %}margin-right:-4px;{% endif %}">
-                {% if a.badge %}
+              <div class="h--[{{ allday_row_pct }}cqh] bg--{{ a.hue }} text--{{ a.fg }} w--full pr--2 py--[1px] flex flex--row flex--center-y gap--xsmall cal-fit-box" style="position:relative;overflow:hidden;box-sizing:border-box;padding-left:{% if a.icon.size == 2 %}30px{% elsif a.badge or a.icon %}20px{% else %}4px{% endif %};border-radius:{{ ad_radius }};border-top:2px solid currentColor;border-bottom:2px solid currentColor;{% unless a.continues_before %}border-left:2px solid currentColor;{% endunless %}{% unless a.continues_after %}border-right:2px solid currentColor;{% endunless %}{% if a.continues_before %}margin-left:-4px;{% endif %}{% if a.continues_after %}margin-right:-4px;{% endif %}">
+                {% if a.badge or a.icon %}
                   <!-- Pinned to the top-left corner (like the event badge below) rather than
                        inline before the title — a fixed overlay position instead of one that
                        shifts with the row's own vertical centering. Solid black fill + white
@@ -321,8 +336,27 @@ where the axis was already a sane fraction and unchanged. {%- endcomment -%}
                        color) specifically so the circle itself stays visible even against a
                        near-black chip (e.g. a dark gray-N pin) it would otherwise blend into —
                        plain black-on-near-black has ~zero contrast without it. The chip's own
-                       padding-left above makes room so the title text doesn't render under it. -->
-                  <span class="text--white bg--black rounded--full flex flex--center-x flex--center-y" style="position:absolute;top:1px;left:1px;width:16px;height:16px;font-size:9px;line-height:1;border:1.5px solid currentColor;box-sizing:border-box;z-index:1;">{{ a.badge }}</span>
+                       padding-left above makes room so the title text doesn't render under it.
+                       A Category icon (see the Calendar Configuration field) takes this same
+                       corner slot instead of the plain person-badge letter — see the event
+                       badge below for why only one of the two ever shows. A category can carry
+                       UP TO TWO icons (see resolveIcon in transform.js, e.g. ["work","home"] for
+                       "Work From Home") — a.icon is always an array when present, so a second
+                       circle renders offset to the right of the first when there's a second
+                       entry, overlapping slightly rather than needing its own reserved space. -->
+                  {% if a.icon %}
+                    <span class="text--white bg--black rounded--full flex flex--center-x flex--center-y" style="position:absolute;top:1px;left:1px;width:16px;height:16px;border:1.5px solid currentColor;box-sizing:border-box;z-index:2;overflow:hidden;">
+                      <img class="w--[11px] h--[11px] cal-icon-white" src="{{ a.icon[0] }}" alt="">
+                    </span>
+                    {% if a.icon[1] %}
+                      <span class="text--white bg--black rounded--full flex flex--center-x flex--center-y" style="position:absolute;top:1px;left:11px;width:16px;height:16px;border:1.5px solid currentColor;box-sizing:border-box;z-index:1;overflow:hidden;">
+                        <img class="w--[11px] h--[11px] cal-icon-white" src="{{ a.icon[1] }}" alt="">
+                      </span>
+                    {% endif %}
+                  {% else %}
+                    <span class="text--white bg--black rounded--full flex flex--center-x flex--center-y" style="position:absolute;top:1px;left:1px;width:16px;height:16px;font-size:9px;line-height:1;border:1.5px solid currentColor;box-sizing:border-box;z-index:1;overflow:hidden;">{{ a.badge }}</span>
+                  {% endif %}
+                  </span>
                 {% endif %}
                 <!-- cal-fit-text/cal-fit-clip (see fit() below): a static size tier alone —
                      what this used to be, plus a 1-line CSS clamp to ellipsis — truncated
@@ -465,23 +499,52 @@ where the axis was already a sane fraction and unchanged. {%- endcomment -%}
                    (see run() below, needed for the axis/background rows whose size actually
                    is content-driven) which would re-clip a too-tall title right back after
                    fit() just set this event's own cal-fit-box to overflow:visible below. -->
-              <div class="h--full w--full bg--{{ event.hue }} text--{{ event.fg }} rounded--small {{ event_pad_cls }} flex flex--col flex--center-y cal-fit-box" style="position:relative;box-sizing:border-box;border:2px solid currentColor;">
-                {% if event.badge %}
+              <div class="h--full w--full bg--{{ event.hue }} text--{{ event.fg }} rounded--small {{ event_pad_cls }} flex flex--col flex--center-y cal-fit-box" style="position:relative;box-sizing:border-box;border:2px solid currentColor;padding-left:{{ bar_pad }}px;">
+                <!-- Left "meaning" accent bar — every event gets one (see accentColor in
+                     transform.js): a darker/more-saturated step of the chip's own color by
+                     default, or a matched Category's own color when one applies (see
+                     applyCategory), so the bar can carry an independent signal from the fill
+                     (e.g. fill = whose calendar/person, bar = what kind of event). Inset
+                     top/bottom/left rather than flush with the box edge so its square corners
+                     never poke past the chip's own rounded--small corners (this box's overflow
+                     is deliberately left visible for oversized titles — see fit() below — so a
+                     flush bar would have nothing to clip it). Absolutely positioned so it never
+                     participates in the flex layout fit() measures against. -->
+                <div class="bg--{{ event.bar }} rounded--full" style="position:absolute;top:3px;bottom:3px;left:3px;width:{{ bar_w }}px;"></div>
+                {% if event.icon or event.badge %}
                   <!-- Absolutely positioned in the corner, deliberately NOT inline with
                        the title: the fit-text script (see run() below) sizes the title
                        purely from this box's own width/padding, with no awareness of a
                        sibling badge eating horizontal space — an inline badge would let
                        fit() size text too large for the room actually left beside it.
                        An overlay sidesteps that entirely instead of teaching fit() about
-                       a second element. Solid black fill + white text regardless of the
-                       chip's own hue/gray, same reasoning as the chip text staying one
-                       fixed color. The currentColor border (= white, this span's own text
-                       color) keeps the circle visible against a near-black chip (a dark
-                       gray-N pin) it would otherwise blend straight into. Sized larger
-                       than the all-day version above (20px vs. ~1.6em of a typically-
-                       bigger chip title) since event chips run much smaller, especially on
-                       quadrant, and a badge that's hard to read defeats its own purpose. -->
-                  <span class="text--white bg--black rounded--full flex flex--center-x flex--center-y {{ badge_hide_cls }}" style="position:absolute;top:1px;left:1px;width:20px;height:20px;font-size:12px;line-height:1;border:2px solid currentColor;box-sizing:border-box;z-index:1;">{{ event.badge }}</span>
+                       a second element. Solid black fill regardless of the chip's own
+                       hue/gray, same reasoning as the chip text staying one fixed color.
+                       The currentColor border (= white, this span's own text color) keeps
+                       the circle visible against a near-black chip (a dark gray-N pin) it
+                       would otherwise blend straight into. Sized larger than the all-day
+                       version above (20px vs. ~1.6em of a typically-bigger chip title)
+                       since event chips run much smaller, especially on quadrant, and a
+                       badge that's hard to read defeats its own purpose. A Category icon
+                       (see the Calendar Configuration field) takes this same corner slot
+                       instead of the plain person-badge letter when both would otherwise
+                       apply — one badge slot, one piece of "what is this" information. A
+                       category can carry UP TO TWO icons (see resolveIcon in transform.js,
+                       e.g. ["work","home"] for "Work From Home") — event.icon is always an
+                       array when present, so a second circle renders offset to the right of
+                       the first when there's a second entry. -->
+                  {% if event.icon %}
+                    <span class="text--white bg--black rounded--full flex flex--center-x flex--center-y {{ badge_hide_cls }}" style="position:absolute;top:1px;left:1px;width:20px;height:20px;border:2px solid currentColor;box-sizing:border-box;z-index:2;overflow:hidden;">
+                      <img class="w--[14px] h--[14px] cal-icon-white" src="{{ event.icon[0] }}" alt="">
+                    </span>
+                    {% if event.icon[1] %}
+                      <span class="text--white bg--black rounded--full flex flex--center-x flex--center-y {{ badge_hide_cls }}" style="position:absolute;top:1px;left:14px;width:20px;height:20px;border:2px solid currentColor;box-sizing:border-box;z-index:1;overflow:hidden;">
+                        <img class="w--[14px] h--[14px] cal-icon-white" src="{{ event.icon[1] }}" alt="">
+                      </span>
+                    {% endif %}
+                  {% else %}
+                    <span class="text--white bg--black rounded--full flex flex--center-x flex--center-y {{ badge_hide_cls }}" style="position:absolute;top:1px;left:1px;width:20px;height:20px;font-size:12px;line-height:1;border:2px solid currentColor;box-sizing:border-box;z-index:1;overflow:hidden;">{{ event.badge }}</span>
+                  {% endif %}
                 {% endif %}
                 <span class="title {{ event_title_cls }} text--{{ event.fg }} cal-fit-text" data-fit-min="11" data-fit-max="90">{{ event.title }}</span>
               </div>

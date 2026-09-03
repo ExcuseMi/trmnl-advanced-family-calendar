@@ -21,8 +21,9 @@ variables:
         time_zone: Europe/Brussels
         view_days: '3'
   header_pct: 15
-  allday_pct: 0
-  grid_pct: 85
+  allday_pct: 6
+  allday_row_pct: 6
+  grid_pct: 79
   title_bar_pct: 0
   show_title_bar: false
   title_text: Daylight & Weather Calendar
@@ -131,7 +132,15 @@ variables:
       high: 28
       low: 16
     icon: https://trmnl.com/images/plugins/weather/wi-day-sunny.svg
-    allday: []
+    allday:
+    - title: Verjaardag Kato
+      hue: pink-65
+      fg: black
+      badge: null
+      icon:
+      - https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/cake/default/24px.svg
+      continues_before: false
+      continues_after: false
     segments:
     - pct: 2
       shade: 0
@@ -238,12 +247,29 @@ variables:
       night: true
       weather: null
     events:
+    - top_pct: 38.0
+      height_pct: 9.0
+      lane_index: 0
+      nlanes: 1
+      title: Thuiswerken
+      hue: blue-65
+      bar: violet-45
+      fg: black
+      badge: null
+      icon:
+      - https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/work/default/24px.svg
+      - https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/home/default/24px.svg
     - top_pct: 55.2941
       height_pct: 11.7647
-      lanes:
-      - title: Speelpunt
-        hue: blue
-        badge: A
+      lane_index: 0
+      nlanes: 1
+      title: Kato's verjaardagsfeest
+      hue: pink-65
+      bar: pink-45
+      fg: black
+      badge: null
+      icon:
+      - https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/cake/default/24px.svg
     now_marker:
       top_pct: 89.9439
       night: false
@@ -363,10 +389,14 @@ variables:
     events:
     - top_pct: 17.6471
       height_pct: 11.7647
-      lanes:
-      - title: Vroege zwemles
-        hue: green
-        badge: null
+      lane_index: 0
+      nlanes: 1
+      title: Vroege zwemles
+      hue: green-65
+      bar: green-45
+      fg: black
+      badge: A
+      icon: null
     now_marker: null
   - label: Ma 6 Juli
     label_short: Ma 6 Jul
@@ -484,10 +514,14 @@ variables:
     events:
     - top_pct: 92.9412
       height_pct: 7.0588
-      lanes:
-      - title: Laat etentje
-        hue: orange
-        badge: null
+      lane_index: 0
+      nlanes: 1
+      title: Laat etentje
+      hue: gray-25
+      bar: gray-15
+      fg: white
+      badge: null
+      icon: null
     now_marker: null
   generated_at: 1783192907
   tz: Europe/Brussels

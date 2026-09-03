@@ -26,6 +26,12 @@ plain browser tab — see [Configuration Editor](#configuration-editor) below.
   and a small badge circle next to the event — e.g. give a kid their own color and initial,
   independent of which calendar their events land on, optionally renaming a class code to their
   actual name at the same time.
+- **Categories**: every event gets a small color "meaning" bar down its left edge — a darker
+  shade of its own color by default, or a Category's own color when one matches (by regex,
+  across every calendar, independent of People). A category can also swap the badge circle for
+  an icon (up to two, e.g. a briefcase + a house for "Work From Home") — reused from
+  [Google's Material Symbols](https://fonts.google.com/icons) by plain name, searchable live in
+  the [Configuration Editor](#configuration-editor); a custom image URL works too.
 - Recurring events (`DAILY` / `WEEKLY` incl. `BYDAY` / `MONTHLY` / `YEARLY`, with `INTERVAL`,
   `COUNT`, `UNTIL`, `EXDATE`) expanded into the window, IANA-timezone aware.
 - Language (day/month names, abbreviated on narrower layouts) auto-detected from your TRMNL
@@ -67,10 +73,18 @@ The JSON shape it produces:
 {
   "calendars": [
     { "url": "https://cloud.example.com/family.ics", "color": "pink" },
-    { "url": "https://cloud.example.com/school.ics", "exclude": "\\bL[1345]\\b" }
+    {
+      "url": "https://cloud.example.com/school.ics",
+      "exclude": "\\bL[1345]\\b",
+      "personRules": [{ "match": "\\bL6\\b", "person": "Aiko" }]
+    }
   ],
   "people": [
-    { "name": "Aiko", "match": "\\bL6\\b", "color": "pink", "badge": "A" }
+    { "name": "Aiko", "color": "pink", "badge": "A" }
+  ],
+  "categories": [
+    { "name": "Birthday", "match": "birthday|verjaardag", "icon": "cake" },
+    { "name": "Work From Home", "match": "\\bWFH\\b", "icon": ["work", "home"] }
   ]
 }
 ```
@@ -79,15 +93,28 @@ The JSON shape it produces:
   Outlook, and Apple Calendar, all of which have a private/secret ICS link tucked away in their
   calendar settings. `webcal://` links are handled automatically.
 - `calendars[].color` — optional, one of `red` `orange` `yellow` `lime` `green` `cyan` `blue`
-  `violet` `purple` `pink`. Pins that calendar's color instead of auto-assigning by position.
-- `calendars[].exclude` — optional regex (case-insensitive). Matching events from *that*
-  calendar are hidden entirely, before `people` ever sees them.
-- `people[].name` + `people[].match` — required. Every surviving event from *any* calendar
-  whose title matches `match` gets renamed to `name` (set `"rename": false` to tag/color
-  without renaming).
-- `people[].color` / `people[].badge` — optional. Overrides that event's chip color and/or
-  attaches a small badge circle (defaults to `name`'s first letter). Multiple people can match
-  the same event; the last match in the array wins for color/badge, same as renaming.
+  `violet` `purple` `pink`, or an explicit `gray-10`..`gray-70` shade. Pins that calendar's color
+  instead of auto-assigning by position.
+- `calendars[].exclude` — optional regex, or array of them (case-insensitive). Matching events
+  from *that* calendar are hidden entirely, before `people`/`categories` ever see them.
+- `calendars[].personRules` — optional array of `{ match, person, rename }`, checked in order
+  against every surviving event on *that* calendar. `person` names who it belongs to (doesn't
+  need to already exist in `people[]`, but only a declared one contributes color/badge);
+  `rename` (default `true`) controls whether the matched text is replaced with `person`'s name.
+- `calendars[].defaultPerson` — optional, applied when no `personRules` matched.
+- `people[].name` — required, the lookup key `personRules[].person`/`defaultPerson` reference.
+  `people[].color` / `people[].badge` — optional; overrides that event's chip color and/or
+  attaches a small badge circle (defaults to `name`'s first letter).
+- `categories[].match` — required, a regex or array of them (case-insensitive). Unlike
+  `people`/`personRules`, a category isn't scoped to one calendar — it's tested against every
+  surviving event's title, from any calendar, in array order (later matches win for color/icon).
+- `categories[].color` — optional, overrides the event's calendar/person color (a category wins
+  over both — it's the most specific signal). Every event always gets a left-edge color bar; a
+  matched category's color applies there too, independent of the chip's own fill color.
+- `categories[].icon` — optional, a [Material Symbols](https://fonts.google.com/icons) name
+  (e.g. `"cake"`) or a custom image URL, or an array of up to two of either (rendered as two
+  small overlapping badge circles, e.g. `["work", "home"]`). Replaces the person-badge letter in
+  the same corner slot.
 
 ## Local layout development
 

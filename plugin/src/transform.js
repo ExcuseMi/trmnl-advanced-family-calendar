@@ -72,10 +72,60 @@ function foregroundFor(color) {
   return parseInt(m[1], 10) < 45 ? "white" : "black";
 }
 
+// The accent-bar color for an event: a darker/more-saturated step of the SAME color family as
+// its fill (colorClass), so every event gets a two-tone card by default (light fill, darker
+// bar) even with no Category configured — see the "accent bar" markup in shared.liquid. Step
+// 45 for a chromatic hue is the framework's peak-saturation step (colorClass uses 65, a lighter
+// pastel step for the fill) — same hue, visibly darker. A pinned gray shade has no separate
+// "saturated" step, so this just steps two positions darker within GRAY_SHADES instead (clamped
+// at the darkest, gray-10).
+function accentColor(color) {
+  if (HUES.includes(color)) return color + "-45";
+  const m = /^gray-(\d+)$/.exec(color);
+  if (m) {
+    const idx = GRAY_SHADES.indexOf(parseInt(m[1], 10));
+    const steppedIdx = idx === -1 ? 0 : Math.max(0, idx - 2);
+    return "gray-" + GRAY_SHADES[steppedIdx];
+  }
+  return color;
+}
+
+// ---------------------------------------------------------------------------- category icons
+//
+// Category icons reference Google's Material Symbols (Outlined) set — https://fonts.google.com/
+// icons — by plain name (e.g. "cake", "flight"), same lookup /tools/config-editor.html's search
+// picker uses. Nothing about the icon set is bundled into this repo: resolveIcon() just builds
+// a URL to Google's own hosted static SVG for that name — the exact same "just a URL, no local
+// copy" pattern day.icon already uses above for weather icons — so an unrecognized/misspelled
+// name just fails to load the image rather than breaking the render. A plain http(s) URL works
+// too, for a self-hosted/custom icon. `icon` accepts either one name/URL or an array of up to
+// two — e.g. ["work", "home"] for a "Work From Home" category — rendered as two small
+// overlapping badge circles instead of one (see shared.liquid). Always returns an array (1 or 2
+// resolved URLs) or null, so callers never need to branch on single-vs-multi.
+const MATERIAL_ICON_BASE = "https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/";
+const MATERIAL_ICON_SUFFIX = "/default/24px.svg";
+const MAX_CATEGORY_ICONS = 2;
+
+function resolveIcon(ref) {
+  const list = Array.isArray(ref) ? ref : [ref];
+  const urls = [];
+  for (const item of list) {
+    if (urls.length >= MAX_CATEGORY_ICONS) break;
+    if (typeof item !== "string") continue;
+    const v = item.trim();
+    if (!v) continue;
+    if (/^https?:\/\//i.test(v)) { urls.push(v); continue; }
+    const name = v.toLowerCase().replace(/[^a-z0-9_]/g, "");
+    if (name) urls.push(MATERIAL_ICON_BASE + name + MATERIAL_ICON_SUFFIX);
+  }
+  return urls.length ? urls : null;
+}
+
 async function run(input) {
   const cfg = parseConfig(cf(input, "calendars"));
   const calendars = cfg.calendars;
   const people = cfg.people;
+  const categories = cfg.categories;
   const calendarColors = calendars.map((c) => c.color);
   const locale = localeOf(input);
   const tzname = cf(input, "time_zone").trim() || userTz(input) || "UTC";
@@ -134,6 +184,12 @@ async function run(input) {
     e.title = r.title;
     e.hueOverride = r.hue;
     e.badge = r.badge;
+    // Categories are matched against the FINAL (post-rename) title, globally across every
+    // calendar — a category's own color wins over a person's (more specific signal), and its
+    // icon replaces the person badge letter in the same corner slot (see shared.liquid).
+    const c = applyCategory(e.title, categories);
+    if (c.color) e.hueOverride = c.color;
+    e.icon = c.icon;
   }
 
   // Bucket occurrences into day columns, split into timed vs all-day.
@@ -160,6 +216,7 @@ async function run(input) {
           calIdx: e.calIdx,
           hueOverride: e.hueOverride,
           badge: e.badge,
+          icon: e.icon,
           label: fmtTime(vs, tz, is12h) + "–" + fmtTime(ve, tz, is12h),
         });
       }
@@ -174,6 +231,7 @@ async function run(input) {
         title: a.title,
         hue: a.hueOverride || hueOf(a.calIdx, calendarColors),
         badge: a.badge || null,
+        icon: a.icon || null,
         // Lets the template draw multi-day all-day events as one continuous banner (square
         // off the edge that's mid-span) instead of a separate fully-rounded pill repeating
         // in every day column it touches.
@@ -345,7 +403,7 @@ function emptyResult(tzname, tz, locale, daysN, msg, showTitleBar, titleBarPct, 
 // strict validation.
 
 function parseConfig(raw) {
-  const empty = { calendars: [], people: {}, hours: null };
+  const empty = { calendars: [], people: {}, hours: null, categories: [] };
   if (typeof raw !== "string" || !raw.trim()) return empty;
   let data;
   try {
@@ -406,7 +464,45 @@ function parseConfig(raw) {
     calendars.push({ id, url: item.url.trim(), color, exclude, defaultPerson, personRules });
   }
 
-  return { calendars, people, hours };
+  // Optional top-level "categories": [{ name, match, icon, color }] — unlike people[], which
+  // is only ever applied per-calendar (via personRules/defaultPerson), a category is matched
+  // against every surviving event's title regardless of which calendar it came from — meant for
+  // "kind of event" (Birthday, Work, Medical...) rather than "whose event", so it doesn't need
+  // per-calendar wiring. See applyCategory. `match` (required) is a regex, or an array of them
+  // (case-insensitive, any match applies) — same shape as calendars[].exclude. `icon` is a
+  // Material Symbols name (see resolveIcon above) or an http(s) URL to a custom image, OR an
+  // array of up to two of either — e.g. ["work", "home"] for a "Work From Home" category —
+  // rendered as two small overlapping badge circles instead of one. `color` is one of HUES or
+  // "gray-10".."gray-70". Both icon and color are optional independently — a color-only
+  // category just recolors the chip, an icon-only category just swaps the badge.
+  const categories = [];
+  for (const item of Array.isArray(data.categories) ? data.categories : []) {
+    if (!item || typeof item !== "object") continue;
+    const matchRx = compileRegexList(item.match);
+    if (!matchRx.length) continue;
+    const name = typeof item.name === "string" ? item.name.trim() : "";
+    const color = typeof item.color === "string" && isValidColor(item.color.toLowerCase()) ? item.color.toLowerCase() : null;
+    const icon = resolveIcon(item.icon);
+    categories.push({ name, rx: matchRx, color, icon });
+  }
+
+  return { calendars, people, hours, categories };
+}
+
+// Tests `title` (the event's title, already through any personRules rename) against every
+// configured category IN ORDER — each category that matches contributes whichever of
+// color/icon it defines, later matches overwriting earlier ones field-by-field (not as a whole
+// object), so e.g. one category matching for color and a later one matching only for icon both
+// still apply, same "last match wins" convention as personRules/calendar color.
+function applyCategory(title, categories) {
+  let color = null;
+  let icon = null;
+  for (const cat of categories) {
+    if (!cat.rx.some((rx) => rx.test(title))) continue;
+    if (cat.color) color = cat.color;
+    if (cat.icon) icon = cat.icon;
+  }
+  return { color, icon };
 }
 
 function compileRegex(pattern) {
@@ -1348,8 +1444,13 @@ function layoutNative(days, importantStart, importantEnd, nowH, sunMarks, hourly
         nlanes: item.nlanes,
         title: ev.title,
         hue: colorClass(color),
+        // Left accent bar (see shared.liquid) — every event gets one, a darker/more-saturated
+        // step of its own fill color by default, or a Category's own color when one matched
+        // (see applyCategory) so the bar can carry a second, independent signal from the fill.
+        bar: accentColor(color),
         fg: foregroundFor(color),
         badge: ev.badge || null,
+        icon: ev.icon || null,
       });
     });
 
@@ -1357,7 +1458,7 @@ function layoutNative(days, importantStart, importantEnd, nowH, sunMarks, hourly
       label: d.label, label_short: d.labelShort, is_today: d.isToday,
       temp: d.temp || null, icon: d.icon || null,
       allday: d.allday.map((a) => ({
-        title: a.title, hue: colorClass(a.hue), fg: foregroundFor(a.hue), badge: a.badge,
+        title: a.title, hue: colorClass(a.hue), fg: foregroundFor(a.hue), badge: a.badge, icon: a.icon || null,
         continues_before: a.continuesBefore, continues_after: a.continuesAfter,
       })),
       segments, events, now_marker: nowMarker,
