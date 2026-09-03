@@ -175,6 +175,12 @@ entirely controlled by that calendar's
 A person with no `color` set still gets the badge circle (or photo) — it just doesn't change the
 event's color, which stays whatever the calendar itself uses.
 
+That badge circle is small and TRMNL's panels are grayscale/dithered, so a real photo often turns
+muddy at that size — a flat, high-contrast cartoon/illustrated version of the same photo reads
+much more clearly. [imagetocartoon.com](https://imagetocartoon.com/) is one free way to make one
+before uploading it (the [Configuration Editor](https://trmnl.bettens.dev/advanced-family-calendar/)
+can host the result for you — see its Photo field / [Backend](README.md#backend)).
+
 ---
 
 ## `categories[]`
