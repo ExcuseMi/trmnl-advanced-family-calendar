@@ -125,6 +125,7 @@ variables:
     bold: false
   days:
   - label: Za 4 Juli
+    label_short: Za 4 Jul
     is_today: true
     temp:
       high: 28
@@ -246,6 +247,7 @@ variables:
       top_pct: 89.9439
       night: false
   - label: Zo 5 Juli
+    label_short: Zo 5 Jul
     is_today: false
     temp:
       high: 25
@@ -365,6 +367,7 @@ variables:
         hue: green
     now_marker: null
   - label: Ma 6 Juli
+    label_short: Ma 6 Jul
     is_today: false
     temp:
       high: 29

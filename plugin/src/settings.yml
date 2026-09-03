@@ -1,15 +1,35 @@
 ---
 strategy: polling
-no_screen_padding: 'yes'
+no_screen_padding: ''
 dark_mode: 'no'
 static_data: ''
 polling_verb: get
-framework_version: 3.1.1
+framework_version: 3.3.1
 serverless_language: python
 polling_url: ''
 polling_headers: ''
 polling_body: ''
 id: 365548
+oauth_enabled: 'false'
+oauth_pkce_enabled: 'no'
+oauth_authorize_url: ''
+oauth_token_url: ''
+oauth_scopes: ''
+oauth_scope_separator: ''
+oauth_refresh_url: ''
+oauth_auth_params: ''
+oauth_token_headers: ''
+oauth_token_site: ''
+oauth_token_params: ''
+oauth_token_request_auth_method: ''
+oauth_body_format: ''
+oauth_token_response_metadata: ''
+oauth_authorization_method: ''
+oauth_refresh_params: ''
+oauth_token_field_name: ''
+oauth_expiry_field_name: ''
+oauth_expiry_strategy: ''
+oauth_fixed_expiry_ms: ''
 custom_fields:
 - keyname: author_info
   name: About This Plugin
@@ -25,6 +45,16 @@ custom_fields:
   placeholder: |-
     https://cloud.example.com/remote.php/dav/public-calendars/TOKEN1/?export
     https://cloud.example.com/remote.php/dav/public-calendars/TOKEN2/?export
+- keyname: exclude_regex
+  field_type: text
+  name: Exclude Events (regex)
+  description: Hide any event whose title matches this regular expression (case-insensitive). Leave blank to show everything. Example, for a school calendar with titles like <code>L1 - Turnen</code> and <code>L1 + L2 - Sportdag</code> — hide every class's events except L2 and L6, while still keeping school-wide entries with no class code at all&#58; <code>(?=.*\b(?:L[1345]|K[123]|Kleuter)\b)(?!.*\b(?:L2|L6)\b)</code>
+  optional: true
+- keyname: rename_rules
+  field_type: text
+  name: Rename Events (find → replace)
+  description: One rule per line, <code>find regex => replacement</code>, applied in order (case-insensitive) to every event title that survives the Exclude filter above. Example, to show a kid's name instead of a class code&#58;<br /><code>\bL6\b => Aiko</code><br /><code>\bL2\b => Finn</code>
+  optional: true
 - keyname: view_days
   field_type: select
   name: Days to Show
@@ -68,4 +98,5 @@ custom_fields:
   description: Shows a bar with this plugin instance's name across the top of the screen. Off by default to leave more room for the calendar grid.
   default: 'false'
 name: Daylight & Weather Calendar
+description: ''
 refresh_interval: 15

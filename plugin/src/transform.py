@@ -13,6 +13,7 @@
 # Budget: 128 MB / 5 s — everything is bounded to the render window.
 
 import math
+import re
 import requests
 from datetime import datetime, date, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -33,6 +34,8 @@ def run(input):
     show_title_bar = _cf(input, "show_title_bar").strip().lower() in ("true", "yes", "1")
     title_bar_pct = TITLE_BAR_PCT if show_title_bar else 0
     title_text = _title_text(input)
+    exclude_re = _compile_regex(_cf(input, "exclude_regex"))
+    rename_rules = _parse_rename_rules(_cf(input, "rename_rules"))
 
     tz = _resolve_tz(tzname, input)
 
@@ -62,6 +65,15 @@ def run(input):
     if errors and not occ:
         err = "Fetch/parse failed: %s" % errors[0]
 
+    # Exclude tested against the RAW title (before renaming) so a rename rule can't
+    # accidentally dodge or trigger an exclude rule by rewriting the very text it
+    # matches against; rename then runs on whatever survives the exclude pass.
+    if exclude_re:
+        occ = [e for e in occ if not exclude_re.search(e["title"])]
+    if rename_rules:
+        for e in occ:
+            e["title"] = _apply_rename_rules(e["title"], rename_rules)
+
     # Bucket occurrences into day columns, split into timed vs all-day.
     raw_days = []
     for i in range(days_n):
@@ -85,6 +97,7 @@ def run(input):
         timed.sort(key=lambda t: t["h0"])
         raw_days.append({
             "label": _day_label(d0, t),
+            "label_short": _day_label_short(d0, t),
             "is_today": i == 0,
             "timed": timed,
             "allday": [{"title": a["title"], "hue": _hue(a["cal_idx"]),
@@ -143,6 +156,48 @@ def _urls(raw):
     return [p.strip() for p in parts if p.strip()]
 
 
+def _compile_regex(raw):
+    """The Exclude Events field — a single regex tested (case-insensitively) against
+    each event's title; a match hides the whole event. Blank or invalid input is
+    treated as "no filter" rather than erroring the whole render."""
+    pattern = (raw or "").strip()
+    if not pattern:
+        return None
+    try:
+        return re.compile(pattern, re.IGNORECASE)
+    except re.error:
+        return None
+
+
+def _parse_rename_rules(raw):
+    """The Rename Events field — one `find regex => replacement` rule per line, applied
+    in order via re.sub (case-insensitive) to every surviving event's title. Lets e.g.
+    a class code like "L6" be swapped for a kid's actual name. Blank/malformed lines
+    (no `=>`, or an invalid regex) are skipped rather than erroring the whole render."""
+    rules = []
+    if not isinstance(raw, str):
+        return rules
+    for line in raw.replace("\r", "").split("\n"):
+        line = line.strip()
+        if not line or "=>" not in line:
+            continue
+        find, _, repl = line.partition("=>")
+        find = find.strip()
+        if not find:
+            continue
+        try:
+            rules.append((re.compile(find, re.IGNORECASE), repl.strip()))
+        except re.error:
+            continue
+    return rules
+
+
+def _apply_rename_rules(title, rules):
+    for rx, repl in rules:
+        title = rx.sub(repl, title)
+    return title
+
+
 def _int(raw, default, lo, hi):
     try:
         return max(lo, min(hi, int(float(str(raw).strip()))))
@@ -188,6 +243,7 @@ def _empty(tzname, tz, t, days_n, msg, show_title_bar=False, title_bar_pct=0, ti
         d0 = win_s + timedelta(days=i)
         days.append({
             "label": _day_label(d0, t),
+            "label_short": _day_label_short(d0, t),
             "is_today": i == 0, "timed": [], "allday": [],
         })
     grid = _layout_native(days, 8, 22, None, title_bar_pct=title_bar_pct)
@@ -205,30 +261,40 @@ _I18N = {
         "wd": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
         "months": ["January", "February", "March", "April", "May", "June", "July",
                    "August", "September", "October", "November", "December"],
+        "months_short": ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul",
+                          "Aug", "Sep", "Oct", "Nov", "Dec"],
         "unavailable": "Calendar unavailable",
     },
     "nl": {
         "wd": ["Ma", "Di", "Wo", "Do", "Vr", "Za", "Zo"],
         "months": ["Januari", "Februari", "Maart", "April", "Mei", "Juni", "Juli",
                    "Augustus", "September", "Oktober", "November", "December"],
+        "months_short": ["Jan", "Feb", "Mrt", "Apr", "Mei", "Jun", "Jul",
+                          "Aug", "Sep", "Okt", "Nov", "Dec"],
         "unavailable": "Kalender niet beschikbaar",
     },
     "fr": {
         "wd": ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"],
         "months": ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet",
                    "Août", "Septembre", "Octobre", "Novembre", "Décembre"],
+        "months_short": ["Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil",
+                          "Août", "Sep", "Oct", "Nov", "Déc"],
         "unavailable": "Agenda indisponible",
     },
     "de": {
         "wd": ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"],
         "months": ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli",
                    "August", "September", "Oktober", "November", "Dezember"],
+        "months_short": ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul",
+                          "Aug", "Sep", "Okt", "Nov", "Dez"],
         "unavailable": "Kalender nicht verfügbar",
     },
     "es": {
         "wd": ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"],
         "months": ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio",
                    "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"],
+        "months_short": ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul",
+                          "Ago", "Sep", "Oct", "Nov", "Dic"],
         "unavailable": "Calendario no disponible",
     },
 }
@@ -288,6 +354,14 @@ def _resolve_tz(tzname, input):
 
 def _day_label(d0, t):
     return "%s %s %s" % (t["wd"][d0.weekday()], d0.strftime("%-d"), t["months"][d0.month - 1])
+
+
+def _day_label_short(d0, t):
+    """Abbreviated-month variant for narrow layouts (quadrant, half_vertical, or a wide
+    Days-to-Show setting) — the full month name is what wraps/gets clipped there, e.g.
+    "Zo 5 Juli" losing "Juli" off the header at 7 columns; the weekday/day are already
+    short enough not to need shrinking."""
+    return "%s %s %s" % (t["wd"][d0.weekday()], d0.strftime("%-d"), t["months_short"][d0.month - 1])
 
 
 def _fmt_time(dt, is_12h):
@@ -930,7 +1004,7 @@ def _layout_native(days, important_start, important_end, now_h=None, sun_marks=N
                             "lanes": lanes})
 
         out_days.append({
-            "label": d["label"], "is_today": d["is_today"],
+            "label": d["label"], "label_short": d["label_short"], "is_today": d["is_today"],
             "temp": d.get("temp"), "icon": d.get("icon"),
             "allday": d["allday"], "segments": segments, "events": events,
             "now_marker": now_marker,

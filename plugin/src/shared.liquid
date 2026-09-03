@@ -102,9 +102,24 @@ there are more columns than the sizes above were tuned for, regardless of view. 
          device — including the larger, portrait, 4-bit TRMNL X — via the framework's
          own container-query system instead of a fixed-aspect picture. -->
 
+    <!-- Abbreviated-month day label for layouts where the full month name is what
+         wraps/overflows: quadrant and half_vertical are narrow regardless of Days to
+         Show (see their branches below), and the wider views get tight once Days to
+         Show pushes past 3-4 columns (see the head_title_cls step-down above). -->
+    {% if view == 3 or view == 4 or days.size >= 4 %}
+      {% assign use_short_month = true %}
+    {% else %}
+      {% assign use_short_month = false %}
+    {% endif %}
+
     <div class="grid gap--none h--[{{ header_pct }}cqh]">
       <div class="col--span-1"></div>
       {% for day in days %}
+        {% if use_short_month %}
+          {% assign dlabel = day.label_short %}
+        {% else %}
+          {% assign dlabel = day.label %}
+        {% endif %}
         <!-- gap--xsmall is explicit rather than relying on the framework's default flex gap:
              today's label is wrapped in an extra div (the black pill) that plain-text days
              don't have, and without a deliberate gap value here the two box shapes ended up
@@ -122,11 +137,11 @@ there are more columns than the sizes above were tuned for, regardless of view. 
             <div class="flex flex--row flex--center-y gap--xsmall w--full">
               {% if day.is_today %}
                 <div class="bg--black rounded--small px--[10px] py--[2px]" style="min-width:0;overflow:hidden;">
-                  <span class="title {{ head_title_cls }} {{ daylabel_pad_cls }} text--white" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;">{{ day.label }}</span>
+                  <span class="title {{ head_title_cls }} {{ daylabel_pad_cls }} text--white" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;">{{ dlabel }}</span>
                 </div>
               {% else %}
                 <div class="rounded--small px--[10px] py--[2px]" style="min-width:0;overflow:hidden;">
-                  <span class="title {{ head_title_cls }} {{ daylabel_pad_cls }}" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;">{{ day.label }}</span>
+                  <span class="title {{ head_title_cls }} {{ daylabel_pad_cls }}" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;">{{ dlabel }}</span>
                 </div>
               {% endif %}
               {% if day.icon %}
@@ -146,11 +161,11 @@ there are more columns than the sizes above were tuned for, regardless of view. 
             <div class="flex flex--row flex--center-y gap--xsmall">
               {% if day.is_today %}
                 <div class="bg--black rounded--small px--[10px] py--[2px]">
-                  <span class="title {{ head_title_cls }} {{ daylabel_pad_cls }} text--white">{{ day.label }}</span>
+                  <span class="title {{ head_title_cls }} {{ daylabel_pad_cls }} text--white">{{ dlabel }}</span>
                 </div>
               {% else %}
                 <div class="rounded--small px--[10px] py--[2px]">
-                  <span class="title {{ head_title_cls }} {{ daylabel_pad_cls }}">{{ day.label }}</span>
+                  <span class="title {{ head_title_cls }} {{ daylabel_pad_cls }}">{{ dlabel }}</span>
                 </div>
               {% endif %}
               {% if day.icon %}
@@ -178,11 +193,11 @@ there are more columns than the sizes above were tuned for, regardless of view. 
                  of clamping to one line. -->
             {% if day.is_today %}
               <div class="bg--black rounded--small px--[10px] py--[2px]" style="max-width:100%;overflow:hidden;">
-                <span class="title {{ head_title_cls }} {{ daylabel_pad_cls }} text--white{% unless view == 3 %} cal-full-daylabel{% endunless %}" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;">{{ day.label }}</span>
+                <span class="title {{ head_title_cls }} {{ daylabel_pad_cls }} text--white{% unless view == 3 %} cal-full-daylabel{% endunless %}" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;">{{ dlabel }}</span>
               </div>
             {% else %}
               <div class="rounded--small px--[10px] py--[2px]" style="max-width:100%;overflow:hidden;">
-                <span class="title {{ head_title_cls }} {{ daylabel_pad_cls }}{% unless view == 3 %} cal-full-daylabel{% endunless %}" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;">{{ day.label }}</span>
+                <span class="title {{ head_title_cls }} {{ daylabel_pad_cls }}{% unless view == 3 %} cal-full-daylabel{% endunless %}" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;">{{ dlabel }}</span>
               </div>
             {% endif %}
             {% if day.icon and view != 3 %}
@@ -228,14 +243,10 @@ there are more columns than the sizes above were tuned for, regardless of view. 
               {% else %}
                 {% assign ad_radius = "7px" %}
               {% endif %}
-              <!-- yellow/lime's bg--{hue}-30 fill is pale enough (measured luminance ~150/~125
-                   out of 255, vs. ~20-100 for the rest) that white text loses contrast —
-                   near-black reads clearly there instead, every other hue keeps white. -->
-              {% if a.hue == "yellow" or a.hue == "lime" %}
-                {% assign ad_text_cls = "text--black" %}
-              {% else %}
-                {% assign ad_text_cls = "text--white" %}
-              {% endif %}
+              <!-- Softer, lighter fill (step 45 of the framework's 10=darkest/75=lightest
+                   chromatic scale, up from the original 30) reads less saturated/harsh —
+                   near-black text keeps solid contrast against every hue at this lighter
+                   step, so there's no more per-hue white/black branching needed here. -->
               <!-- w--full: the framework's .flex--col sets align-items:center (not the
                    usual stretch), so without this every chip shrink-wraps to its own title's
                    text width and centers in the column instead of spanning it. -->
@@ -245,8 +256,8 @@ there are more columns than the sizes above were tuned for, regardless of view. 
                    stylesheet) silently wins over a separate pl--N class fighting it for
                    padding-left — named pl--N/pr--N classes each only touch their own side,
                    so they don't conflict with each other. -->
-              <div class="bg--{{ a.hue }}-30 w--full pl--1 pr--2 py--[2px]" style="overflow:hidden;border-radius:{{ ad_radius }};{% if a.continues_before %}margin-left:-4px;{% endif %}{% if a.continues_after %}margin-right:-4px;{% endif %}">
-                <span class="title {{ chip_title_cls }} {{ ad_text_cls }}" data-clamp="1">{{ a.title }}</span>
+              <div class="bg--{{ a.hue }}-45 w--full pl--1 pr--2 py--[2px]" style="overflow:hidden;border-radius:{{ ad_radius }};{% if a.continues_before %}margin-left:-4px;{% endif %}{% if a.continues_after %}margin-right:-4px;{% endif %}">
+                <span class="title {{ chip_title_cls }} text--black" data-clamp="1">{{ a.title }}</span>
               </div>
             {% endfor %}
           </div>
@@ -346,17 +357,12 @@ there are more columns than the sizes above were tuned for, regardless of view. 
                    fit() just set this event's own cal-fit-box to overflow:visible below. -->
               <div class="h--full w--full grid grid--cols-{{ event.lanes.size }} gap--xsmall px--1">
                 {% for lane in event.lanes %}
-                  <!-- yellow/lime's bg--{hue}-30 fill is pale enough (measured luminance
-                       ~150/~125 out of 255, vs. ~20-100 for the rest) that white text loses
-                       contrast — near-black reads clearly there instead, every other hue
-                       keeps white. -->
-                  {% if lane.hue == "yellow" or lane.hue == "lime" %}
-                    {% assign ev_text_cls = "text--black" %}
-                  {% else %}
-                    {% assign ev_text_cls = "text--white" %}
-                  {% endif %}
-                  <div class="col--span-1 h--full w--full bg--{{ lane.hue }}-30 rounded--small {{ event_pad_cls }} flex flex--col flex--center-y cal-fit-box">
-                    <span class="title {{ event_title_cls }} {{ ev_text_cls }} cal-fit-text" data-fit-min="11" data-fit-max="90">{{ lane.title }}</span>
+                  <!-- Softer, lighter fill (step 45 of the framework's 10=darkest/75=lightest
+                       chromatic scale, up from the original 30) reads less saturated/harsh —
+                       near-black text keeps solid contrast against every hue at this lighter
+                       step, so there's no more per-hue white/black branching needed here. -->
+                  <div class="col--span-1 h--full w--full bg--{{ lane.hue }}-45 rounded--small {{ event_pad_cls }} flex flex--col flex--center-y cal-fit-box">
+                    <span class="title {{ event_title_cls }} text--black cal-fit-text" data-fit-min="11" data-fit-max="90">{{ lane.title }}</span>
                   </div>
                 {% endfor %}
               </div>
