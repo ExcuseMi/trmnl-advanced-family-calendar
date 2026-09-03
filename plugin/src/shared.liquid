@@ -89,6 +89,7 @@ badge content needs to sit clear of it (bar's own left inset + width + a small b
 {%- endcomment -%}
 {%- assign bar_pad = bar_w | plus: 7 -%}
 
+
 {%- comment -%} Every tier above assumes the original 3-day layout's column width. With
 Days to Show now configurable, the SAME day columns get much narrower at 5 or 7 days —
 "Za 4 Juli" fit fine at 3 columns wide but "Zo 5 Juli" wrapped and lost "Juli" off the
@@ -153,7 +154,16 @@ where the axis was already a sane fraction and unchanged. {%- endcomment -%}
       {% assign use_short_month = false %}
     {% endif %}
 
-    <div class="grid gap--none h--[{{ header_pct }}cqh]">
+    <!-- Header gets its own visual "zone" — a light background fill plus a solid bottom rule
+         (border--h-1, a real framework border utility: a themed 1px line, black by default,
+         confirmed against the compiled CSS at trmnl.com/css/latest/plugins.css) — so it reads
+         as a deliberate header bar instead of day labels just floating on the same white as
+         the grid below with nothing marking where one ends and the other begins.
+         flex-shrink:0/flex-grow:0 + a duplicated inline height alongside the h--[Ncqh] class:
+         same defensive fix as the all-day row below (see its comment) — this is also a flex
+         child of #cal-root's flex--col, so it's exposed to the identical class of bug even
+         though it wasn't the one actually reported shrinking. -->
+    <div class="grid gap--none h--[{{ header_pct }}cqh] bg--gray-70 border--h-1" style="flex-shrink:0;flex-grow:0;height:{{ header_pct }}cqh;min-height:{{ header_pct }}cqh;">
       <div class="col--span-1"></div>
       {% for day in days %}
         {% if use_short_month %}
@@ -262,7 +272,7 @@ where the axis was already a sane fraction and unchanged. {%- endcomment -%}
     </div>
 
     {% if allday_pct > 0 %}
-      <div class="grid gap--none h--[{{ allday_pct }}cqh]">
+      <div class="grid gap--none h--[{{ allday_pct }}cqh]" style="flex-shrink:0;flex-grow:0;height:{{ allday_pct }}cqh;min-height:{{ allday_pct }}cqh;">
         <div class="col--span-1"></div>
         {% for day in days %}
           <div class="col--span-{{ day_span }} flex flex--col gap--xsmall px--[4px] border--v-1">
@@ -319,8 +329,29 @@ where the axis was already a sane fraction and unchanged. {%- endcomment -%}
                    regardless of how little text it has, and different days' chips would end
                    up visibly different heights depending on which one happened to render
                    first. A fixed height fixes both: a real ceiling fit() can shrink against,
-                   and a genuine minimum every row gets regardless of content. -->
-              <div class="h--[{{ allday_row_pct }}cqh] bg--{{ a.hue }} text--{{ a.fg }} w--full pr--2 py--[1px] flex flex--row flex--center-y gap--xsmall cal-fit-box" style="position:relative;overflow:hidden;box-sizing:border-box;padding-left:{% if a.icon.second %}38px{% elsif a.badge or a.icon %}25px{% else %}4px{% endif %};border-radius:{{ ad_radius }};border-top:2px solid currentColor;border-bottom:2px solid currentColor;{% unless a.continues_before %}border-left:2px solid currentColor;{% endunless %}{% unless a.continues_after %}border-right:2px solid currentColor;{% endunless %}{% if a.continues_before %}margin-left:-4px;{% endif %}{% if a.continues_after %}margin-right:-4px;{% endif %}">
+                   and a genuine minimum every row gets regardless of content.
+
+                   ROOT-CAUSE HISTORY, kept because the symptom is easy to reintroduce the same
+                   way twice: this row previously rendered as h--[cqh] — the allday_row_pct
+                   merge variable resolving to EMPTY, not the height going missing after some
+                   later reflow. Every view file's render-main call (see full.liquid etc.) passes
+                   a fixed, explicit list of variables into the template block below (Liquid's
+                   render tag does NOT auto-inherit the caller's scope, unlike include) —
+                   allday_row_pct had
+                   simply never been added to that list when it was introduced, so it read as
+                   nil here regardless of what transform.js/​.trmnlp.yml set it to. An empty
+                   bracket value means no real height rule at all, so the box fell back to
+                   content-driven auto-height — exactly the "no real vertical budget" failure
+                   mode described above, which let fit()'s binary search lock in its max font
+                   size (since an auto-height box always "fits" whatever's tried). Severity
+                   scaled with column width: wide views mostly hid it (a big font still fit on
+                   one or two lines), narrow ones (quadrant, half_vertical) wrapped that oversize
+                   font across many lines and inflated the row to hundreds of pixels tall. Fixed
+                   by adding allday_row_pct to the render call in every *.liquid view file.
+                   flex-shrink:0/flex-grow:0 and the duplicated inline height below are kept as
+                   cheap extra insurance (a fixed-size row should never be flex-resized by its
+                   container regardless of cause) but were not themselves the fix. -->
+              <div class="h--[{{ allday_row_pct }}cqh] bg--{{ a.hue }} text--{{ a.fg }} w--full pr--2 py--[1px] flex flex--row flex--center-y gap--xsmall cal-fit-box" style="position:relative;overflow:hidden;box-sizing:border-box;height:{{ allday_row_pct }}cqh;min-height:{{ allday_row_pct }}cqh;flex-shrink:0;flex-grow:0;padding-left:{% if a.icon.second %}38px{% elsif a.badge or a.icon %}25px{% else %}4px{% endif %};border-radius:{{ ad_radius }};border-top:2px solid currentColor;border-bottom:2px solid currentColor;{% unless a.continues_before %}border-left:2px solid currentColor;{% endunless %}{% unless a.continues_after %}border-right:2px solid currentColor;{% endunless %}{% if a.continues_before %}margin-left:-4px;{% endif %}{% if a.continues_after %}margin-right:-4px;{% endif %}">
                 {% if a.badge or a.icon %}
                   <!-- Pinned to the top-left corner (like the event badge below) rather than
                        inline before the title — a fixed overlay position instead of one that
@@ -382,7 +413,7 @@ where the axis was already a sane fraction and unchanged. {%- endcomment -%}
       </div>
     {% endif %}
 
-    <div class="grid gap--none h--[{{ grid_pct }}cqh]">
+    <div class="grid gap--none h--[{{ grid_pct }}cqh]" style="flex-shrink:0;flex-grow:0;height:{{ grid_pct }}cqh;min-height:{{ grid_pct }}cqh;">
       <div class="col--span-1 flex flex--col gap--none">
         {% for row in hour_rows %}
           <!-- Zebra-stripe by hour instead of drawing boundary lines: five different

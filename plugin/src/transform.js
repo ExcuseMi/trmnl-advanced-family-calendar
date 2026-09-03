@@ -370,16 +370,16 @@ function emptyResult(tzname, tz, locale, daysN, msg, showTitleBar, titleBarPct, 
 //   {
 //     "hours": { "start": 7, "end": 21 },
 //     "calendars": [
-//       { "id": "Kato", "url": "https://.../kato.ics", "defaultPerson": "Kato" },
+//       { "id": "Alex", "url": "https://.../alex.ics", "defaultPerson": "Alex" },
 //       { "id": "School", "url": "https://.../school.ics", "exclude": "regex",
 //         "personRules": [
-//           { "match": "\\bL6\\b", "person": "Kato" },
-//           { "match": "\\bL2\\b", "person": "Nala" }
+//           { "match": "\\bL6\\b", "person": "Alex" },
+//           { "match": "\\bL2\\b", "person": "Jordan" }
 //         ] }
 //     ],
 //     "people": [
-//       { "name": "Kato", "color": "pink", "badge": "K" },
-//       { "name": "Nala", "color": "blue" }
+//       { "name": "Alex", "color": "pink", "badge": "K" },
+//       { "name": "Jordan", "color": "blue" }
 //     ]
 //   }
 // `hours` is optional (defaults to DEFAULT_HOURS, 7-21) — the default hour range to show.
@@ -1239,12 +1239,11 @@ async function fetchSky(location, daysN, fahrenheit) {
 // no layout math itself; it just loops over this pre-baked structure.
 
 const HEADER_PCT = 15; // bumped from 11 to fit a second line (daily high/low) under the day label
-const ALLDAY_ROW_PCT = 9; // bumped from 6 — at 6 the row (~29px on the full/OG device) read as a
-                           // thin sliver next to timed events (which floor at MIN_EVENT_PCT, a
-                           // share of the taller grid_pct budget) even after the badge/icon
-                           // circle grew to 20px in the categories work — the circle nearly
-                           // filled the whole row with almost no margin. 9 gives it real
-                           // presence as a banner instead of a stripe.
+const ALLDAY_ROW_PCT = 12; // bumped from 6, then 9 for visual weight (see the all-day chip's
+                           // own h--[Ncqh] comment in shared.liquid for a real, since-fixed bug
+                           // this value alone couldn't have masked: allday_row_pct wasn't wired
+                           // through the view files' {% render %} calls, so the row had no real
+                           // height at all in some views regardless of what this constant said).
 const TITLE_BAR_PCT = 6; // optional plugin-name bar at the very top, off by default (see run())
 const MIN_EVENT_PCT = 10; // floor so a block is never a literally invisible sliver — actual font
                            // sizing is handled client-side by the fit-text script (see shared.liquid),

@@ -46,12 +46,12 @@ custom_fields:
     {
       "hours": { "start": 7, "end": 21 },
       "calendars": [
-        { "id": "Kato", "url": "https://cloud.example.com/kato.ics", "defaultPerson": "Kato" },
+        { "id": "Alex", "url": "https://cloud.example.com/alex.ics", "defaultPerson": "Alex" },
         {
           "id": "School", "url": "https://cloud.example.com/school.ics",
           "exclude": ["\\bL[1345]\\b", "\\bK[123]\\b"],
           "personRules": [
-            { "match": "\\bL6\\b", "person": "Kato" }
+            { "match": "\\bL6\\b", "person": "Alex" }
           ]
         },
         {
@@ -61,7 +61,7 @@ custom_fields:
         }
       ],
       "people": [
-        { "name": "Kato", "color": "pink", "badge": "K" }
+        { "name": "Alex", "color": "pink", "badge": "K" }
       ],
       "categories": [
         { "name": "Birthday", "match": "verjaardag|birthday", "icon": "cake" },

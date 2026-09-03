@@ -84,11 +84,11 @@ The JSON shape it produces:
     {
       "url": "https://cloud.example.com/school.ics",
       "exclude": "\\bL[1345]\\b",
-      "personRules": [{ "match": "\\bL6\\b", "person": "Aiko" }]
+      "personRules": [{ "match": "\\bL6\\b", "person": "Alex" }]
     }
   ],
   "people": [
-    { "name": "Aiko", "color": "pink", "badge": "A" }
+    { "name": "Alex", "color": "pink", "badge": "A" }
   ],
   "categories": [
     { "name": "Birthday", "match": "birthday|verjaardag", "icon": "cake" },

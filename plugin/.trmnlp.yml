@@ -21,9 +21,9 @@ variables:
         time_zone: Europe/Brussels
         view_days: '3'
   header_pct: 15
-  allday_pct: 9
-  allday_row_pct: 9
-  grid_pct: 76
+  allday_pct: 12
+  allday_row_pct: 12
+  grid_pct: 73
   title_bar_pct: 0
   show_title_bar: false
   title_text: Daylight & Weather Calendar
@@ -133,7 +133,7 @@ variables:
       low: 16
     icon: https://trmnl.com/images/plugins/weather/wi-day-sunny.svg
     allday:
-    - title: Verjaardag Kato
+    - title: Verjaardag Alex
       hue: pink-65
       fg: black
       badge: null
@@ -263,7 +263,7 @@ variables:
       height_pct: 11.7647
       lane_index: 0
       nlanes: 1
-      title: Kato's verjaardagsfeest
+      title: Alex's verjaardagsfeest
       hue: pink-65
       bar: pink-45
       fg: black

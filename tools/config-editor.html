@@ -508,7 +508,7 @@
     var wrap = document.getElementById("people");
     wrap.innerHTML = "";
     people.forEach(function (p, idx) {
-      var nameInput = el("input", { type: "text", class: "field-narrow", placeholder: "Kato", value: p.name });
+      var nameInput = el("input", { type: "text", class: "field-narrow", placeholder: "Alex", value: p.name });
       nameInput.addEventListener("input", function () { p.name = nameInput.value; renderJson(); renderCalendars(); });
 
       var colorSel = hueSelect("p-color-" + p._id, p.color, false);
