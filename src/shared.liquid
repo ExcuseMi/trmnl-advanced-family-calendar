@@ -243,14 +243,12 @@ there are more columns than the sizes above were tuned for, regardless of view. 
               {% else %}
                 {% assign ad_radius = "7px" %}
               {% endif %}
-              <!-- Pastel fill (step 65 of the framework's 10=darkest/75=lightest chromatic
-                   scale — checked against the real compiled CSS: the scale peaks in
-                   SATURATION around step 40-45, e.g. blue-45 is #1111FF, not lighter/softer
-                   than blue-30's #0000AA at all despite the higher number; 65+ is where it
-                   actually desaturates toward pastel, e.g. blue-65 is #9999FF) reads clearly
-                   less harsh than the original step 30 — near-black text keeps solid contrast
-                   against every hue at this much lighter step, so there's no more per-hue
-                   white/black branching needed here. -->
+              <!-- a.hue/a.fg are computed server-side (see colorClass/foregroundFor in
+                   transform.js): a.hue is already the full bg-- suffix (a chromatic hue's
+                   fixed pastel step, e.g. "pink-65", or an explicit "gray-N" pin), and a.fg
+                   is the matching black/white foreground — a gray shade spans near-black to
+                   near-white so it genuinely needs a per-shade contrast decision, unlike the
+                   hues (all fixed at one step light enough for black text uniformly). -->
               <!-- w--full: the framework's .flex--col sets align-items:center (not the
                    usual stretch), so without this every chip shrink-wraps to its own title's
                    text width and centers in the column instead of spanning it. -->
@@ -260,7 +258,7 @@ there are more columns than the sizes above were tuned for, regardless of view. 
                    stylesheet) silently wins over a separate pl--N class fighting it for
                    padding-left — named pl--N/pr--N classes each only touch their own side,
                    so they don't conflict with each other. -->
-              <div class="bg--{{ a.hue }}-65 w--full pl--1 pr--2 py--[2px] flex flex--row flex--center-y gap--xsmall" style="overflow:hidden;border-radius:{{ ad_radius }};{% if a.continues_before %}margin-left:-4px;{% endif %}{% if a.continues_after %}margin-right:-4px;{% endif %}">
+              <div class="bg--{{ a.hue }} w--full pl--1 pr--2 py--[2px] flex flex--row flex--center-y gap--xsmall" style="overflow:hidden;border-radius:{{ ad_radius }};{% if a.continues_before %}margin-left:-4px;{% endif %}{% if a.continues_after %}margin-right:-4px;{% endif %}">
                 {% if a.badge %}
                   <!-- A Person's badge (see the Calendar Configuration field) — solid black/
                        white regardless of the chip's own hue, same reasoning as the chip text
@@ -268,7 +266,7 @@ there are more columns than the sizes above were tuned for, regardless of view. 
                        than a second per-hue contrast decision on top of the chip's own. -->
                   <span class="text--white bg--black rounded--full flex flex--center-x flex--center-y" style="width:1.3em;height:1.3em;flex-shrink:0;font-size:0.75em;line-height:1;">{{ a.badge }}</span>
                 {% endif %}
-                <span class="title {{ chip_title_cls }} text--black" data-clamp="1" style="min-width:0;">{{ a.title }}</span>
+                <span class="title {{ chip_title_cls }} text--{{ a.fg }}" data-clamp="1" style="min-width:0;">{{ a.title }}</span>
               </div>
             {% endfor %}
           </div>
@@ -368,11 +366,10 @@ there are more columns than the sizes above were tuned for, regardless of view. 
                    fit() just set this event's own cal-fit-box to overflow:visible below. -->
               <div class="h--full w--full grid grid--cols-{{ event.lanes.size }} gap--xsmall px--1">
                 {% for lane in event.lanes %}
-                  <!-- Softer, lighter fill (step 45 of the framework's 10=darkest/75=lightest
-                       chromatic scale, up from the original 30) reads less saturated/harsh —
-                       near-black text keeps solid contrast against every hue at this lighter
-                       step, so there's no more per-hue white/black branching needed here. -->
-                  <div class="col--span-1 h--full w--full bg--{{ lane.hue }}-65 rounded--small {{ event_pad_cls }} flex flex--col flex--center-y cal-fit-box" style="position:relative;">
+                  <!-- lane.hue/lane.fg are computed server-side the same way as the all-day
+                       chip above (see colorClass/foregroundFor in transform.js) — lane.hue is
+                       already the full bg-- suffix, lane.fg the matching foreground. -->
+                  <div class="col--span-1 h--full w--full bg--{{ lane.hue }} rounded--small {{ event_pad_cls }} flex flex--col flex--center-y cal-fit-box" style="position:relative;">
                     {% if lane.badge %}
                       <!-- Absolutely positioned in the corner, deliberately NOT inline with
                            the title: the fit-text script (see run() below) sizes the title
@@ -386,7 +383,7 @@ there are more columns than the sizes above were tuned for, regardless of view. 
                            needed for the badge either. -->
                       <span class="text--white bg--black rounded--full flex flex--center-x flex--center-y" style="position:absolute;top:2px;left:2px;width:14px;height:14px;font-size:9px;line-height:1;z-index:1;">{{ lane.badge }}</span>
                     {% endif %}
-                    <span class="title {{ event_title_cls }} text--black cal-fit-text" data-fit-min="11" data-fit-max="90">{{ lane.title }}</span>
+                    <span class="title {{ event_title_cls }} text--{{ lane.fg }} cal-fit-text" data-fit-min="11" data-fit-max="90">{{ lane.title }}</span>
                   </div>
                 {% endfor %}
               </div>
