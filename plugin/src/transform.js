@@ -1395,11 +1395,16 @@ const FOOTER_PCT = 9; // weather icon + daily high/low, its own zone at the bott
                       // screen (see shared.liquid) rather than a second header line — kept
                       // out of gridBase (the hourly grid's own top-offset math) since it sits
                       // AFTER the grid, not before it; only gridPct's own size shrinks for it.
-const ALLDAY_ROW_PCT = 12; // bumped from 6, then 9 for visual weight (see the all-day chip's
+const ALLDAY_ROW_PCT = 10; // bumped from 6 to 9 to 12 for visual weight (see the all-day chip's
                            // own h--[Ncqh] comment in shared.liquid for a real, since-fixed bug
                            // this value alone couldn't have masked: allday_row_pct wasn't wired
                            // through the view files' {% render %} calls, so the row had no real
                            // height at all in some views regardless of what this constant said).
+                           // Eased back down from 12 once badge sizing (see badge_d1/badge_d2 in
+                           // shared.liquid) started giving a lone all-day event's own badge most
+                           // of the row's height on its own — 12 read oversized for the common
+                           // case of just one all-day event once that badge was doing the visual
+                           // weight lifting instead of raw row height.
 const MIN_EVENT_PCT = 10; // floor so a block is never a literally invisible sliver — actual font
                            // sizing is handled client-side by the fit-text script (see shared.liquid),
                            // which measures the real rendered box and grows/shrinks text to match.
