@@ -138,7 +138,7 @@ variables:
       fg: black
       badge: null
       icon:
-      - https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/cake/default/24px.svg
+        first: https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/cake/default/24px.svg
       continues_before: false
       continues_after: false
     segments:
@@ -257,8 +257,8 @@ variables:
       fg: black
       badge: null
       icon:
-      - https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/work/default/24px.svg
-      - https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/home/default/24px.svg
+        first: https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/work/default/24px.svg
+        second: https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/home/default/24px.svg
     - top_pct: 55.2941
       height_pct: 11.7647
       lane_index: 0
@@ -269,7 +269,7 @@ variables:
       fg: black
       badge: null
       icon:
-      - https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/cake/default/24px.svg
+        first: https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/cake/default/24px.svg
     now_marker:
       top_pct: 89.9439
       night: false
