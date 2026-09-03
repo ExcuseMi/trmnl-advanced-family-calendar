@@ -700,8 +700,13 @@ function applyCalendarPerson(title, cal, people) {
       const p = people[personName.toLowerCase()];
       if (!p) continue;
       if (hue === null && p.color) hue = p.color;
-      if (p.image) badges.push({ kind: "photo", src: p.image });
-      else badges.push({ kind: "letter", text: p.badge });
+      // `person` (the declared name) rides along on top of kind/src/text — chip_body's own
+      // rendering ignores it, it's only read back out by run()'s "who has something today"
+      // pass (see the day.people assembly below), which needs to tell a person-badge apart
+      // from a Category's own icon badge (never tagged) and dedupe by WHO, not by badge
+      // appearance alone (two people could share a badge letter).
+      if (p.image) badges.push({ kind: "photo", src: p.image, person: p.name });
+      else badges.push({ kind: "letter", text: p.badge, person: p.name });
     }
   }
   return { title, hue, badges };
@@ -1641,9 +1646,23 @@ function layoutNative(days, importantStart, importantEnd, nowH, sunMarks, hourly
       });
     });
 
+    // Who has something on THIS day, for the header's own small badge row (see shared.liquid —
+    // currently only shown for is_today, but computed for every day here since which day
+    // counts as "today" is a display concern, not a data one). Scans every all-day/timed
+    // badge already assembled above for this day and keeps the first one seen per declared
+    // person (person, set in applyCalendarPerson) — a category icon's badge has no `person`
+    // and is skipped, and a person tagged on 3 events today still only shows once here.
+    const dayPeopleSeen = new Set();
+    const dayPeople = [];
+    for (const b of [...d.allday.flatMap((a) => a.badges || []), ...events.flatMap((ev) => ev.badges || [])]) {
+      if (!b.person || dayPeopleSeen.has(b.person)) continue;
+      dayPeopleSeen.add(b.person);
+      dayPeople.push(b.kind === "photo" ? { kind: "photo", src: b.src } : { kind: "letter", text: b.text });
+    }
+
     outDays.push({
       label: d.label, label_short: d.labelShort, is_today: d.isToday,
-      temp: d.temp || null, icon: d.icon || null,
+      temp: d.temp || null, icon: d.icon || null, people: dayPeople,
       allday: d.allday.map((a) => ({
         title: a.title, hue: colorClass(a.hue), fg: foregroundFor(a.hue),
         // Left accent bar (see shared.liquid's chip_body) — every timed event already got one
