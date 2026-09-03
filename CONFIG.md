@@ -175,6 +175,11 @@ entirely controlled by that calendar's
 A person with no `color` set still gets the badge circle (or photo) — it just doesn't change the
 event's color, which stays whatever the calendar itself uses.
 
+Today's own header also shows a small badge for every person with at least one event that day —
+a glance at the top of the grid answers "does anyone have something on today" without reading
+every chip below it. Automatic: no setting to turn it on, it just reflects whoever's actually
+tagged (by `personRules`/`defaultPerson`) on today's events.
+
 That badge circle is small and TRMNL's panels are grayscale/dithered, so a real photo often turns
 muddy at that size — a flat, high-contrast cartoon/illustrated version of the same photo reads
 much more clearly. [imagetocartoon.com](https://imagetocartoon.com/) is one free way to make one
