@@ -19,18 +19,49 @@
 const DEFAULT_DAYS = 3;
 const WD_MAP = { MO: 0, TU: 1, WE: 2, TH: 3, FR: 4, SA: 5, SU: 6 };
 
-// One hue per configured calendar — cycled by position (if more calendars than hues) unless a
-// calendar pinned an explicit one, or a matching Person overrides it for a specific event (see
-// applyPeople). These are real framework chromatic classes (bg--{hue}-65, checked against the
-// live CSS at trmnl.com/css/latest/plugins.css) — on a grayscale panel they automatically fall
-// back to distinct perceptually-appropriate gray shades (no manual gray mapping needed), and
-// render as actual color on a chromatic panel. Chip text stays solid black regardless of hue:
-// step 65 (of the framework's 10=darkest/75=lightest scale, which peaks in SATURATION around
-// step 40-45 and only desaturates toward pastel above that) is light enough that black reads
-// clearly against all 10 at once, so no per-hue foreground branching is needed for chips. A
-// Person's badge circle is solid black/white
-// instead of colored, for the same reason — it never needs its own contrast decision either.
+// One color per configured calendar — cycled by position through the 10 chromatic hues (if
+// more calendars than hues) unless a calendar pinned an explicit one, or a matching Person
+// overrides it for a specific event (see applyCalendarPerson). A pinned color (calendar or
+// person) can also be an explicit gray shade ("gray-10".."gray-70") instead of a hue — most
+// real TRMNL devices are grayscale panels, not the color ones, so picking a gray directly
+// (rather than a hue that just falls back to SOME gray automatically) gives real control over
+// exactly how light/dark a calendar reads on those. Auto-cycling only ever picks a hue, never
+// a gray, since the whole point of cycling is telling multiple calendars apart at a glance —
+// gray shades are for a deliberate, single pinned choice.
+//
+// Chromatic hues render as real framework classes (bg--{hue}-65, checked against the live CSS
+// at trmnl.com/css/latest/plugins.css) — on a grayscale panel they automatically fall back to
+// distinct perceptually-appropriate gray shades, and render as actual color on a chromatic
+// panel. Step 65 (of the framework's 10=darkest/75=lightest scale, which peaks in SATURATION
+// around step 40-45 and only desaturates toward pastel above that) is light enough that solid
+// black chip text reads clearly against all 10 at once. Gray shades span near-black to
+// near-white though (bg--gray-10 is #111111, bg--gray-70 is #DDDDDD), so unlike the hues they
+// DO need a real per-shade foreground decision — see foregroundFor.
 const HUES = ["blue", "green", "orange", "purple", "red", "cyan", "pink", "lime", "violet", "yellow"];
+const GRAY_SHADES = [10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70];
+
+function isValidColor(v) {
+  if (HUES.includes(v)) return true;
+  const m = /^gray-(\d+)$/.exec(v);
+  return !!m && GRAY_SHADES.includes(parseInt(m[1], 10));
+}
+
+// The bg-- class suffix for a validated color string — chromatic hues get the fixed pastel
+// step baked on, a gray-N value already names its own exact shade.
+function colorClass(color) {
+  return HUES.includes(color) ? color + "-65" : color;
+}
+
+// Solid black for every chromatic hue (see the step-65 rationale above) and for any badge —
+// but a gray shade's own lightness decides its foreground: measured against the real hex
+// values (gray-10 #111111 ... gray-70 #DDDDDD), black stops being legible below gray-45
+// (#888888, relative luminance ~136 of 255 — the last step light enough for black text; 40's
+// #777777 (~119) is not).
+function foregroundFor(color) {
+  const m = /^gray-(\d+)$/.exec(color);
+  if (!m) return "black";
+  return parseInt(m[1], 10) < 45 ? "white" : "black";
+}
 
 async function run(input) {
   const cfg = parseConfig(cf(input, "calendars"));
@@ -82,15 +113,15 @@ async function run(input) {
   let err = null;
   if (errors.length && !occ.length) err = "Fetch/parse failed: " + errors[0];
 
-  // Exclude tested against the RAW title (before people renaming) so a rename can't
+  // Exclude tested against the RAW title (before personRules renaming) so a rename can't
   // accidentally dodge or trigger an exclude rule by rewriting the very text it matches
-  // against; people rules then run on whatever survives each calendar's own exclude pass.
+  // against; personRules then run on whatever survives each calendar's own exclude pass.
   const filtered = occ.filter((e) => {
     const cal = calendars[e.calIdx];
-    return !(cal.exclude && cal.exclude.test(e.title));
+    return !cal.exclude.some((rx) => rx.test(e.title));
   });
   for (const e of filtered) {
-    const r = applyPeople(e.title, people, e.calIdx);
+    const r = applyCalendarPerson(e.title, calendars[e.calIdx], people);
     e.title = r.title;
     e.hueOverride = r.hue;
     e.badge = r.badge;
@@ -254,35 +285,51 @@ function emptyResult(tzname, tz, locale, daysN, msg, showTitleBar, titleBarPct, 
 // The "Calendar Configuration" field is one JSON object:
 //   {
 //     "calendars": [
-//       { "id": "family", "url": "https://.../family.ics", "color": "pink", "exclude": "regex" },
-//       { "url": "https://.../work.ics", "color": "blue" }
+//       { "id": "Kato", "url": "https://.../kato.ics", "defaultPerson": "Kato" },
+//       { "id": "School", "url": "https://.../school.ics", "exclude": "regex",
+//         "personRules": [
+//           { "match": "\\bL6\\b", "person": "Kato" },
+//           { "match": "\\bL2\\b", "person": "Nala" }
+//         ] }
 //     ],
 //     "people": [
-//       { "name": "Aiko", "match": "\\bL6\\b", "color": "pink", "badge": "A", "calendars": ["family"] }
+//       { "name": "Kato", "color": "pink", "badge": "K" },
+//       { "name": "Nala", "color": "blue" }
 //     ]
 //   }
-// `calendars[].id` is optional — a short label for linking a person to that calendar (see
-// `people[].calendars` below); a calendar without one can still be linked by its `url`
-// instead. `calendars[].color` and `people[].color` are optional — one of HUES, pins that
-// calendar/person's color instead of auto-cycling by position. `calendars[].exclude` is an
-// optional regex (case-insensitive): matching events from THAT calendar are hidden entirely,
-// before people rules ever see them. `people[].calendars` is optional — an array of
-// `calendars[].id`/`url` values restricting that person's rule to only those calendars;
-// omit it (the default) for the rule to apply globally, across every calendar. Either way, a
-// person's `match` regex is tested against every surviving event from its linked (or, if
-// unlinked, every) calendar, in array order, each rule's rename building on the previous
-// one's output (same chaining a plain find/replace had before people existed). A match
-// renames the text to `name` (set `"rename": false` to tag/recolor without renaming) and, if
-// `color`/`badge` are set, overrides that event's chip color and/or attaches a small badge
-// (defaults to `name`'s first letter if `badge` is omitted) — last matching person wins for
-// color/badge, same as color pinning above.
+// `people[]` holds ONLY formatting — `name` (required, also the lookup key), `color`
+// (optional, one of HUES or "gray-10".."gray-70" in steps of 5) and `badge` (optional short
+// text for the small circle next to an event, defaults to `name`'s first letter). It carries
+// no matching logic: which events
+// belong to a person is entirely a property of the CALENDAR they're on, via two mechanisms
+// that combine per calendar:
+//   - `calendars[].personRules`: an array of `{ match, person, rename }`. `match` (regex,
+//     case-insensitive) is tested against every surviving event on THAT calendar, in array
+//     order — a later rule's rename builds on an earlier one's output, and its color/badge
+//     wins if it also matches (last match wins, same as color pinning). `person` names who
+//     the event belongs to (rename target text too) — it doesn't need to already exist in
+//     `people[]`, but only a declared person contributes color/badge. `rename` (default
+//     true) controls whether the matched text is actually replaced with `person`; set it
+//     false to tag/color without renaming.
+//   - `calendars[].defaultPerson`: a person name applied when NO personRule on that
+//     calendar matched — for a calendar that's already entirely one person's own (like a
+//     personal calendar per family member), this avoids needing a `personRules` entry at
+//     all. Never overrides an actual personRules match.
+// `calendars[].id` is optional — a short label `personRules[].person`/`defaultPerson` values
+// double as (see above); calendars are otherwise unrelated to it. `calendars[].color` is
+// optional, one of HUES or "gray-10".."gray-70", pins that calendar's own default color
+// instead of auto-cycling through the hues by position (a matched/defaulted person's color,
+// when there is one, still wins over this).
+// `calendars[].exclude` is optional — a regex, or an array of them (case-insensitive):
+// matching ANY of them hides that event entirely, before personRules/defaultPerson ever see
+// it, only from THAT calendar.
 // Malformed JSON, or an entry missing its required field, is skipped rather than erroring
 // the whole render — this is designed to be generated by /tools/config-editor.html, not
 // necessarily hand-typed, so being forgiving of partial/in-progress edits matters more than
 // strict validation.
 
 function parseConfig(raw) {
-  const empty = { calendars: [], people: [] };
+  const empty = { calendars: [], people: {} };
   if (typeof raw !== "string" || !raw.trim()) return empty;
   let data;
   try {
@@ -292,43 +339,42 @@ function parseConfig(raw) {
   }
   if (!data || typeof data !== "object") return empty;
 
+  // Keyed by lowercased name so personRules/defaultPerson lookups are case-insensitive, same
+  // as the regex matching around them.
+  const people = {};
+  for (const item of Array.isArray(data.people) ? data.people : []) {
+    if (!item || typeof item !== "object") continue;
+    const name = typeof item.name === "string" ? item.name.trim() : "";
+    if (!name) continue;
+    const color = typeof item.color === "string" && isValidColor(item.color.toLowerCase()) ? item.color.toLowerCase() : "";
+    const badge = typeof item.badge === "string" && item.badge.trim() ? item.badge.trim() : name[0].toUpperCase();
+    people[name.toLowerCase()] = { name, color, badge };
+  }
+
   const calendars = [];
   for (const item of Array.isArray(data.calendars) ? data.calendars : []) {
     if (!item || typeof item !== "object" || typeof item.url !== "string" || !item.url.trim()) continue;
     const id = typeof item.id === "string" && item.id.trim() ? item.id.trim() : null;
-    const color = typeof item.color === "string" && HUES.includes(item.color.toLowerCase()) ? item.color.toLowerCase() : null;
-    const exclude = compileRegex(typeof item.exclude === "string" ? item.exclude : "");
-    calendars.push({ id, url: item.url.trim(), color, exclude });
-  }
+    const color = typeof item.color === "string" && isValidColor(item.color.toLowerCase()) ? item.color.toLowerCase() : null;
+    const exclude = compileRegexList(item.exclude);
+    const defaultPerson = typeof item.defaultPerson === "string" && item.defaultPerson.trim() ? item.defaultPerson.trim() : null;
 
-  const people = [];
-  for (const item of Array.isArray(data.people) ? data.people : []) {
-    if (!item || typeof item !== "object") continue;
-    const name = typeof item.name === "string" ? item.name.trim() : "";
-    const matchSrc = typeof item.match === "string" ? item.match : "";
-    if (!name || !matchSrc) continue;
-    let rx;
-    try {
-      rx = new RegExp(matchSrc, "i");
-    } catch (e) {
-      continue;
-    }
-    const color = typeof item.color === "string" && HUES.includes(item.color.toLowerCase()) ? item.color.toLowerCase() : "";
-    const badge = typeof item.badge === "string" && item.badge.trim() ? item.badge.trim() : name[0].toUpperCase();
-    const rename = item.rename !== false;
-    // Resolve each referenced calendar (by id, falling back to url) to its array index —
-    // null means unlinked (applies to every calendar), matching the pre-linking default.
-    let calIdxs = null;
-    if (Array.isArray(item.calendars) && item.calendars.length) {
-      calIdxs = new Set();
-      for (const ref of item.calendars) {
-        if (typeof ref !== "string" || !ref.trim()) continue;
-        const key = ref.trim();
-        const idx = calendars.findIndex((c) => c.id === key || c.url === key);
-        if (idx !== -1) calIdxs.add(idx);
+    const personRules = [];
+    for (const rule of Array.isArray(item.personRules) ? item.personRules : []) {
+      if (!rule || typeof rule !== "object") continue;
+      const matchSrc = typeof rule.match === "string" ? rule.match : "";
+      const person = typeof rule.person === "string" ? rule.person.trim() : "";
+      if (!matchSrc || !person) continue;
+      let rx;
+      try {
+        rx = new RegExp(matchSrc, "i");
+      } catch (e) {
+        continue;
       }
+      personRules.push({ rx, person, rename: rule.rename !== false });
     }
-    people.push({ name, rx, color, badge, rename, calIdxs });
+
+    calendars.push({ id, url: item.url.trim(), color, exclude, defaultPerson, personRules });
   }
 
   return { calendars, people };
@@ -344,17 +390,40 @@ function compileRegex(pattern) {
   }
 }
 
-function applyPeople(title, people, calIdx) {
+function compileRegexList(raw) {
+  // calendars[].exclude accepts either a single regex string (kept for backward
+  // compatibility with configs written before multiple excludes existed) or an array of
+  // them — an event is hidden if ANY compiled pattern matches. Invalid/empty entries are
+  // dropped rather than erroring the whole render, same forgiving handling as everywhere
+  // else in this parser.
+  const list = Array.isArray(raw) ? raw : typeof raw === "string" ? [raw] : [];
+  const rxs = [];
+  for (const pattern of list) {
+    const rx = compileRegex(typeof pattern === "string" ? pattern : "");
+    if (rx) rxs.push(rx);
+  }
+  return rxs;
+}
+
+function applyCalendarPerson(title, cal, people) {
+  let personName = null;
+  for (const rule of cal.personRules) {
+    if (!rule.rx.test(title)) continue;
+    if (rule.rename) {
+      title = title.replace(new RegExp(rule.rx.source, "gi"), rule.person);
+    }
+    personName = rule.person;
+  }
+  if (personName === null) personName = cal.defaultPerson;
+
   let hue = null;
   let badge = null;
-  for (const person of people) {
-    if (person.calIdxs && !person.calIdxs.has(calIdx)) continue;
-    if (!person.rx.test(title)) continue;
-    if (person.rename) {
-      title = title.replace(new RegExp(person.rx.source, "gi"), person.name);
+  if (personName) {
+    const p = people[personName.toLowerCase()];
+    if (p) {
+      if (p.color) hue = p.color;
+      badge = p.badge;
     }
-    if (person.color) hue = person.color;
-    badge = person.badge;
   }
   return { title, hue, badge };
 }
@@ -1193,7 +1262,8 @@ function layoutNative(days, importantStart, importantEnd, nowH, sunMarks, hourly
       }
       const lanes = [...c.lanes].sort((p, q) => p[1] - q[1]).map((p) => {
         const ev = p[0];
-        return { title: ev.title, hue: ev.hueOverride || hueOf(ev.calIdx, calendarColors), badge: ev.badge || null };
+        const color = ev.hueOverride || hueOf(ev.calIdx, calendarColors);
+        return { title: ev.title, hue: colorClass(color), fg: foregroundFor(color), badge: ev.badge || null };
       });
       events.push({ top_pct: round4((top / gridPct) * 100), height_pct: round4((height / gridPct) * 100), lanes });
     });
@@ -1202,7 +1272,7 @@ function layoutNative(days, importantStart, importantEnd, nowH, sunMarks, hourly
       label: d.label, label_short: d.labelShort, is_today: d.isToday,
       temp: d.temp || null, icon: d.icon || null,
       allday: d.allday.map((a) => ({
-        title: a.title, hue: a.hue, badge: a.badge,
+        title: a.title, hue: colorClass(a.hue), fg: foregroundFor(a.hue), badge: a.badge,
         continues_before: a.continuesBefore, continues_after: a.continuesAfter,
       })),
       segments, events, now_marker: nowMarker,
