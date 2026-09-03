@@ -5,7 +5,7 @@ dark_mode: 'no'
 static_data: ''
 polling_verb: get
 framework_version: 3.3.1
-serverless_language: python
+serverless_language: node
 polling_url: ''
 polling_headers: ''
 polling_body: ''
@@ -38,13 +38,20 @@ custom_fields:
   github_url: https://github.com/ExcuseMi/trmnl-daylight-ics-calendar-plugin
   category: calendar
   help_text: TRMNL X Ready
-- keyname: ics_url
-  field_type: text
-  name: Calendar ICS URLs
-  description: One ICS link per line to combine several calendars, each gets its own color, auto-assigned in order unless pinned. Most calendar apps have a private ICS link tucked away in settings, e.g. Nextcloud (Calendar → hover a calendar → ⋯ → <strong>Copy private link</strong>) or Google Calendar (Settings → your calendar → <strong>Secret address in iCal format</strong>). <code>webcal://</code> links work too.<br /><br />To pin a calendar's color instead of auto-assigning it, add <code>| colorname</code> after the link, one of&#58; <code>red</code>, <code>orange</code>, <code>yellow</code>, <code>lime</code>, <code>green</code>, <code>cyan</code>, <code>blue</code>, <code>violet</code>, <code>purple</code>, <code>pink</code>. Example&#58;<br /><code>https://cloud.example.com/family.ics | pink</code>
+- keyname: calendars
+  field_type: code
+  name: Calendar Configuration
+  description: One JSON object describing your calendars and (optionally) the people whose events you want colored/labeled/renamed. Most calendar apps have a private ICS link tucked away in settings, e.g. Nextcloud (Calendar → hover a calendar → ⋯ → <strong>Copy private link</strong>) or Google Calendar (Settings → your calendar → <strong>Secret address in iCal format</strong>). <code>webcal://</code> links work too.<br /><br />Build and test this with real ICS data at <a href="https://excusemi.github.io/trmnl-daylight-ics-calendar-plugin/tools/config-editor.html" target="_blank">the Calendar Configuration Editor</a> rather than hand-writing it — paste the result here.<br /><br /><strong>Shape:</strong><br /><code>calendars[].url</code> required. <code>calendars[].color</code> optional, pins that calendar's color instead of auto-assigning by position. <code>calendars[].exclude</code> optional regex (case-insensitive) — events matching it are hidden entirely, only from that calendar.<br /><code>people[].name</code> + <code>people[].match</code> (regex) required — every surviving event (from any calendar) matching <code>match</code> gets renamed to <code>name</code> (set <code>"rename"&#58; false</code> to tag without renaming). <code>people[].color</code> optional, overrides that event's color. <code>people[].badge</code> optional short text shown in a small circle next to the event (defaults to <code>name</code>'s first letter).<br /><br />Colors are one of&#58; <code>red</code>, <code>orange</code>, <code>yellow</code>, <code>lime</code>, <code>green</code>, <code>cyan</code>, <code>blue</code>, <code>violet</code>, <code>purple</code>, <code>pink</code>.
   placeholder: |-
-    https://cloud.example.com/remote.php/dav/public-calendars/TOKEN1/?export
-    https://cloud.example.com/remote.php/dav/public-calendars/TOKEN2/?export | pink
+    {
+      "calendars": [
+        { "url": "https://cloud.example.com/family.ics", "color": "pink" },
+        { "url": "https://cloud.example.com/school.ics", "exclude": "\\bL[1345]\\b" }
+      ],
+      "people": [
+        { "name": "Aiko", "match": "\\bL6\\b", "color": "pink", "badge": "A" }
+      ]
+    }
 - keyname: view_days
   field_type: select
   name: Days to Show
@@ -87,18 +94,6 @@ custom_fields:
   name: Title Bar
   description: Shows a bar with this plugin instance's name across the top of the screen. Off by default to leave more room for the calendar grid.
   default: 'false'
-- keyname: exclude_regex
-  group: Advanced
-  field_type: text
-  name: Exclude Events (regex)
-  description: Hide any event whose title matches this regular expression (case-insensitive). Leave blank to show everything. Example, for a school calendar with titles like <code>L1 - Turnen</code> and <code>L1 + L2 - Sportdag</code> — hide every class's events except L2 and L6, while still keeping school-wide entries with no class code at all&#58; <code>(?=.*\b(?:L[1345]|K[123]|Kleuter)\b)(?!.*\b(?:L2|L6)\b)</code>
-  optional: true
-- keyname: event_rules
-  group: Advanced
-  field_type: text
-  name: Rename & Recolor Events (regex)
-  description: One rule per line&#58; <code>find regex => replacement | color</code>, applied in order (case-insensitive) to every event that survives the Exclude filter above. Both parts after <code>=></code> are optional. Colors are the same 10 names as the Calendar ICS URLs field above.<br /><br /><strong>Rename only</strong> — show a kid's name instead of a class code&#58;<br /><code>\bL6\b => Aiko</code><br /><br /><strong>Recolor only</strong> — leave the replacement blank to color without renaming&#58;<br /><code>\bAiko\b => | pink</code><br /><br /><strong>Both at once</strong> — every "L6" event becomes "Aiko" and turns pink, regardless of which calendar it's on&#58;<br /><code>\bL6\b => Aiko | pink</code>
-  optional: true
 name: Daylight & Weather Calendar
 description: ''
 refresh_interval: 15
