@@ -1,0 +1,92 @@
+---
+strategy: polling
+no_screen_padding: ''
+dark_mode: 'no'
+static_data: ''
+polling_verb: get
+framework_version: 3.3.1
+serverless_language: python
+polling_url: ''
+polling_headers: ''
+polling_body: ''
+id: 365548
+oauth_enabled: 'false'
+oauth_pkce_enabled: 'no'
+oauth_authorize_url: ''
+oauth_token_url: ''
+oauth_scopes: ''
+oauth_scope_separator: ''
+oauth_refresh_url: ''
+oauth_auth_params: ''
+oauth_token_headers: ''
+oauth_token_site: ''
+oauth_token_params: ''
+oauth_token_request_auth_method: ''
+oauth_body_format: ''
+oauth_token_response_metadata: ''
+oauth_authorization_method: ''
+oauth_refresh_params: ''
+oauth_token_field_name: ''
+oauth_expiry_field_name: ''
+oauth_expiry_strategy: ''
+oauth_fixed_expiry_ms: ''
+custom_fields:
+- keyname: author_info
+  name: About This Plugin
+  field_type: author_bio
+  description: A smart-scaling agenda from any ICS calendar feed, where the timeline auto-expands the hours that matter (daylight and your meetings) and shrinks the quiet ones, so your day never gets squeezed into a tiny sliver of the screen. Combine multiple calendars, each shown in its own color, with sunrise/sunset and daily weather right alongside your events. 1 day to a week of coverage. Auto-detects your language and time format from your TRMNL account.<br /><br />Runs on TRMNL <strong>Serverless</strong>, no server to host.
+  github_url: https://github.com/ExcuseMi/trmnl-daylight-ics-calendar-plugin
+  category: calendar
+  help_text: TRMNL X Ready
+- keyname: ics_url
+  field_type: text
+  name: Calendar ICS URLs
+  description: One ICS link per line to combine several calendars, each gets its own color. Most calendar apps have a private ICS link tucked away in settings, e.g. Nextcloud (Calendar → hover a calendar → ⋯ → <strong>Copy private link</strong>) or Google Calendar (Settings → your calendar → <strong>Secret address in iCal format</strong>). <code>webcal://</code> links work too.
+  placeholder: |-
+    https://cloud.example.com/remote.php/dav/public-calendars/TOKEN1/?export
+    https://cloud.example.com/remote.php/dav/public-calendars/TOKEN2/?export
+- keyname: view_days
+  field_type: select
+  name: Days to Show
+  description: How many days the calendar grid covers, starting today.
+  options:
+  - 1 day: '1'
+  - 2 days: '2'
+  - 3 days: '3'
+  - 5 days: '5'
+  - 1 week: '7'
+  default: '3'
+- keyname: location
+  field_type: string
+  name: Location (for sunrise/sunset)
+  description: City name (e.g. <code>Brussels</code>) or coordinates as <code>lat,lon</code>. Also used to decide which hours of the grid get emphasized (daylight hours, expanded, are shown alongside your actual meetings). Leave blank to hide sun times and emphasize by meetings alone.
+  optional: true
+- keyname: temperature_unit
+  field_type: select
+  name: Temperature Unit
+  description: Used for the daily high/low shown under each day (requires Location above).
+  options:
+  - Celsius (°C): celsius
+  - Fahrenheit (°F): fahrenheit
+  default: celsius
+- keyname: time_format
+  field_type: select
+  name: Time Format
+  description: How event and sun times are displayed.
+  options:
+  - 24-hour (14:30): 24h
+  - 12-hour (2:30 PM): 12h
+  default: 24h
+- keyname: time_zone
+  field_type: time_zone
+  name: Time Zone
+  description: Days and event times are computed in this zone. Leave blank to use your TRMNL account's own time zone.
+  optional: true
+- keyname: show_title_bar
+  field_type: boolean
+  name: Title Bar
+  description: Shows a bar with this plugin instance's name across the top of the screen. Off by default to leave more room for the calendar grid.
+  default: 'false'
+name: Daylight & Weather Calendar
+description: ''
+refresh_interval: 15
