@@ -18,12 +18,16 @@ link(s), expands recurring events for the window, and returns a pre-computed nat
   into side-by-side lanes.
 - A red line for the current time, plus orange/purple lines for sunrise/sunset when a location
   is configured, and a daily weather icon + high/low.
-- One color per configured calendar (cycled if you add more than the palette covers), so you can
-  combine as many ICS feeds as you like and still tell them apart at a glance.
+- One color per configured calendar — auto-assigned in order (cycled if you add more than the
+  palette covers) or pinned per calendar — so you can combine as many ICS feeds as you like and
+  still tell them apart at a glance.
 - Recurring events (`DAILY` / `WEEKLY` incl. `BYDAY` / `MONTHLY` / `YEARLY`, with `INTERVAL`,
   `COUNT`, `UNTIL`, `EXDATE`) expanded into the window.
-- Language (day/month names) auto-detected from your TRMNL account locale, with 24h/12h time
-  format as a setting.
+- Language (day/month names, abbreviated on narrower layouts) auto-detected from your TRMNL
+  account locale, with 24h/12h time format as a setting.
+- Advanced, optional per-event control: hide events by regex, and rename and/or recolor them
+  (e.g. swap a class code for a kid's name and give them their own color, independent of which
+  calendar they're on).
 - Graceful states: an `error` banner if every feed fails to fetch.
 
 ## Setup
@@ -35,13 +39,19 @@ link(s), expands recurring events for the window, and returns a pre-computed nat
    - **Calendar ICS URLs**: one per line to combine several calendars, each in its own color.
      Any ICS source works, including Nextcloud, Google Calendar, Outlook, and Apple Calendar,
      all of which have a private/secret ICS link tucked away in their calendar settings.
-     `webcal://` links are handled automatically.
+     `webcal://` links are handled automatically. Append `| colorname` (e.g. `| pink`) to a
+     line to pin that calendar's color instead of letting it auto-assign.
    - **Time Zone**: leave blank to use your TRMNL account's own time zone, or set one explicitly.
    - **Time Format**: 24-hour or 12-hour (AM/PM).
-   - **Location**: a city name or `lat,lon`, for sunrise/sunset and daily weather. Leave blank
-     to hide sun times and weather, and emphasize hours by meetings alone.
+   - **Location**: search a place or enter coordinates, for sunrise/sunset and daily weather.
+     Leave blank to hide sun times and weather, and emphasize hours by meetings alone.
    - **Temperature Unit**: Celsius or Fahrenheit (requires Location above).
    - **Days to Show**: 1, 2, 3, 5 days, or a full week.
+   - **Advanced → Exclude Events (regex)**: hide any event whose title matches a regular
+     expression, e.g. to only show your kid's class among a whole school's events.
+   - **Advanced → Rename & Recolor Events (regex)**: `find regex => replacement | color`, one
+     rule per line, to rewrite an event's title and/or force its color regardless of which
+     calendar it came from.
 
 ## Local layout development
 
@@ -62,9 +72,9 @@ than hand-editing the percentages.
 
 | Path | Purpose |
 |------|---------|
-| `plugin/src/transform.py` | Serverless code: fetch ICS, expand recurrences, compute layout, geocode + fetch sun times |
+| `plugin/src/transform.py` | Serverless code: fetch ICS, expand recurrences, compute layout, fetch sun times |
 | `plugin/src/shared.liquid` | The `main` template for all four view sizes (`full`/`half_*`/`quadrant`) |
-| `plugin/src/settings.yml` | Custom fields (ICS URLs, time zone, time format, location, days to show) |
+| `plugin/src/settings.yml` | Custom fields (ICS URLs + colors, time zone, time format, location, days to show, Advanced regex rules) |
 | `plugin/.trmnlp.yml` | Local mock data for `trmnlp serve` |
 
 ## Notes & limits

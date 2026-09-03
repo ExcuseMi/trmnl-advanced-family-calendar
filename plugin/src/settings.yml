@@ -1,6 +1,6 @@
 ---
 strategy: polling
-no_screen_padding: ''
+no_screen_padding: 'yes'
 dark_mode: 'no'
 static_data: ''
 polling_verb: get
@@ -41,20 +41,10 @@ custom_fields:
 - keyname: ics_url
   field_type: text
   name: Calendar ICS URLs
-  description: One ICS link per line to combine several calendars, each gets its own color. Most calendar apps have a private ICS link tucked away in settings, e.g. Nextcloud (Calendar → hover a calendar → ⋯ → <strong>Copy private link</strong>) or Google Calendar (Settings → your calendar → <strong>Secret address in iCal format</strong>). <code>webcal://</code> links work too.
+  description: One ICS link per line to combine several calendars, each gets its own color, auto-assigned in order unless pinned. Most calendar apps have a private ICS link tucked away in settings, e.g. Nextcloud (Calendar → hover a calendar → ⋯ → <strong>Copy private link</strong>) or Google Calendar (Settings → your calendar → <strong>Secret address in iCal format</strong>). <code>webcal://</code> links work too.<br /><br />To pin a calendar's color instead of auto-assigning it, add <code>| colorname</code> after the link, one of&#58; <code>red</code>, <code>orange</code>, <code>yellow</code>, <code>lime</code>, <code>green</code>, <code>cyan</code>, <code>blue</code>, <code>violet</code>, <code>purple</code>, <code>pink</code>. Example&#58;<br /><code>https://cloud.example.com/family.ics | pink</code>
   placeholder: |-
     https://cloud.example.com/remote.php/dav/public-calendars/TOKEN1/?export
-    https://cloud.example.com/remote.php/dav/public-calendars/TOKEN2/?export
-- keyname: exclude_regex
-  field_type: text
-  name: Exclude Events (regex)
-  description: Hide any event whose title matches this regular expression (case-insensitive). Leave blank to show everything. Example, for a school calendar with titles like <code>L1 - Turnen</code> and <code>L1 + L2 - Sportdag</code> — hide every class's events except L2 and L6, while still keeping school-wide entries with no class code at all&#58; <code>(?=.*\b(?:L[1345]|K[123]|Kleuter)\b)(?!.*\b(?:L2|L6)\b)</code>
-  optional: true
-- keyname: rename_rules
-  field_type: text
-  name: Rename Events (find → replace)
-  description: One rule per line, <code>find regex => replacement</code>, applied in order (case-insensitive) to every event title that survives the Exclude filter above. Example, to show a kid's name instead of a class code&#58;<br /><code>\bL6\b => Aiko</code><br /><code>\bL2\b => Finn</code>
-  optional: true
+    https://cloud.example.com/remote.php/dav/public-calendars/TOKEN2/?export | pink
 - keyname: view_days
   field_type: select
   name: Days to Show
@@ -66,10 +56,10 @@ custom_fields:
   - 5 days: '5'
   - 1 week: '7'
   default: '3'
-- keyname: location
-  field_type: string
+- keyname: lat_lon
+  field_type: lat_lon
   name: Location (for sunrise/sunset)
-  description: City name (e.g. <code>Brussels</code>) or coordinates as <code>lat,lon</code>. Also used to decide which hours of the grid get emphasized (daylight hours, expanded, are shown alongside your actual meetings). Leave blank to hide sun times and emphasize by meetings alone.
+  description: Search a city, address, or postal code and pick a match, or enter coordinates directly. Also used to decide which hours of the grid get emphasized (daylight hours, expanded, are shown alongside your actual meetings). Leave blank to hide sun times and emphasize by meetings alone.
   optional: true
 - keyname: temperature_unit
   field_type: select
@@ -97,6 +87,18 @@ custom_fields:
   name: Title Bar
   description: Shows a bar with this plugin instance's name across the top of the screen. Off by default to leave more room for the calendar grid.
   default: 'false'
+- keyname: exclude_regex
+  group: Advanced
+  field_type: text
+  name: Exclude Events (regex)
+  description: Hide any event whose title matches this regular expression (case-insensitive). Leave blank to show everything. Example, for a school calendar with titles like <code>L1 - Turnen</code> and <code>L1 + L2 - Sportdag</code> — hide every class's events except L2 and L6, while still keeping school-wide entries with no class code at all&#58; <code>(?=.*\b(?:L[1345]|K[123]|Kleuter)\b)(?!.*\b(?:L2|L6)\b)</code>
+  optional: true
+- keyname: event_rules
+  group: Advanced
+  field_type: text
+  name: Rename & Recolor Events (regex)
+  description: One rule per line&#58; <code>find regex => replacement | color</code>, applied in order (case-insensitive) to every event that survives the Exclude filter above. Both parts after <code>=></code> are optional. Colors are the same 10 names as the Calendar ICS URLs field above.<br /><br /><strong>Rename only</strong> — show a kid's name instead of a class code&#58;<br /><code>\bL6\b => Aiko</code><br /><br /><strong>Recolor only</strong> — leave the replacement blank to color without renaming&#58;<br /><code>\bAiko\b => | pink</code><br /><br /><strong>Both at once</strong> — every "L6" event becomes "Aiko" and turns pink, regardless of which calendar it's on&#58;<br /><code>\bL6\b => Aiko | pink</code>
+  optional: true
 name: Daylight & Weather Calendar
 description: ''
 refresh_interval: 15
