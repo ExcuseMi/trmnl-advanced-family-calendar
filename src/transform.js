@@ -1189,22 +1189,29 @@ function layoutNative(days, importantStart, importantEnd, nowH, sunMarks, hourly
   //
   // h--[Ncqh] is a bracket "arbitrary value" utility class that only works for INTEGERS: a
   // decimal value silently no-ops (the element falls back to its unstyled content-box
-  // height). So gridPct has to divide across importantN hours as whole percents; the
-  // leftover from flooring gets spread one-per-hour across the visible hours.
+  // height). So gridPct has to divide across importantN hours as whole percents, and the
+  // leftover from that division has to land somewhere.
+  //
+  // NOT "give the first `deficit` hours a whole extra percent each, in order" — that piled
+  // every bumped hour at the START of the visible range (hour 7 gets +1, so does 8, 9, ...
+  // however many the deficit needed), which read as "the rows aren't all the same size, even
+  // in the middle of the day" once the deficit was more than 1 or 2 (confirmed: with a 16-
+  // hour range you can have a 5-hour deficit — 5 back-to-back morning rows visibly taller
+  // than the rest of the day, not just a rounding fringe). Cumulative rounding spreads that
+  // same total leftover evenly across the whole range instead — round(i*gridPct/importantN)
+  // for each position i, taking each hour's share as the difference from the previous
+  // position's rounded cumulative total. Consecutive differences of a linear sequence
+  // rounded this way can only ever be base or base+1, and the +1s fall roughly one every
+  // importantN/deficit hours rather than all bunched at the front — everywhere still sums
+  // exactly to gridPct (the last cumulative value is round(importantN*gridPct/importantN),
+  // and gridPct is already an integer, so that's just gridPct itself).
   const importantN = importantEnd - importantStart;
-  const base = Math.trunc(gridPct / importantN);
-  const deficit = gridPct - base * importantN;
-
-  const hourPct = [];
-  let bumped = 0;
-  for (let h = 0; h < 24; h++) {
-    if (importantStart <= h && h < importantEnd) {
-      const extra = bumped < deficit ? 1 : 0;
-      bumped += extra;
-      hourPct.push(base + extra);
-    } else {
-      hourPct.push(0);
-    }
+  const hourPct = new Array(24).fill(0);
+  let prevCum = 0;
+  for (let i = 1; i <= importantN; i++) {
+    const cum = Math.round((i * gridPct) / importantN);
+    hourPct[importantStart + i - 1] = cum - prevCum;
+    prevCum = cum;
   }
 
   const cumPct = [0];
@@ -1357,5 +1364,5 @@ function layoutNative(days, importantStart, importantEnd, nowH, sunMarks, hourly
     });
   });
 
-  return { header_pct: HEADER_PCT, allday_pct: alldayPct, grid_pct: gridPct, title_bar_pct: titleBarPct, hour_rows: hourRows, days: outDays };
+  return { header_pct: HEADER_PCT, allday_pct: alldayPct, allday_row_pct: ALLDAY_ROW_PCT, grid_pct: gridPct, title_bar_pct: titleBarPct, hour_rows: hourRows, days: outDays };
 }
