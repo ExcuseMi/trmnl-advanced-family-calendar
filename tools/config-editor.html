@@ -118,6 +118,14 @@
   <div id="calendars"></div>
   <button id="addCalendar">+ Add calendar</button>
 
+  <div class="card" style="margin-top:10px;">
+    <p class="muted" style="margin-top:0;">Add a public holiday calendar — a real Google-hosted ICS feed, no account needed. Adds it as a normal calendar above (color + flag icon pre-filled, both freely editable).</p>
+    <div class="row">
+      <select id="holidayCountrySelect"></select>
+      <button id="addHolidayCalendar">+ Add public holidays</button>
+    </div>
+  </div>
+
   <h2>People <span class="muted">(optional — just names + colors/badges; who a badge/color applies to is set per calendar above, under each calendar's Advanced section)</span></h2>
   <div id="people"></div>
   <button id="addPerson">+ Add person</button>
@@ -258,6 +266,39 @@
     })
     .catch(function () { materialIconNames = []; });
 
+  // ---------------------------------------------------------- public holiday calendars (Google)
+  //
+  // Google hosts a free, no-account-needed public ICS feed per country at a predictable URL —
+  // this list of country -> feed-id pairs is this page's own convenience data (nothing to do
+  // with the plugin's schema, which has no notion of "holidays" at all, see transform.js) for
+  // turning a country pick into a normal calendars[] entry. Every id below was verified by hand
+  // (HTTP 200 + real ICS content) — Google doesn't publish a lookup API for these, and the
+  // naming isn't a consistent pattern (ISO codes, English country adjectives, and abbreviations
+  // are all mixed in), so this can't be derived programmatically; it's necessarily a fixed list
+  // rather than exhaustive country coverage.
+  var HOLIDAY_COUNTRIES = [
+    ["Australia", "australian"], ["Austria", "austrian"], ["Belgium", "be"],
+    ["Brazil", "brazilian"], ["Bulgaria", "bulgarian"], ["Canada", "canadian"],
+    ["China", "china"], ["Croatia", "croatian"], ["Czech Republic", "czech"],
+    ["Denmark", "danish"], ["Finland", "finnish"], ["France", "french"],
+    ["Germany", "german"], ["Greece", "greek"], ["Hong Kong", "hong_kong"],
+    ["Hungary", "hungarian"], ["India", "indian"], ["Indonesia", "indonesian"],
+    ["Ireland", "irish"], ["Israel", "jewish"], ["Italy", "italian"],
+    ["Japan", "japanese"], ["Latvia", "latvian"], ["Lithuania", "lithuanian"],
+    ["Malaysia", "malaysia"], ["Mexico", "mexican"], ["Netherlands", "dutch"],
+    ["New Zealand", "new_zealand"], ["Norway", "norwegian"], ["Pakistan", "pk"],
+    ["Philippines", "philippines"], ["Poland", "polish"], ["Portugal", "portuguese"],
+    ["Romania", "romanian"], ["Russia", "russian"], ["Saudi Arabia", "saudiarabian"],
+    ["Singapore", "singapore"], ["Slovakia", "slovak"], ["Slovenia", "slovenian"],
+    ["South Korea", "south_korea"], ["Spain", "spain"], ["Sweden", "swedish"],
+    ["Switzerland", "ch"], ["Taiwan", "taiwan"], ["Thailand", "th"],
+    ["Turkey", "turkish"], ["Ukraine", "ukrainian"], ["United Kingdom", "uk"],
+    ["United States", "usa"], ["Vietnam", "vietnamese"],
+  ];
+  function holidayIcsUrl(code) {
+    return "https://calendar.google.com/calendar/ical/en." + code + "%23holiday%40group.v.calendar.google.com/public/basic.ics";
+  }
+
   function el(tag, attrs, children) {
     var e = document.createElement(tag);
     for (var k in (attrs || {})) {
@@ -302,7 +343,7 @@
   // ------------------------------------------------------------------- state
 
   function uid() { return Math.random().toString(36).slice(2, 9); }
-  function newCalendar() { return { _id: uid(), url: "", id: "", color: "", excludes: [""], defaultPerson: "", personRules: [] }; }
+  function newCalendar() { return { _id: uid(), url: "", id: "", color: "", icon: "", excludes: [""], defaultPerson: "", personRules: [] }; }
   function newPersonRule() { return { _id: uid(), match: "", person: "", rename: true }; }
   function newPerson() { return { _id: uid(), name: "", color: "", badge: "" }; }
   function newCategory() { return { _id: uid(), name: "", matches: [""], icons: [""], color: "" }; }
@@ -357,10 +398,13 @@
         el("strong", {}, [document.createTextNode("Calendar " + (idx + 1))]),
         removeBtn,
       ]);
+      var iconPicker = iconPickerFor(function () { return c.icon; }, function (v) { c.icon = v; });
+
       var body = el("div", { class: "row" }, [
         el("div", { style: "flex:1 1 320px;" }, [el("label", { text: "ICS URL" }), urlInput]),
         el("div", {}, [el("label", { text: "ID (optional)" }), idInput]),
         el("div", {}, [el("label", { text: "Color" }), el("div", { class: "row", style: "gap:6px;" }, [colorSel, swatch])]),
+        el("div", { style: "flex:1 1 200px;" }, [el("label", { text: "Default icon (optional)" }), iconPicker]),
       ]);
 
       wrap.appendChild(el("div", { class: "entry" }, [head, body, advancedBlockFor(c)]));
@@ -437,6 +481,27 @@
     renderCalendars(); renderJson(); renderIcsSources();
   });
 
+  // ------------------------------------------------------- public holiday calendar quick-add
+
+  (function () {
+    var sel = document.getElementById("holidayCountrySelect");
+    HOLIDAY_COUNTRIES.forEach(function (pair) {
+      sel.appendChild(el("option", { value: pair[1] }, [document.createTextNode(pair[0])]));
+    });
+  })();
+
+  document.getElementById("addHolidayCalendar").addEventListener("click", function () {
+    var sel = document.getElementById("holidayCountrySelect");
+    var code = sel.value;
+    var cal = newCalendar();
+    cal.url = holidayIcsUrl(code);
+    cal.id = "Holidays";
+    cal.color = "red";
+    cal.icon = "flag";
+    calendars.push(cal);
+    renderCalendars(); renderJson(); renderIcsSources();
+  });
+
   // ----------------------------------------------------------------- people UI
 
   function renderPeople() {
@@ -484,14 +549,15 @@
   // full image URL) with a live black-circle preview, plus a dropdown of matching names (each
   // with its own tiny preview) filtered from materialIconNames as you type. Degrades to a plain
   // freeform input with live preview if the name list never loaded (see materialIconNamesReady).
-  // Operates on cat.icons[index] — a category can carry up to two icons (see MAX_CATEGORY_ICONS
-  // in transform.js), e.g. work + home for a "Work From Home" category.
-  function iconPickerFor(cat, index) {
+  // Generic over WHERE the value lives — getValue()/setValue(v) — so the same picker serves a
+  // category's icons[index] (see renderCategories) and a calendar's single icon field (see
+  // renderCalendars' advanced block) without duplicating this whole widget.
+  function iconPickerFor(getValue, setValue) {
     var wrap = el("div", { class: "icon-picker" });
     var preview = el("div", { class: "icon-preview" });
     function updatePreview() {
       preview.innerHTML = "";
-      var url = iconUrlFor(cat.icons[index]);
+      var url = iconUrlFor(getValue());
       if (!url) return;
       var img = el("img", { src: url, alt: "" });
       img.addEventListener("error", function () { img.remove(); });
@@ -500,7 +566,7 @@
 
     var input = el("input", {
       type: "text", class: "field-narrow", style: "width:100%;box-sizing:border-box;",
-      placeholder: "search icon name, or paste image URL", value: cat.icons[index],
+      placeholder: "search icon name, or paste image URL", value: getValue(),
     });
     var suggest = el("div", { class: "icon-suggest" });
     suggest.hidden = true;
@@ -519,7 +585,7 @@
         // hideSuggest()'s blur-triggered timeout would otherwise race it closed first.
         item.addEventListener("mousedown", function (e) {
           e.preventDefault();
-          cat.icons[index] = name;
+          setValue(name);
           input.value = name;
           updatePreview();
           hideSuggest();
@@ -529,7 +595,7 @@
       });
       suggest.hidden = false;
     }
-    input.addEventListener("input", function () { cat.icons[index] = input.value; updatePreview(); showSuggest(); renderJson(); });
+    input.addEventListener("input", function () { setValue(input.value); updatePreview(); showSuggest(); renderJson(); });
     input.addEventListener("focus", showSuggest);
     input.addEventListener("blur", function () { setTimeout(hideSuggest, 150); });
     // If the name list is still loading when the user focuses in, show suggestions the moment
@@ -595,7 +661,7 @@
         iconWrap.appendChild(el("label", { text: cat.icons.length > 1 ? "Icons" : "Icon" }));
         var row = el("div", { class: "row", style: "gap:6px;flex-wrap:nowrap;align-items:flex-start;" });
         cat.icons.forEach(function (val, i) {
-          var picker = iconPickerFor(cat, i);
+          var picker = iconPickerFor(function () { return cat.icons[i]; }, function (v) { cat.icons[i] = v; });
           if (i === 0 && cat.icons.length < 2) {
             var addIconBtn = el("button", { class: "small" }, [document.createTextNode("+")]);
             addIconBtn.title = "Add a second icon (e.g. work + home)";
@@ -675,6 +741,7 @@
       var entry = { url: c.url.trim() };
       if (c.id.trim()) entry.id = c.id.trim();
       if (c.color) entry.color = c.color;
+      if (c.icon && c.icon.trim()) entry.icon = c.icon.trim();
 
       var excludes = c.excludes.map(function (x) { return x.trim(); }).filter(Boolean);
       if (excludes.length === 1) entry.exclude = excludes[0];
@@ -753,6 +820,11 @@
           url: c.url.trim(),
           id: typeof c.id === "string" ? c.id.trim() : "",
           color: typeof c.color === "string" && VALID_COLORS.indexOf(c.color.toLowerCase()) !== -1 ? c.color.toLowerCase() : "",
+          // This editor's UI only offers one default icon per calendar (categories get two —
+          // see renderCategories); an imported array is collapsed to its first entry so
+          // hand-written/API-sourced configs with two still round-trip to something visible
+          // instead of silently vanishing.
+          icon: typeof c.icon === "string" ? c.icon.trim() : Array.isArray(c.icon) && typeof c.icon[0] === "string" ? c.icon[0].trim() : "",
           excludes: excludes.length ? excludes : [""],
           defaultPerson: typeof c.defaultPerson === "string" ? c.defaultPerson.trim() : "",
           personRules: personRules,

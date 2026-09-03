@@ -32,6 +32,11 @@ plain browser tab — see [Configuration Editor](#configuration-editor) below.
   an icon (up to two, e.g. a briefcase + a house for "Work From Home") — reused from
   [Google's Material Symbols](https://fonts.google.com/icons) by plain name, searchable live in
   the [Configuration Editor](#configuration-editor); a custom image URL works too.
+- **Public holidays**: the Configuration Editor has a one-click "Add public holidays" picker (50
+  countries) that adds a real Google-hosted holiday ICS feed as a normal calendar, with color and
+  a flag icon pre-filled — nothing holiday-specific in the plugin itself, it's just a calendar
+  with a default icon (`calendars[].icon`, same mechanism as `categories[].icon`) that a matching
+  Category still overrides.
 - Recurring events (`DAILY` / `WEEKLY` incl. `BYDAY` / `MONTHLY` / `YEARLY`, with `INTERVAL`,
   `COUNT`, `UNTIL`, `EXDATE`) expanded into the window, IANA-timezone aware.
 - Language (day/month names, abbreviated on narrower layouts) auto-detected from your TRMNL
@@ -61,11 +66,14 @@ plain browser tab — see [Configuration Editor](#configuration-editor) below.
 
 **[excusemi.github.io/trmnl-daylight-ics-calendar-plugin/tools/config-editor.html](https://excusemi.github.io/trmnl-daylight-ics-calendar-plugin/tools/config-editor.html)**
 — a static page (`tools/config-editor.html`, served via GitHub Pages) for building the Calendar
-Configuration field visually instead of hand-writing JSON: add calendars and people through a
-form, test against real ICS data (direct fetch when the host allows CORS, or paste the `.ics`
-text otherwise — a private calendar URL is never routed through a third-party proxy), and
-preview the actual colors/badges using TRMNL's real CSS classes. Copy the generated JSON into
-the plugin's Calendar Configuration field when you're happy with it.
+Configuration field visually instead of hand-writing JSON: add calendars, people, and categories
+through a form (categories' icons are searchable live against
+[Google's Material Symbols](https://fonts.google.com/icons), no spelling guesses needed), add a
+public holiday calendar for your country in one click, test against real ICS data (direct fetch
+when the host allows CORS, or paste the `.ics` text otherwise — a private calendar URL is never
+routed through a third-party proxy), and preview the actual colors/badges/icons using TRMNL's
+real CSS classes. Copy the generated JSON into the plugin's Calendar Configuration field when
+you're happy with it.
 
 The JSON shape it produces:
 
@@ -95,6 +103,10 @@ The JSON shape it produces:
 - `calendars[].color` — optional, one of `red` `orange` `yellow` `lime` `green` `cyan` `blue`
   `violet` `purple` `pink`, or an explicit `gray-10`..`gray-70` shade. Pins that calendar's color
   instead of auto-assigning by position.
+- `calendars[].icon` — optional, same shape as `categories[].icon` below. A default icon for
+  every event on that calendar; a matching Category's own icon still wins over this. What the
+  Configuration Editor's "Add public holidays" picker sets, for instance — the plugin has no
+  built-in notion of holidays, that button just fills in a normal calendar entry.
 - `calendars[].exclude` — optional regex, or array of them (case-insensitive). Matching events
   from *that* calendar are hidden entirely, before `people`/`categories` ever see them.
 - `calendars[].personRules` — optional array of `{ match, person, rename }`, checked in order
