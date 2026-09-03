@@ -17,6 +17,7 @@
 // Budget on TRMNL: 128 MB / 5 s — everything is bounded to the render window.
 
 const DEFAULT_DAYS = 3;
+const DEFAULT_HOURS = { start: 7, end: 21 }; // Calendar Configuration's optional "hours" field
 const WD_MAP = { MO: 0, TU: 1, WE: 2, TH: 3, FR: 4, SA: 5, SU: 6 };
 
 // One color per configured calendar — cycled by position through the 10 chromatic hues (if
@@ -192,13 +193,14 @@ async function run(input) {
     rd.icon = rd.temp ? dayIcon(sky.hourlyWeather[i]) : null;
   });
 
-  // The emphasized ("important") range is automatic, not a manual setting: it starts at
-  // sunrise or the first meeting of the visible days, whichever is earlier, and ends at
-  // sunset or the last meeting, whichever is later — so daylight hours and every actual event
-  // are always in the expanded part of the grid, never stuck in the compressed margin. Floor
-  // the start / ceil the end so a meeting or sunrise/sunset falling mid-hour still pulls its
-  // whole hour into the emphasized range. Falls back to 8-22 if there's neither sun data (no
-  // Location configured) nor any timed events to go on.
+  // The shown range is the configured default hours (Calendar Configuration's "hours", see
+  // parseConfig — 7-21 unless overridden), automatically widened to also cover sunrise, the
+  // first/last meeting of the visible days, and sunset, whichever push earlier/later — so
+  // daylight hours and every actual event are always visible, never hidden along with the
+  // rest of an otherwise-empty hour. Floor the start / ceil the end so a meeting or sunrise/
+  // sunset falling mid-hour still pulls its whole hour in. Hours left outside this final
+  // range are hidden entirely (see layoutNative) rather than shown compressed — by
+  // construction they contain neither the default range nor any real event/sun mark.
   const daySun = sky.sunMarks[0] || [];
   const sunriseMark = daySun.find((m) => m.kind === "sunrise");
   const sunsetMark = daySun.find((m) => m.kind === "sunset");
@@ -210,10 +212,11 @@ async function run(input) {
       eventEnds.push(e.h1);
     }
   }
-  const startCandidates = [sunriseMark ? sunriseMark.hour : null, ...eventStarts].filter((h) => h !== null && h !== undefined);
-  const endCandidates = [sunsetMark ? sunsetMark.hour : null, ...eventEnds].filter((h) => h !== null && h !== undefined);
-  const startH = startCandidates.length ? Math.floor(Math.min(...startCandidates)) : 8;
-  let endH = endCandidates.length ? Math.ceil(Math.max(...endCandidates)) : 22;
+  const defaultHours = cfg.hours || DEFAULT_HOURS;
+  const startCandidates = [defaultHours.start, sunriseMark ? sunriseMark.hour : null, ...eventStarts].filter((h) => h !== null && h !== undefined);
+  const endCandidates = [defaultHours.end, sunsetMark ? sunsetMark.hour : null, ...eventEnds].filter((h) => h !== null && h !== undefined);
+  const startH = Math.floor(Math.min(...startCandidates));
+  let endH = Math.ceil(Math.max(...endCandidates));
   endH = Math.max(endH, startH + 1);
 
   const grid = layoutNative(rawDays, startH, endH, nowH, sky.sunMarks, sky.hourlyWeather, titleBarPct, calendarColors);
@@ -337,7 +340,7 @@ function emptyResult(tzname, tz, locale, daysN, msg, showTitleBar, titleBarPct, 
 // strict validation.
 
 function parseConfig(raw) {
-  const empty = { calendars: [], people: {} };
+  const empty = { calendars: [], people: {}, hours: null };
   if (typeof raw !== "string" || !raw.trim()) return empty;
   let data;
   try {
@@ -346,6 +349,19 @@ function parseConfig(raw) {
     return empty;
   }
   if (!data || typeof data !== "object") return empty;
+
+  // Optional top-level "hours": { "start": 7, "end": 21 } — the default hour range to show
+  // (see DEFAULT_HOURS/run() for how it's widened to also cover real sun/event data, and
+  // layoutNative for how hours left outside it end up hidden entirely). Malformed input
+  // falls back to null here so run() applies DEFAULT_HOURS, same as omitting it.
+  let hours = null;
+  if (data.hours && typeof data.hours === "object") {
+    const start = Math.trunc(Number(data.hours.start));
+    const end = Math.trunc(Number(data.hours.end));
+    if (Number.isFinite(start) && Number.isFinite(end) && start >= 0 && start < end && end <= 24) {
+      hours = { start, end };
+    }
+  }
 
   // Keyed by lowercased name so personRules/defaultPerson lookups are case-insensitive, same
   // as the regex matching around them.
@@ -385,7 +401,7 @@ function parseConfig(raw) {
     calendars.push({ id, url: item.url.trim(), color, exclude, defaultPerson, personRules });
   }
 
-  return { calendars, people };
+  return { calendars, people, hours };
 }
 
 function compileRegex(pattern) {
@@ -623,18 +639,52 @@ function addMonths(civil, n) {
 
 // -------------------------------------------------------------------------- i18n / labels
 //
-// Weekday/month names come straight from Intl.DateTimeFormat instead of a hand-rolled
-// table — the engine's own ICU data covers essentially any real locale, which is both a
-// broader net than the 5 languages a hand-picked table would cover and one less thing to
-// maintain. Only "unavailable" (a UI string Intl has no way to translate) still needs one.
-
-const UNAVAILABLE = {
-  en: "Calendar unavailable",
-  nl: "Kalender niet beschikbaar",
-  fr: "Agenda indisponible",
-  de: "Kalender nicht verfügbar",
-  es: "Calendario no disponible",
+// A hardcoded table for the languages we've actually verified, checked FIRST — Intl.
+// DateTimeFormat only steps in for locales outside it. Intl alone isn't reliable enough to
+// be the only source: whether it actually has non-English weekday/month data depends on
+// whether the runtime was built with full ICU or a slimmed-down "small-icu" build (common in
+// serverless sandboxes for faster cold starts) — small-icu doesn't error for an unsupported
+// locale, it just silently formats in English, which is exactly what happened here (real
+// TRMNL input with locale "nl" rendered English day/month names). Same class of problem
+// Python's strftime has with the OS's locale data not being installed in a sandboxed VM —
+// this hits it at the JS/ICU layer instead. The table covers what shipped before Intl was
+// introduced; Intl is still tried for anything outside it, on the chance the runtime's ICU
+// happens to cover it — better than a guaranteed-English default for those, even if not
+// guaranteed to work.
+const I18N = {
+  en: {
+    wd: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+    months: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
+    months_short: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+    unavailable: "Calendar unavailable",
+  },
+  nl: {
+    wd: ["Ma", "Di", "Wo", "Do", "Vr", "Za", "Zo"],
+    months: ["Januari", "Februari", "Maart", "April", "Mei", "Juni", "Juli", "Augustus", "September", "Oktober", "November", "December"],
+    months_short: ["Jan", "Feb", "Mrt", "Apr", "Mei", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dec"],
+    unavailable: "Kalender niet beschikbaar",
+  },
+  fr: {
+    wd: ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"],
+    months: ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"],
+    months_short: ["Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Août", "Sep", "Oct", "Nov", "Déc"],
+    unavailable: "Agenda indisponible",
+  },
+  de: {
+    wd: ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"],
+    months: ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"],
+    months_short: ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"],
+    unavailable: "Kalender nicht verfügbar",
+  },
+  es: {
+    wd: ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"],
+    months: ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"],
+    months_short: ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"],
+    unavailable: "Calendario no disponible",
+  },
 };
+
+const UNAVAILABLE = Object.fromEntries(Object.entries(I18N).map(([code, t]) => [code, t.unavailable]));
 
 const _weekdayFmtCache = new Map();
 const _monthFmtCache = new Map();
@@ -660,8 +710,10 @@ function localeDatePart(locale, width, kind, y, mo, d) {
 }
 
 function dayLabel(civil, locale) {
-  const wd = localeDatePart(locale, "short", "weekday", civil.y, civil.mo, civil.d);
-  const month = localeDatePart(locale, "long", "month", civil.y, civil.mo, civil.d);
+  const code = String(locale).toLowerCase().split(/[-_]/)[0];
+  const t = I18N[code];
+  const wd = t ? t.wd[civilWeekday(civil.y, civil.mo, civil.d)] : localeDatePart(locale, "short", "weekday", civil.y, civil.mo, civil.d);
+  const month = t ? t.months[civil.mo - 1] : localeDatePart(locale, "long", "month", civil.y, civil.mo, civil.d);
   return wd + " " + civil.d + " " + month;
 }
 
@@ -670,8 +722,10 @@ function dayLabelShort(civil, locale) {
   // Show setting) — the full month name is what wraps/gets clipped there, e.g. "Zo 5 Juli"
   // losing "Juli" off the header at 7 columns; the weekday/day are already short enough not
   // to need shrinking.
-  const wd = localeDatePart(locale, "short", "weekday", civil.y, civil.mo, civil.d);
-  const month = localeDatePart(locale, "short", "month", civil.y, civil.mo, civil.d);
+  const code = String(locale).toLowerCase().split(/[-_]/)[0];
+  const t = I18N[code];
+  const wd = t ? t.wd[civilWeekday(civil.y, civil.mo, civil.d)] : localeDatePart(locale, "short", "weekday", civil.y, civil.mo, civil.d);
+  const month = t ? t.months_short[civil.mo - 1] : localeDatePart(locale, "short", "month", civil.y, civil.mo, civil.d);
   return wd + " " + civil.d + " " + month;
 }
 
@@ -1070,9 +1124,6 @@ const MIN_EVENT_PCT = 10; // floor so a block is never a literally invisible sli
                            // height_pct (see layoutNative) are a share of grid_pct specifically (the
                            // day column's own height), not the whole screen — events are an
                            // absolutely-positioned overlay sized relative to their direct container.
-const IMPORTANT_HOUR_WEIGHT = 4; // every hour in the configured day_start-day_end range gets this
-                                  // many times the vertical space of an hour outside it
-
 function hueOf(calIdx, calendarColors) {
   if (calendarColors && calIdx < calendarColors.length && calendarColors[calIdx]) return calendarColors[calIdx];
   return HUES[calIdx % HUES.length];
@@ -1124,42 +1175,30 @@ function layoutNative(days, importantStart, importantEnd, nowH, sunMarks, hourly
   const gridBase = HEADER_PCT + alldayPct + titleBarPct;
   const gridPct = 100 - gridBase;
 
-  // The full day (0-24) is always shown — day_start/day_end mark an "important" range that
-  // gets more vertical weight per hour, while hours outside still show, just compressed.
+  // Hours outside [importantStart, importantEnd) are hidden entirely (0% height) — that
+  // range is always at least the configured default hours (see DEFAULT_HOURS/run()),
+  // widened to also cover any real sunrise/event/sunset outside them, so anything left
+  // outside it by construction has nothing worth keeping on screen. With hidden hours
+  // contributing zero, there's no separate "important vs compressed" ratio to weigh
+  // anymore — every visible hour just splits gridPct evenly.
   //
   // h--[Ncqh] is a bracket "arbitrary value" utility class that only works for INTEGERS: a
   // decimal value silently no-ops (the element falls back to its unstyled content-box
-  // height). So every hour in the important zone must share one INTEGER percent, and every
-  // hour outside it another — but scaling an integer weight ratio essentially never divides
-  // gridPct evenly, so the leftover remainder has to land somewhere. Putting it on the
-  // important hours would break the exact uniformity that's the whole point here; instead
-  // spread it one-per-hour across the LEAST prominent (compressed, outside-range) hours,
-  // where a handful being 1% taller than the rest is essentially invisible.
+  // height). So gridPct has to divide across importantN hours as whole percents; the
+  // leftover from flooring gets spread one-per-hour across the visible hours.
   const importantN = importantEnd - importantStart;
-  const outsideN = 24 - importantN;
-  const totalUnits = IMPORTANT_HOUR_WEIGHT * importantN + outsideN;
-
-  // Floor (not round) each zone's ideal share — floors always sum to at most gridPct, never
-  // over, so the leftover ("deficit") is always >= 0 and only ever needs handing OUT as +1s,
-  // never clawed back.
-  const importantBase = Math.trunc((IMPORTANT_HOUR_WEIGHT / totalUnits) * gridPct);
-  const outsideBase = outsideN ? Math.trunc((1 / totalUnits) * gridPct) : 0;
-  const deficit = gridPct - (importantBase * importantN + outsideBase * outsideN);
-
-  const bumpOutside = Math.min(deficit, outsideN);
-  const bumpImportant = deficit - bumpOutside;
+  const base = Math.trunc(gridPct / importantN);
+  const deficit = gridPct - base * importantN;
 
   const hourPct = [];
-  let outsideBumped = 0, importantBumped = 0;
+  let bumped = 0;
   for (let h = 0; h < 24; h++) {
     if (importantStart <= h && h < importantEnd) {
-      const extra = importantBumped < bumpImportant ? 1 : 0;
-      importantBumped += extra;
-      hourPct.push(importantBase + extra);
+      const extra = bumped < deficit ? 1 : 0;
+      bumped += extra;
+      hourPct.push(base + extra);
     } else {
-      const extra = outsideBumped < bumpOutside ? 1 : 0;
-      outsideBumped += extra;
-      hourPct.push(outsideBase + extra);
+      hourPct.push(0);
     }
   }
 
@@ -1224,6 +1263,10 @@ function layoutNative(days, importantStart, importantEnd, nowH, sunMarks, hourly
     for (const h of [sunriseH, sunsetH]) {
       if (h !== null && h >= 0 && h < 24) boundsSet.add(h);
     }
+    // Also split at "now" (today only) so segments cleanly separate into wholly-past or
+    // wholly-upcoming — see `past` below — instead of one segment straddling the boundary.
+    const hasNow = d.isToday && nowH !== null && nowH !== undefined && nowH >= 0 && nowH < 24;
+    if (hasNow) boundsSet.add(nowH);
     const bounds = [...boundsSet].sort((a, b) => a - b);
 
     function isNight(mid) {
@@ -1245,7 +1288,8 @@ function layoutNative(days, importantStart, importantEnd, nowH, sunMarks, hourly
       const h = Math.trunc(a);
       const pct = Math.round(hourPct[h] * (b - h)) - Math.round(hourPct[h] * (a - h));
       const shade = Math.trunc(a) % 2;
-      segments.push({ pct, shade, night: isNight(mid), weather: dayWeather[Math.trunc(a)] || null });
+      const past = hasNow && a < nowH;
+      segments.push({ pct, shade, night: isNight(mid), past, weather: dayWeather[Math.trunc(a)] || null });
     }
 
     // "Now" is an absolutely-positioned overlay too, for the same reason events are: its
@@ -1257,25 +1301,44 @@ function layoutNative(days, importantStart, importantEnd, nowH, sunMarks, hourly
       nowMarker = { top_pct: round4((top / gridPct) * 100), night: isNight(nowH) };
     }
 
-    // Events are absolutely-positioned overlays, sized straight from pctAt() on each
-    // cluster's own h0/h1 as a fraction of the GRID area's own height — independent of the
-    // background's own segmentation, so an event's minimum-size enforcement can never borrow
-    // space from a spacer and drag its rendered start time away from its real hour.
+    // Events are absolutely-positioned overlays, sized straight from pctAt() on each EVENT's
+    // OWN h0/h1 (not the whole cluster's) — clustering only decides which lane (horizontal
+    // slot) an event sits in among whatever else overlaps it; each lane still gets its own
+    // independent vertical position/size. A cluster's h0/h1 is the UNION of everything in
+    // it, so sizing every lane to that shared span used to stretch a short event to match a
+    // much longer one it merely overlapped (e.g. a 45-minute class inside an 8-hour block) —
+    // confirmed against real data, not a hypothetical. Flattened across all clusters and
+    // sorted by start time so the MIN_EVENT_PCT growth-cap below (an event too short to read
+    // grows down, but never past whatever's next) has one consistent, chronological list to
+    // check against — capping against the immediately-following event overall is a
+    // conservative, always-safe bound: two events sharing a lane can never be adjacent
+    // without something between them (in any lane) starting first.
+    const flatEvents = [];
+    for (const c of clusters) {
+      for (const [ev, laneIdx] of c.lanes) flatEvents.push({ ev, laneIdx, nlanes: c.nlanes });
+    }
+    flatEvents.sort((a, b) => a.ev.h0 - b.ev.h0);
+
     const events = [];
-    const sortedClusters = [...clusters].sort((a, b) => a.h0 - b.h0);
-    sortedClusters.forEach((c, idx) => {
-      const top = pctAt(c.h0) - gridBase;
-      let height = pctAt(c.h1) - gridBase - top;
+    flatEvents.forEach((item, idx) => {
+      const ev = item.ev;
+      const top = pctAt(ev.h0) - gridBase;
+      let height = pctAt(ev.h1) - gridBase - top;
       if (height < MIN_EVENT_PCT) {
-        const nextTop = idx + 1 < sortedClusters.length ? pctAt(sortedClusters[idx + 1].h0) - gridBase : gridPct;
+        const nextTop = idx + 1 < flatEvents.length ? pctAt(flatEvents[idx + 1].ev.h0) - gridBase : gridPct;
         height = Math.min(MIN_EVENT_PCT, Math.max(0, nextTop - top));
       }
-      const lanes = [...c.lanes].sort((p, q) => p[1] - q[1]).map((p) => {
-        const ev = p[0];
-        const color = ev.hueOverride || hueOf(ev.calIdx, calendarColors);
-        return { title: ev.title, hue: colorClass(color), fg: foregroundFor(color), badge: ev.badge || null };
+      const color = ev.hueOverride || hueOf(ev.calIdx, calendarColors);
+      events.push({
+        top_pct: round4((top / gridPct) * 100),
+        height_pct: round4((height / gridPct) * 100),
+        lane_index: item.laneIdx,
+        nlanes: item.nlanes,
+        title: ev.title,
+        hue: colorClass(color),
+        fg: foregroundFor(color),
+        badge: ev.badge || null,
       });
-      events.push({ top_pct: round4((top / gridPct) * 100), height_pct: round4((height / gridPct) * 100), lanes });
     });
 
     outDays.push({
