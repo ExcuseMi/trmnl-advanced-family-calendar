@@ -1646,6 +1646,15 @@ function layoutNative(days, importantStart, importantEnd, nowH, sunMarks, hourly
       temp: d.temp || null, icon: d.icon || null,
       allday: d.allday.map((a) => ({
         title: a.title, hue: colorClass(a.hue), fg: foregroundFor(a.hue),
+        // Left accent bar (see shared.liquid's chip_body) — every timed event already got one
+        // (see the `bar: accentColor(color)` a few lines up); this was missing here entirely,
+        // so an all-day chip with no badges (the plain-bar fallback in chip_body) rendered
+        // bg--{{ bar }} as literally "bg--" (bar undefined) — no accent color at all, not the
+        // same code path timed events actually exercise despite {% render %}ing the identical
+        // template. a.hue here is the same raw (pre-colorClass) value passed to colorClass
+        // just above, mirroring how the timed-event loop derives both hue and bar from one
+        // shared `color` variable.
+        bar: accentColor(a.hue),
         badges: a.badges || [], display: a.display || "text",
         continues_before: a.continuesBefore, continues_after: a.continuesAfter,
       })),
