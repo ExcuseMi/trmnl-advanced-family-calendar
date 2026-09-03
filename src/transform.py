@@ -25,17 +25,18 @@ _WD = {"MO": 0, "TU": 1, "WE": 2, "TH": 3, "FR": 4, "SA": 5, "SU": 6}
 
 def run(input):
     urls = _urls(_cf(input, "ics_url"))
+    calendar_colors = [hue for _, hue in urls]
     t = _I18N[_locale_of(input)]
     tzname = _cf(input, "time_zone").strip() or _user_tz(input) or "UTC"
     is_12h = _cf(input, "time_format").strip().lower() == "12h"
-    location = _cf(input, "location")
+    location = _cf(input, "lat_lon")
     fahrenheit = _cf(input, "temperature_unit").strip().lower() == "fahrenheit"
     days_n = _int(_cf(input, "view_days"), DEFAULT_DAYS, 1, 7)
     show_title_bar = _cf(input, "show_title_bar").strip().lower() in ("true", "yes", "1")
     title_bar_pct = TITLE_BAR_PCT if show_title_bar else 0
     title_text = _title_text(input)
     exclude_re = _compile_regex(_cf(input, "exclude_regex"))
-    rename_rules = _parse_rename_rules(_cf(input, "rename_rules"))
+    event_rules = _parse_event_rules(_cf(input, "event_rules"))
 
     tz = _resolve_tz(tzname, input)
 
@@ -49,7 +50,7 @@ def run(input):
 
     occ = []
     errors = []
-    for cal_idx, url in enumerate(urls):
+    for cal_idx, (url, _pinned_hue) in enumerate(urls):
         if url.startswith("webcal://"):
             url = "https://" + url[len("webcal://"):]
         try:
@@ -65,14 +66,13 @@ def run(input):
     if errors and not occ:
         err = "Fetch/parse failed: %s" % errors[0]
 
-    # Exclude tested against the RAW title (before renaming) so a rename rule can't
+    # Exclude tested against the RAW title (before renaming) so a rule can't
     # accidentally dodge or trigger an exclude rule by rewriting the very text it
-    # matches against; rename then runs on whatever survives the exclude pass.
+    # matches against; rename/recolor then runs on whatever survives the exclude pass.
     if exclude_re:
         occ = [e for e in occ if not exclude_re.search(e["title"])]
-    if rename_rules:
-        for e in occ:
-            e["title"] = _apply_rename_rules(e["title"], rename_rules)
+    for e in occ:
+        e["title"], e["hue_override"] = _apply_event_rules(e["title"], event_rules)
 
     # Bucket occurrences into day columns, split into timed vs all-day.
     raw_days = []
@@ -92,6 +92,7 @@ def run(input):
                     "h0": (vs - d0).total_seconds() / 3600.0,
                     "h1": (ve - d0).total_seconds() / 3600.0,
                     "title": e["title"], "cal_idx": e["cal_idx"],
+                    "hue_override": e["hue_override"],
                     "label": "%s–%s" % (_fmt_time(vs, is_12h), _fmt_time(ve, is_12h)),
                 })
         timed.sort(key=lambda t: t["h0"])
@@ -100,7 +101,8 @@ def run(input):
             "label_short": _day_label_short(d0, t),
             "is_today": i == 0,
             "timed": timed,
-            "allday": [{"title": a["title"], "hue": _hue(a["cal_idx"]),
+            "allday": [{"title": a["title"],
+                        "hue": a["hue_override"] or _hue(a["cal_idx"], calendar_colors),
                         # Lets the template draw multi-day all-day events as one continuous
                         # banner (square off the edge that's mid-span) instead of a separate
                         # fully-rounded pill repeating in every day column it touches.
@@ -137,7 +139,7 @@ def run(input):
     end_h = max(end_h, start_h + 1)
 
     grid = _layout_native(raw_days, start_h, end_h, now_h, sun, hourly_weather,
-                          title_bar_pct=title_bar_pct)
+                          title_bar_pct=title_bar_pct, calendar_colors=calendar_colors)
 
     return dict(grid, generated_at=int(now.timestamp()), tz=tzname, error=err,
                 unavailable_label=t["unavailable"],
@@ -149,11 +151,26 @@ def run(input):
 # ---------------------------------------------------------------- input helpers
 
 def _urls(raw):
-    """Split a multi-line / comma-separated ICS field into clean URLs."""
+    """Split a multi-line / comma-separated ICS field into (url, pinned_hue) pairs. A
+    line may end with `| <hue>` to pin that calendar's color to one of the framework's
+    10 chromatic hues (see _HUES); without it, pinned_hue is None and the calendar
+    falls back to auto-cycling by position (see _hue) — unchanged from before pinning
+    existed. An unrecognized hue name is treated the same as omitting it."""
     if not isinstance(raw, str):
         return []
     parts = raw.replace(",", "\n").splitlines()
-    return [p.strip() for p in parts if p.strip()]
+    out = []
+    for p in parts:
+        p = p.strip()
+        if not p:
+            continue
+        url, sep, hue = p.rpartition("|")
+        if sep:
+            hue = hue.strip().lower()
+            out.append((url.strip(), hue if hue in _HUES else None))
+        else:
+            out.append((p, None))
+    return out
 
 
 def _compile_regex(raw):
@@ -169,11 +186,17 @@ def _compile_regex(raw):
         return None
 
 
-def _parse_rename_rules(raw):
-    """The Rename Events field — one `find regex => replacement` rule per line, applied
-    in order via re.sub (case-insensitive) to every surviving event's title. Lets e.g.
-    a class code like "L6" be swapped for a kid's actual name. Blank/malformed lines
-    (no `=>`, or an invalid regex) are skipped rather than erroring the whole render."""
+def _parse_event_rules(raw):
+    """The Rename & Recolor Events field — one rule per line:
+        <find regex> => [replacement] [| hue]
+    `replacement` renames matching text via re.sub (case-insensitive) — leave it blank
+    to recolor without renaming. `hue` (one of the framework's 10 chromatic hues, see
+    _HUES) overrides that event's chip color wherever the rule matches — omit it to
+    rename without recoloring. Rules run in order against every surviving event's
+    title, each rule's replacement building on the previous rule's output — same
+    chaining a plain find/replace had before recoloring existed. Blank/malformed lines
+    (no `=>`, invalid regex, unrecognized hue) are skipped rather than erroring the
+    whole render."""
     rules = []
     if not isinstance(raw, str):
         return rules
@@ -181,21 +204,35 @@ def _parse_rename_rules(raw):
         line = line.strip()
         if not line or "=>" not in line:
             continue
-        find, _, repl = line.partition("=>")
+        find, _, rest = line.partition("=>")
         find = find.strip()
         if not find:
             continue
+        repl_part, sep, hue_part = rest.partition("|")
+        repl = repl_part.strip()
+        hue = hue_part.strip().lower() if sep else ""
+        if hue and hue not in _HUES:
+            hue = ""
         try:
-            rules.append((re.compile(find, re.IGNORECASE), repl.strip()))
+            rx = re.compile(find, re.IGNORECASE)
         except re.error:
             continue
+        rules.append((rx, repl, hue))
     return rules
 
 
-def _apply_rename_rules(title, rules):
-    for rx, repl in rules:
-        title = rx.sub(repl, title)
-    return title
+def _apply_event_rules(title, rules):
+    """Returns (title, forced_hue) after running every matching rule from
+    _parse_event_rules in order — forced_hue is None if no matching rule set one."""
+    forced = None
+    for rx, repl, hue in rules:
+        if not rx.search(title):
+            continue
+        if repl:
+            title = rx.sub(repl, title)
+        if hue:
+            forced = hue
+    return title, forced
 
 
 def _int(raw, default, lo, hi):
@@ -584,10 +621,12 @@ def _expand(ev, tz, win_s, win_e, out):
 
 # ------------------------------------------------------------------- sun times
 #
-# Open-Meteo is free and needs no API key: geocode a place name to lat/lon, then ask
-# its forecast endpoint for sunrise/sunset. Best-effort only — the calendar itself is
-# the primary feature, so any failure here (bad location, network hiccup, timeout)
-# just omits the sun marks instead of surfacing as a page-level error.
+# Open-Meteo is free and needs no API key: the Location field is TRMNL's built-in
+# lat_lon picker (search a place, pick from autocomplete), which always hands back
+# "lat,lon" — so no geocoding step is needed here, just parse the pair and ask
+# Open-Meteo's forecast endpoint for sunrise/sunset. Best-effort only — the calendar
+# itself is the primary feature, so any failure here (malformed value, network
+# hiccup, timeout) just omits the sun marks instead of surfacing as a page-level error.
 
 def _parse_latlon(raw):
     parts = raw.split(",")
@@ -597,17 +636,6 @@ def _parse_latlon(raw):
         return float(parts[0].strip()), float(parts[1].strip())
     except ValueError:
         return None
-
-
-def _geocode(name):
-    r = requests.get("https://geocoding-api.open-meteo.com/v1/search",
-                      params={"name": name, "count": 1, "format": "json"},
-                      timeout=3, headers={"User-Agent": "TRMNL-ICS-Calendar"})
-    r.raise_for_status()
-    results = (r.json() or {}).get("results") or []
-    if not results:
-        return None
-    return results[0]["latitude"], results[0]["longitude"]
 
 
 # WMO weather codes (Open-Meteo's `weathercode`/`weather_code`), grouped into the categories
@@ -649,14 +677,14 @@ def _day_icon(hours):
 
 def _fetch_sky(location, days_n, fahrenheit=False):
     """Sunrise/sunset + significant hourly weather + daily high/low, from a single Open-Meteo
-    forecast call. `location` is either "lat,lon" or a place name (geocoded).
+    forecast call. `location` is the lat_lon field's "lat,lon" value.
     Returns (sun_marks, hourly_weather, daily_temps, error):
       sun_marks:      {day_index: [{"hour", "kind"}, ...]}            kind: sunrise/sunset
       hourly_weather: {day_index: {hour_int: "rain"/"snow"/"storm"/"fog"}}
       daily_temps:    {day_index: {"high": float, "low": float}}      Celsius, or Fahrenheit
                                                                        if fahrenheit=True
       error:          None on success (including "no location configured"), else a short
-                      diagnostic string — geocode failure, HTTP error, timeout, etc.
+                      diagnostic string — malformed value, HTTP error, timeout, etc.
     Best-effort only — the calendar itself is the primary feature, so any failure here
     (bad location, network hiccup, timeout) just omits sun/weather/temps instead of surfacing
     as a page-level error. `error` is carried into the output as a debug-only field so a
@@ -679,9 +707,9 @@ def _fetch_sky(location, days_n, fahrenheit=False):
     if not location:
         return {}, {}, {}, None
     try:
-        latlon = _parse_latlon(location) or _geocode(location)
+        latlon = _parse_latlon(location)
         if not latlon:
-            return {}, {}, {}, "could not geocode location %r" % location
+            return {}, {}, {}, "invalid coordinates %r" % location
         lat, lon = latlon
         params = {
             "latitude": lat, "longitude": lon,
@@ -758,14 +786,18 @@ MIN_EVENT_PCT = 10  # floor so a block is never a literally invisible sliver —
                      # (the day column's own height), not the whole screen — events are an
                      # absolutely-positioned overlay sized relative to their direct container.
 
-# One hue per configured ICS URL (cycled if more calendars than hues). These are real
-# framework chromatic classes (bg--{hue}-30) — on a grayscale panel they automatically
-# fall back to distinct perceptually-appropriate gray shades (no manual gray mapping
-# needed), and render as actual color on a chromatic panel.
+# One hue per configured ICS URL — cycled by position (if more calendars than hues) unless
+# a calendar pinned an explicit one (see _urls) or a Rename & Recolor rule overrides it for a
+# specific event (see _apply_event_rules). These are real framework chromatic classes
+# (bg--{hue}-45) — on a grayscale panel they automatically fall back to distinct
+# perceptually-appropriate gray shades (no manual gray mapping needed), and render as actual
+# color on a chromatic panel.
 _HUES = ["blue", "green", "orange", "purple", "red", "cyan", "pink", "lime", "violet", "yellow"]
 
 
-def _hue(cal_idx):
+def _hue(cal_idx, calendar_colors=None):
+    if calendar_colors and cal_idx < len(calendar_colors) and calendar_colors[cal_idx]:
+        return calendar_colors[cal_idx]
     return _HUES[cal_idx % len(_HUES)]
 
 
@@ -808,7 +840,7 @@ IMPORTANT_HOUR_WEIGHT = 4  # every hour in the configured day_start-day_end rang
 
 
 def _layout_native(days, important_start, important_end, now_h=None, sun_marks=None,
-                    hourly_weather=None, title_bar_pct=0):
+                    hourly_weather=None, title_bar_pct=0, calendar_colors=None):
     important_start = max(0, min(23, int(important_start)))
     important_end = max(important_start + 1, min(24, int(important_end)))
 
@@ -997,7 +1029,8 @@ def _layout_native(days, important_start, important_end, now_h=None, sun_marks=N
                 next_top = (pct_at(sorted_clusters[idx + 1]["h0"]) - grid_base
                             if idx + 1 < len(sorted_clusters) else grid_pct)
                 height = min(MIN_EVENT_PCT, max(0, next_top - top))
-            lanes = [{"title": ev["title"], "hue": _hue(ev["cal_idx"])}
+            lanes = [{"title": ev["title"],
+                      "hue": ev["hue_override"] or _hue(ev["cal_idx"], calendar_colors)}
                      for ev, lane in sorted(c["lanes"], key=lambda p: p[1])]
             events.append({"top_pct": round(top / grid_pct * 100, 4),
                             "height_pct": round(height / grid_pct * 100, 4),
