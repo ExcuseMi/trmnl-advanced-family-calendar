@@ -58,15 +58,19 @@ elsewhere below) were written the obvious way, with the delimiters spelled out.
   Params: badges, bar, title, fg, title_cls, fit_min, clip, pad_right, radius, bar_w, badge_d.
   {%- endcomment -%}
   {%- if badges.size > 0 -%}
-    {%- assign chip_rail_w = badge_d | times: badges.size | plus: 3 | plus: 8 -%}
+    {%- comment -%} 1px between the two circles themselves (tight — they're one group, "whose
+    + what kind"), but generous padding around that group inside the rail (4px) and before the
+    title (12px, vs the bare 8px bar_pad below) — the group should read as a unit sitting with
+    real breathing room inside the chip, not two separate dots crowding its edges. {%- endcomment -%}
+    {%- assign chip_rail_w = badge_d | times: badges.size | plus: 1 | plus: 8 -%}
     <div class="bg--{{ bar }} flex flex--row flex--center-x flex--center-y" style="position:absolute;top:0;bottom:0;left:0;width:{{ chip_rail_w }}px;overflow:hidden;border-radius:{{ radius }};">
       {%- for b in badges -%}
-        <span class="rounded--full flex flex--center-x flex--center-y text--white bg--black" style="width:{{ badge_d }}px;height:{{ badge_d }}px;flex-shrink:0;{% unless forloop.first %}margin-left:3px;{% endunless %}overflow:hidden;border:1.5px solid currentColor;box-sizing:border-box;">
+        <span class="rounded--full flex flex--center-x flex--center-y text--white bg--black" style="width:{{ badge_d }}px;height:{{ badge_d }}px;flex-shrink:0;{% unless forloop.first %}margin-left:1px;{% endunless %}overflow:hidden;border:1.5px solid currentColor;box-sizing:border-box;">
           {%- render "badge_content", b: b -%}
         </span>
       {%- endfor -%}
     </div>
-    {%- assign chip_pad_left = chip_rail_w | plus: 8 -%}
+    {%- assign chip_pad_left = chip_rail_w | plus: 12 -%}
   {%- else -%}
     <div class="bg--{{ bar }}" style="position:absolute;top:0;bottom:0;left:0;width:{{ bar_w }}px;border-radius:{{ radius }};"></div>
     {%- assign chip_pad_left = bar_w | plus: 8 -%}
