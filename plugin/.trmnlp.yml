@@ -17,7 +17,7 @@ variables:
       dark_mode: 'no'
       no_screen_padding: 'yes'
       custom_fields_values:
-        ics_url: https://cloud.example.com/x.ics
+        calendars: '{"calendars":[{"url":"https://cloud.example.com/x.ics"}]}'
         time_zone: Europe/Brussels
         view_days: '3'
   header_pct: 15
@@ -243,6 +243,7 @@ variables:
       lanes:
       - title: Speelpunt
         hue: blue
+        badge: A
     now_marker:
       top_pct: 89.9439
       night: false
@@ -365,6 +366,7 @@ variables:
       lanes:
       - title: Vroege zwemles
         hue: green
+        badge: null
     now_marker: null
   - label: Ma 6 Juli
     label_short: Ma 6 Jul
@@ -485,6 +487,7 @@ variables:
       lanes:
       - title: Laat etentje
         hue: orange
+        badge: null
     now_marker: null
   generated_at: 1783192907
   tz: Europe/Brussels

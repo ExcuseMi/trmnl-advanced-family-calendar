@@ -256,8 +256,15 @@ there are more columns than the sizes above were tuned for, regardless of view. 
                    stylesheet) silently wins over a separate pl--N class fighting it for
                    padding-left — named pl--N/pr--N classes each only touch their own side,
                    so they don't conflict with each other. -->
-              <div class="bg--{{ a.hue }}-45 w--full pl--1 pr--2 py--[2px]" style="overflow:hidden;border-radius:{{ ad_radius }};{% if a.continues_before %}margin-left:-4px;{% endif %}{% if a.continues_after %}margin-right:-4px;{% endif %}">
-                <span class="title {{ chip_title_cls }} text--black" data-clamp="1">{{ a.title }}</span>
+              <div class="bg--{{ a.hue }}-45 w--full pl--1 pr--2 py--[2px] flex flex--row flex--center-y gap--xsmall" style="overflow:hidden;border-radius:{{ ad_radius }};{% if a.continues_before %}margin-left:-4px;{% endif %}{% if a.continues_after %}margin-right:-4px;{% endif %}">
+                {% if a.badge %}
+                  <!-- A Person's badge (see the Calendar Configuration field) — solid black/
+                       white regardless of the chip's own hue, same reasoning as the chip text
+                       staying solid black: one fixed pairing that's always legible, rather
+                       than a second per-hue contrast decision on top of the chip's own. -->
+                  <span class="text--white bg--black rounded--full flex flex--center-x flex--center-y" style="width:1.3em;height:1.3em;flex-shrink:0;font-size:0.75em;line-height:1;">{{ a.badge }}</span>
+                {% endif %}
+                <span class="title {{ chip_title_cls }} text--black" data-clamp="1" style="min-width:0;">{{ a.title }}</span>
               </div>
             {% endfor %}
           </div>
@@ -361,7 +368,20 @@ there are more columns than the sizes above were tuned for, regardless of view. 
                        chromatic scale, up from the original 30) reads less saturated/harsh —
                        near-black text keeps solid contrast against every hue at this lighter
                        step, so there's no more per-hue white/black branching needed here. -->
-                  <div class="col--span-1 h--full w--full bg--{{ lane.hue }}-45 rounded--small {{ event_pad_cls }} flex flex--col flex--center-y cal-fit-box">
+                  <div class="col--span-1 h--full w--full bg--{{ lane.hue }}-45 rounded--small {{ event_pad_cls }} flex flex--col flex--center-y cal-fit-box" style="position:relative;">
+                    {% if lane.badge %}
+                      <!-- Absolutely positioned in the corner, deliberately NOT inline with
+                           the title: the fit-text script (see run() below) sizes the title
+                           purely from this box's own width/padding, with no awareness of a
+                           sibling badge eating horizontal space — an inline badge would let
+                           fit() size text too large for the room actually left beside it.
+                           An overlay sidesteps that entirely instead of teaching fit() about
+                           a second element. Solid black/white regardless of the chip's own
+                           hue, same reasoning as the chip text staying solid black: one
+                           fixed pairing that's always legible, no per-hue contrast decision
+                           needed for the badge either. -->
+                      <span class="text--white bg--black rounded--full flex flex--center-x flex--center-y" style="position:absolute;top:2px;left:2px;width:14px;height:14px;font-size:9px;line-height:1;z-index:1;">{{ lane.badge }}</span>
+                    {% endif %}
                     <span class="title {{ event_title_cls }} text--black cal-fit-text" data-fit-min="11" data-fit-max="90">{{ lane.title }}</span>
                   </div>
                 {% endfor %}

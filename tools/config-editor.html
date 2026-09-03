@@ -1,0 +1,471 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Daylight &amp; Weather Calendar — Configuration Editor</title>
+<!-- Real TRMNL framework CSS, so every swatch/preview here uses the SAME bg--{hue}-45 /
+     text--black / rounded--full classes the plugin itself renders with — what you see here
+     is what actually ships, not an approximation of it. -->
+<link rel="stylesheet" href="https://trmnl.com/css/latest/plugins.css">
+<style>
+  :root { color-scheme: light; }
+  body {
+    margin: 0; padding: 24px; background: #f4f4f2; color: #111;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 14px; line-height: 1.5;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 32px 0 10px; border-bottom: 1px solid #ddd; padding-bottom: 6px; }
+  p.lede { color: #555; margin-top: 0; }
+  .card { background: #fff; border: 1px solid #e0e0dc; border-radius: 10px; padding: 16px; margin-bottom: 14px; }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .row + .row { margin-top: 8px; }
+  label { font-size: 12px; color: #666; display: block; margin-bottom: 3px; }
+  input[type=text], input[type=number], select, textarea {
+    font: inherit; padding: 7px 9px; border: 1px solid #ccc; border-radius: 6px; background: #fff; color: #111;
+  }
+  textarea { width: 100%; box-sizing: border-box; font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; }
+  .field-url { flex: 1 1 320px; min-width: 220px; }
+  .field-narrow { flex: 0 0 130px; }
+  .field-regex { flex: 1 1 260px; min-width: 180px; }
+  button {
+    font: inherit; cursor: pointer; border: 1px solid #ccc; background: #f7f7f5; border-radius: 6px;
+    padding: 7px 12px;
+  }
+  button.primary { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+  button.danger { background: #fff0f0; border-color: #e3b3b3; color: #a33; }
+  button.small { padding: 4px 9px; font-size: 12px; }
+  .entry { border: 1px solid #eee; border-radius: 8px; padding: 12px; margin-bottom: 10px; background: #fafaf9; }
+  .entry-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .swatch {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0; font-size: 10px;
+  }
+  .muted { color: #888; font-size: 12px; }
+  #jsonOut { height: 160px; }
+  #resultJson { height: 220px; }
+  .status { font-size: 12px; padding: 4px 0; }
+  .status.ok { color: #1a7a1a; }
+  .status.err { color: #a33; }
+  .preview-day { border: 1px solid #ddd; border-radius: 8px; overflow: hidden; background: #fff; flex: 1 1 220px; min-width: 200px; }
+  .preview-daylabel { padding: 6px 10px; font-weight: 600; border-bottom: 1px solid #eee; }
+  .preview-allday { padding: 6px 8px 0; display: flex; flex-direction: column; gap: 4px; }
+  .preview-chip { border-radius: 6px; padding: 3px 8px; display: flex; align-items: center; gap: 6px; font-size: 12px; }
+  .preview-events { padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+  .preview-event { border-radius: 6px; padding: 5px 8px; display: flex; align-items: center; gap: 6px; font-size: 12.5px; }
+  .preview-time { font-size: 10.5px; opacity: 0.75; }
+  details summary { cursor: pointer; font-size: 12px; color: #555; }
+  code { background: #f0f0ee; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+  a { color: #1a5fb4; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Daylight &amp; Weather Calendar</h1>
+  <p class="lede">Build the <strong>Calendar Configuration</strong> field visually, test it against real (or pasted) ICS data, and preview colors/badges using TRMNL's actual CSS — then copy the JSON into the plugin's settings. This page runs <code>plugin/src/transform.js</code> directly, unmodified — the same code that runs on TRMNL.</p>
+
+  <h2>Calendars</h2>
+  <div id="calendars"></div>
+  <button id="addCalendar">+ Add calendar</button>
+
+  <h2>People <span class="muted">(optional — recolor/rename/badge events across every calendar)</span></h2>
+  <div id="people"></div>
+  <button id="addPerson">+ Add person</button>
+
+  <h2>Generated Configuration</h2>
+  <div class="card">
+    <p class="muted" style="margin-top:0;">Paste this into the plugin's <strong>Calendar Configuration</strong> field on TRMNL.</p>
+    <textarea id="jsonOut" readonly></textarea>
+    <div class="row" style="margin-top:8px;">
+      <button id="copyJson">Copy JSON</button>
+      <span id="copyStatus" class="status"></span>
+    </div>
+  </div>
+
+  <h2>Test with real data</h2>
+  <div class="card">
+    <div class="row">
+      <div>
+        <label>Locale (e.g. en, nl, fr, ja, pt-BR)</label>
+        <input type="text" id="tLocale" value="en" class="field-narrow">
+      </div>
+      <div>
+        <label>Time format</label>
+        <select id="tTimeFormat"><option value="24h">24h</option><option value="12h">12h</option></select>
+      </div>
+      <div>
+        <label>Time zone (IANA, blank = browser's)</label>
+        <input type="text" id="tTimeZone" placeholder="Europe/Brussels" class="field-url" style="flex:0 0 220px;">
+      </div>
+      <div>
+        <label>Location lat,lon (blank = no sun/weather)</label>
+        <input type="text" id="tLatLon" placeholder="50.8503,4.3517" class="field-url" style="flex:0 0 200px;">
+      </div>
+      <div>
+        <label>Days to show</label>
+        <input type="number" id="tDays" value="3" min="1" max="7" class="field-narrow" style="flex:0 0 80px;">
+      </div>
+    </div>
+    <div id="icsSources" style="margin-top:14px;"></div>
+    <div class="row" style="margin-top:10px;">
+      <button class="primary" id="runTest">Run test</button>
+      <span id="runStatus" class="status"></span>
+    </div>
+  </div>
+
+  <div id="previewWrap" style="display:none;">
+    <h2>Preview</h2>
+    <div class="card">
+      <div id="previewDays" class="row" style="align-items:stretch;"></div>
+      <details style="margin-top:14px;">
+        <summary>Raw run() output (JSON)</summary>
+        <textarea id="resultJson" readonly style="margin-top:8px;"></textarea>
+      </details>
+    </div>
+  </div>
+</div>
+
+<!-- The plugin's actual serverless code — no build step, loaded exactly as TRMNL's Node
+     runtime and this page both execute it: plain top-level function/const declarations,
+     no import/export, so `run` (and everything it calls) just lands in this page's global
+     scope once the script tag below evaluates. -->
+<script src="../plugin/src/transform.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  var HUES = ["blue", "green", "orange", "purple", "red", "cyan", "pink", "lime", "violet", "yellow"];
+
+  function el(tag, attrs, children) {
+    var e = document.createElement(tag);
+    for (var k in (attrs || {})) {
+      if (k === "text") e.textContent = attrs[k];
+      else if (k === "html") e.innerHTML = attrs[k];
+      else e.setAttribute(k, attrs[k]);
+    }
+    (children || []).forEach(function (c) { if (c) e.appendChild(c); });
+    return e;
+  }
+
+  function hueSelect(id, value, includeAuto) {
+    var sel = el("select", { id: id });
+    if (includeAuto) sel.appendChild(el("option", { value: "" }, [document.createTextNode("(auto)")]));
+    else sel.appendChild(el("option", { value: "" }, [document.createTextNode("(none)")]));
+    HUES.forEach(function (h) {
+      var opt = el("option", { value: h }, [document.createTextNode(h)]);
+      if (h === value) opt.setAttribute("selected", "selected");
+      sel.appendChild(opt);
+    });
+    return sel;
+  }
+
+  function swatchFor(hue) {
+    var s = el("span", { class: "swatch " + (hue ? "bg--" + hue + "-45 text--black" : ""), style: hue ? "" : "border:1px dashed #bbb;" });
+    return s;
+  }
+
+  // ------------------------------------------------------------------- state
+
+  var calendars = [
+    { url: "", color: "", exclude: "" },
+  ];
+  var people = [];
+
+  function uid() { return Math.random().toString(36).slice(2, 9); }
+  calendars.forEach(function (c) { c._id = uid(); });
+
+  // -------------------------------------------------------------- calendars UI
+
+  function renderCalendars() {
+    var wrap = document.getElementById("calendars");
+    wrap.innerHTML = "";
+    calendars.forEach(function (c, idx) {
+      var urlInput = el("input", { type: "text", class: "field-url", placeholder: "https://.../calendar.ics", value: c.url });
+      urlInput.addEventListener("input", function () { c.url = urlInput.value; renderJson(); renderIcsSources(); });
+
+      var colorSel = hueSelect("cal-color-" + c._id, c.color, true);
+      colorSel.addEventListener("change", function () { c.color = colorSel.value; renderJson(); swatch.replaceWith(swatchFor(c.color)); swatch = wrap.querySelector("#swatch-" + c._id); });
+      var swatch = swatchFor(c.color);
+      swatch.id = "swatch-" + c._id;
+
+      var excludeInput = el("input", { type: "text", class: "field-regex", placeholder: "exclude regex (optional)", value: c.exclude });
+      excludeInput.addEventListener("input", function () { c.exclude = excludeInput.value; renderJson(); });
+
+      var removeBtn = el("button", { class: "small danger" }, [document.createTextNode("Remove")]);
+      removeBtn.addEventListener("click", function () {
+        calendars = calendars.filter(function (x) { return x._id !== c._id; });
+        renderCalendars(); renderJson(); renderIcsSources();
+      });
+
+      var head = el("div", { class: "entry-head" }, [
+        el("strong", {}, [document.createTextNode("Calendar " + (idx + 1))]),
+        removeBtn,
+      ]);
+      var body = el("div", { class: "row" }, [
+        el("div", { style: "flex:1 1 320px;" }, [el("label", { text: "ICS URL" }), urlInput]),
+        el("div", {}, [el("label", { text: "Color" }), el("div", { class: "row", style: "gap:6px;" }, [colorSel, swatch])]),
+        el("div", { style: "flex:1 1 260px;" }, [el("label", { text: "Exclude (regex, optional)" }), excludeInput]),
+      ]);
+      wrap.appendChild(el("div", { class: "entry" }, [head, body]));
+    });
+  }
+
+  document.getElementById("addCalendar").addEventListener("click", function () {
+    calendars.push({ _id: uid(), url: "", color: "", exclude: "" });
+    renderCalendars(); renderJson(); renderIcsSources();
+  });
+
+  // ----------------------------------------------------------------- people UI
+
+  function renderPeople() {
+    var wrap = document.getElementById("people");
+    wrap.innerHTML = "";
+    people.forEach(function (p, idx) {
+      var nameInput = el("input", { type: "text", class: "field-narrow", placeholder: "Aiko", value: p.name });
+      nameInput.addEventListener("input", function () { p.name = nameInput.value; renderJson(); });
+
+      var matchInput = el("input", { type: "text", class: "field-regex", placeholder: "\\bL6\\b", value: p.match });
+      matchInput.addEventListener("input", function () { p.match = matchInput.value; renderJson(); });
+
+      var colorSel = hueSelect("p-color-" + p._id, p.color, false);
+      colorSel.addEventListener("change", function () { p.color = colorSel.value; renderJson(); swatch.replaceWith(swatchFor(p.color)); swatch = wrap.querySelector("#pswatch-" + p._id); });
+      var swatch = swatchFor(p.color);
+      swatch.id = "pswatch-" + p._id;
+
+      var badgeInput = el("input", { type: "text", class: "field-narrow", placeholder: "(auto: first letter)", value: p.badge, maxlength: "3" });
+      badgeInput.addEventListener("input", function () { p.badge = badgeInput.value; renderJson(); });
+
+      var renameChk = el("input", { type: "checkbox" });
+      renameChk.checked = p.rename !== false;
+      renameChk.addEventListener("change", function () { p.rename = renameChk.checked; renderJson(); });
+
+      var removeBtn = el("button", { class: "small danger" }, [document.createTextNode("Remove")]);
+      removeBtn.addEventListener("click", function () {
+        people = people.filter(function (x) { return x._id !== p._id; });
+        renderPeople(); renderJson();
+      });
+
+      var head = el("div", { class: "entry-head" }, [
+        el("strong", {}, [document.createTextNode("Person " + (idx + 1))]),
+        removeBtn,
+      ]);
+      var body = el("div", { class: "row" }, [
+        el("div", {}, [el("label", { text: "Name" }), nameInput]),
+        el("div", { style: "flex:1 1 260px;" }, [el("label", { text: "Match (regex)" }), matchInput]),
+        el("div", {}, [el("label", { text: "Color" }), el("div", { class: "row", style: "gap:6px;" }, [colorSel, swatch])]),
+        el("div", {}, [el("label", { text: "Badge" }), badgeInput]),
+        el("div", {}, [el("label", { text: "Rename matches" }), renameChk]),
+      ]);
+      wrap.appendChild(el("div", { class: "entry" }, [head, body]));
+    });
+  }
+
+  document.getElementById("addPerson").addEventListener("click", function () {
+    people.push({ _id: uid(), name: "", match: "", color: "", badge: "", rename: true });
+    renderPeople(); renderJson();
+  });
+
+  // ------------------------------------------------------------------ JSON out
+
+  function buildConfig() {
+    var cfg = { calendars: [], people: [] };
+    calendars.forEach(function (c) {
+      if (!c.url.trim()) return;
+      var entry = { url: c.url.trim() };
+      if (c.color) entry.color = c.color;
+      if (c.exclude.trim()) entry.exclude = c.exclude.trim();
+      cfg.calendars.push(entry);
+    });
+    people.forEach(function (p) {
+      if (!p.name.trim() || !p.match.trim()) return;
+      var entry = { name: p.name.trim(), match: p.match.trim() };
+      if (p.color) entry.color = p.color;
+      if (p.badge.trim()) entry.badge = p.badge.trim();
+      if (p.rename === false) entry.rename = false;
+      cfg.people.push(entry);
+    });
+    return cfg;
+  }
+
+  function renderJson() {
+    document.getElementById("jsonOut").value = JSON.stringify(buildConfig(), null, 2);
+  }
+
+  document.getElementById("copyJson").addEventListener("click", function () {
+    var ta = document.getElementById("jsonOut");
+    ta.select();
+    var status = document.getElementById("copyStatus");
+    navigator.clipboard.writeText(ta.value).then(function () {
+      status.textContent = "Copied.";
+      status.className = "status ok";
+    }).catch(function () {
+      status.textContent = "Couldn't copy automatically — select the text and copy manually.";
+      status.className = "status err";
+    });
+  });
+
+  // --------------------------------------------------------------- ICS sources
+
+  // For each configured calendar, this page will try a direct fetch() first (works when the
+  // host happens to send permissive CORS headers) and otherwise let you paste the ICS text
+  // instead — routing a private calendar URL through a third-party CORS proxy would leak its
+  // secret token, so that's deliberately not offered here.
+  var icsOverrides = {}; // url -> pasted text
+
+  function renderIcsSources() {
+    var wrap = document.getElementById("icsSources");
+    wrap.innerHTML = "";
+    var withUrls = calendars.filter(function (c) { return c.url.trim(); });
+    if (!withUrls.length) {
+      wrap.appendChild(el("p", { class: "muted", text: "Add at least one calendar above to test it." }));
+      return;
+    }
+    withUrls.forEach(function (c) {
+      var url = c.url.trim();
+      var statusSpan = el("span", { class: "status" });
+      var textarea = el("textarea", { rows: "4", placeholder: "Paste this calendar's raw .ics content here if direct fetch fails (CORS)…" });
+      textarea.value = icsOverrides[url] || "";
+      textarea.addEventListener("input", function () {
+        if (textarea.value.trim()) icsOverrides[url] = textarea.value;
+        else delete icsOverrides[url];
+      });
+      var tryBtn = el("button", { class: "small" }, [document.createTextNode("Try direct fetch")]);
+      tryBtn.addEventListener("click", function () {
+        statusSpan.textContent = "Fetching…";
+        statusSpan.className = "status";
+        fetch(url).then(function (r) {
+          if (!r.ok) throw new Error("HTTP " + r.status);
+          return r.text();
+        }).then(function (text) {
+          statusSpan.textContent = "Fetched " + text.length + " bytes directly — no need to paste.";
+          statusSpan.className = "status ok";
+        }).catch(function (e) {
+          statusSpan.textContent = "Direct fetch failed (" + e.message + ") — likely CORS. Paste the ICS content below instead.";
+          statusSpan.className = "status err";
+        });
+      });
+      wrap.appendChild(el("div", { class: "entry" }, [
+        el("div", { class: "entry-head" }, [el("strong", { text: url }), tryBtn]),
+        textarea,
+        el("div", { style: "margin-top:4px;" }, [statusSpan]),
+      ]));
+    });
+  }
+
+  // ------------------------------------------------------------------ run test
+
+  document.getElementById("runTest").addEventListener("click", function () {
+    var runStatus = document.getElementById("runStatus");
+    runStatus.textContent = "Running…";
+    runStatus.className = "status";
+
+    var config = buildConfig();
+    var input = {
+      trmnl: {
+        user: {
+          locale: document.getElementById("tLocale").value.trim() || "en",
+          time_zone_iana: undefined,
+        },
+        plugin_settings: {
+          instance_name: "Preview",
+          custom_fields_values: {
+            calendars: JSON.stringify(config),
+            time_zone: document.getElementById("tTimeZone").value.trim(),
+            time_format: document.getElementById("tTimeFormat").value,
+            lat_lon: document.getElementById("tLatLon").value.trim(),
+            temperature_unit: "celsius",
+            view_days: String(document.getElementById("tDays").value || "3"),
+            show_title_bar: "false",
+          },
+        },
+      },
+    };
+
+    // Route configured calendar URLs to their pasted override (if any) instead of the real
+    // network — everything else (Open-Meteo) goes through untouched.
+    var realFetch = window.fetch.bind(window);
+    window.fetch = function (url, opts) {
+      var key = Object.keys(icsOverrides).find(function (u) { return url === u || url.indexOf(u) === 0; });
+      if (key) {
+        return Promise.resolve({ ok: true, status: 200, text: function () { return Promise.resolve(icsOverrides[key]); } });
+      }
+      return realFetch(url, opts);
+    };
+
+    Promise.resolve(run(input)).then(function (result) {
+      window.fetch = realFetch;
+      runStatus.textContent = result.error ? ("Done, with a page-level error: " + result.error) : "Done.";
+      runStatus.className = result.error ? "status err" : "status ok";
+      document.getElementById("resultJson").value = JSON.stringify(result, null, 2);
+      renderPreview(result);
+    }).catch(function (e) {
+      window.fetch = realFetch;
+      runStatus.textContent = "run() threw: " + (e && e.message ? e.message : e);
+      runStatus.className = "status err";
+    });
+  });
+
+  function renderPreview(result) {
+    var wrap = document.getElementById("previewDays");
+    wrap.innerHTML = "";
+    document.getElementById("previewWrap").style.display = "";
+
+    if (result.error && !result.has_events) {
+      wrap.appendChild(el("p", { class: "muted", text: result.error }));
+      return;
+    }
+
+    (result.days || []).forEach(function (day) {
+      var dayEl = el("div", { class: "preview-day" });
+      dayEl.appendChild(el("div", { class: "preview-daylabel" + (day.is_today ? "" : "") , text: day.label + (day.temp ? "  " + day.temp.high + "°/" + day.temp.low + "°" : "") }));
+
+      if (day.allday && day.allday.length) {
+        var adWrap = el("div", { class: "preview-allday" });
+        day.allday.forEach(function (a) {
+          adWrap.appendChild(chipFor(a.title, a.hue, a.badge));
+        });
+        dayEl.appendChild(adWrap);
+      }
+
+      var evWrap = el("div", { class: "preview-events" });
+      var anyEvents = false;
+      (day.events || []).forEach(function (ev) {
+        ev.lanes.forEach(function (lane) {
+          anyEvents = true;
+          evWrap.appendChild(chipFor(lane.title, lane.hue, lane.badge, true));
+        });
+      });
+      if (!anyEvents) evWrap.appendChild(el("p", { class: "muted", text: "No timed events." }));
+      dayEl.appendChild(evWrap);
+
+      wrap.appendChild(dayEl);
+    });
+  }
+
+  function chipFor(title, hue, badge, isEvent) {
+    var chip = el("div", { class: isEvent ? "preview-event" : "preview-chip", style: "" });
+    chip.classList.add("bg--" + hue + "-45");
+    chip.classList.add("text--black");
+    if (badge) {
+      chip.appendChild(el("span", {
+        class: "text--white bg--black rounded--full",
+        style: "display:flex;align-items:center;justify-content:center;width:16px;height:16px;font-size:9px;flex-shrink:0;",
+        text: badge,
+      }));
+    }
+    chip.appendChild(el("span", { text: title }));
+    return chip;
+  }
+
+  // ------------------------------------------------------------------- init
+
+  renderCalendars();
+  renderPeople();
+  renderJson();
+  renderIcsSources();
+})();
+</script>
+</body>
+</html>
