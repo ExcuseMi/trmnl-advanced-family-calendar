@@ -78,11 +78,14 @@ async def check_access(redis, prefix: str):
         log.warning('Blocked %s → %s', ip, prefix)
         return 'blocked'
 
-    # rate_limited mode
+    # rate_limited mode — a burst budget per window, not a single shot: one config-editor
+    # session realistically fires several of these in a row (a photo per family member, an
+    # ics-proxy call per calendar in "Run Test"), so a limit of 1 blocked normal use, not abuse.
     window = int(os.getenv('PUBLIC_RATE_LIMIT_WINDOW_SECONDS', '300'))
+    limit = int(os.getenv('PUBLIC_RATE_LIMIT_MAX_REQUESTS', '20'))
     if redis is not None:
         from modules.utils.rate_limiter import is_rate_limited
-        if await is_rate_limited(redis, f'ratelimit:{prefix}:{ip}', window):
+        if await is_rate_limited(redis, f'ratelimit:{prefix}:{ip}', window, limit):
             log.info('Rate limited: %s:%s', prefix, ip)
             return 'rate_limited'
     else:
