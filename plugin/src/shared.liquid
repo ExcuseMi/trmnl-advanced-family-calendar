@@ -334,21 +334,32 @@ where the axis was already a sane fraction and unchanged. {%- endcomment -%}
                    renders white, giving each badge a visible ring instead of vanishing flush
                    into the background.
 
-                   flex-direction:column + flex-wrap:wrap, height pinned to exactly 2 badges
-                   tall: badges fill straight down each column (2 per column) before starting a
-                   new one, the standard flexbox trick for a fixed-row-count wrap without
-                   knowing the count up front — however many people have something today, they
-                   always land in exactly 2 rows instead of one ever-widening row that would
-                   either crush the date label or run off the header entirely. head_badge_d
-                   (see "main"), not badge_d: sized for its own 2-row header strip, not an
-                   event chip's solo/paired rail. -->
-              {%- assign head_badges_h = head_badge_d | times: 2 | plus: 1 -%}
-              <div class="flex" style="flex-direction:column;flex-wrap:wrap;align-content:flex-start;gap:1px;height:{{ head_badges_h }}px;flex-shrink:0;">
-                {%- for b in day.people -%}
-                  <span class="rounded--small flex flex--center-x flex--center-y text--white bg--black" style="width:{{ head_badge_d }}px;height:{{ head_badge_d }}px;flex-shrink:0;overflow:hidden;border:1.5px solid currentColor;box-sizing:border-box;">
-                    {%- render "badge_content", b: b -%}
-                  </span>
-                {%- endfor -%}
+                   Split explicitly into 2 rows here (first ceil(n/2) people, then the rest)
+                   rather than relying on a flex-wrap:wrap trick to do it implicitly — however
+                   many people have something today, they land in exactly 2 rows instead of one
+                   ever-widening row that would either crush the date label or run off the
+                   header entirely. head_badge_d (see "main"), not badge_d: sized for its own
+                   2-row header strip, not an event chip's solo/paired rail. -->
+              {%- assign head_row1_n = day.people.size | plus: 1 | divided_by: 2 -%}
+              {%- assign head_row1 = day.people | slice: 0, head_row1_n -%}
+              {%- assign head_row2 = day.people | slice: head_row1_n, day.people.size -%}
+              <div class="flex" style="flex-direction:column;gap:1px;flex-shrink:0;">
+                <div class="flex" style="flex-direction:row;gap:1px;">
+                  {%- for b in head_row1 -%}
+                    <span class="rounded--small flex flex--center-x flex--center-y text--white bg--black" style="width:{{ head_badge_d }}px;height:{{ head_badge_d }}px;flex-shrink:0;overflow:hidden;border:1.5px solid currentColor;box-sizing:border-box;">
+                      {%- render "badge_content", b: b -%}
+                    </span>
+                  {%- endfor -%}
+                </div>
+                {%- if head_row2.size > 0 -%}
+                  <div class="flex" style="flex-direction:row;gap:1px;">
+                    {%- for b in head_row2 -%}
+                      <span class="rounded--small flex flex--center-x flex--center-y text--white bg--black" style="width:{{ head_badge_d }}px;height:{{ head_badge_d }}px;flex-shrink:0;overflow:hidden;border:1.5px solid currentColor;box-sizing:border-box;">
+                        {%- render "badge_content", b: b -%}
+                      </span>
+                    {%- endfor -%}
+                  </div>
+                {%- endif -%}
               </div>
             {%- endif -%}
           </div>
