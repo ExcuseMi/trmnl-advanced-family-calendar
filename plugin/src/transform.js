@@ -297,6 +297,8 @@ async function run(input) {
     rawDays.push({
       label: dayLabel(d0Civil, locale),
       labelShort: dayLabelShort(d0Civil, locale),
+      labelShortWeekday: dayLabelShortParts(d0Civil, locale).weekday,
+      labelShortRest: dayLabelShortParts(d0Civil, locale).rest,
       isToday: i === 0,
       timed,
       allday: allday.slice(0, 3).map((a) => ({
@@ -401,6 +403,8 @@ function emptyResult(tzname, tz, locale, daysN, msg) {
     days.push({
       label: dayLabel(d0Civil, locale),
       labelShort: dayLabelShort(d0Civil, locale),
+      labelShortWeekday: dayLabelShortParts(d0Civil, locale).weekday,
+      labelShortRest: dayLabelShortParts(d0Civil, locale).rest,
       isToday: i === 0,
       timed: [],
       allday: [],
@@ -998,7 +1002,10 @@ function dayLabel(civil, locale) {
   return wd + " " + civil.d + " " + month;
 }
 
-function dayLabelShort(civil, locale) {
+// Split out from dayLabelShort so the header (see shared.liquid) can style the weekday
+// abbreviation differently from the day/month — a plain joined string can't be restyled
+// in Liquid without fragile locale-dependent string splitting.
+function dayLabelShortParts(civil, locale) {
   // Abbreviated-month variant for narrow layouts (quadrant, half_vertical, or a wide Days-to-
   // Show setting) — the full month name is what wraps/gets clipped there, e.g. "Zo 5 Juli"
   // losing "Juli" off the header at 7 columns; the weekday/day are already short enough not
@@ -1007,7 +1014,12 @@ function dayLabelShort(civil, locale) {
   const t = I18N[code];
   const wd = t ? t.wd[civilWeekday(civil.y, civil.mo, civil.d)] : localeDatePart(locale, "short", "weekday", civil.y, civil.mo, civil.d);
   const month = t ? t.months_short[civil.mo - 1] : localeDatePart(locale, "short", "month", civil.y, civil.mo, civil.d);
-  return wd + " " + civil.d + " " + month;
+  return { weekday: wd, rest: civil.d + " " + month };
+}
+
+function dayLabelShort(civil, locale) {
+  const p = dayLabelShortParts(civil, locale);
+  return p.weekday + " " + p.rest;
 }
 
 function fmtTime(epoch, tz, is12h) {
@@ -1395,7 +1407,7 @@ async function fetchSky(location, daysN, fahrenheit) {
 // the same numbers render correctly on any device, including the larger TRMNL X. Liquid does
 // no layout math itself; it just loops over this pre-baked structure.
 
-const HEADER_PCT = 13; // day label only, one line. Tried dropping this back toward 11 once
+const HEADER_PCT = 17; // day label only, one line. Tried dropping this back toward 11 once
                        // the daily high/low moved out to its own footer zone (see FOOTER_PCT)
                        // and stopped sharing this bar as a second line, on the assumption
                        // that a single line needs less room — measured wrong: half_horizontal
@@ -1682,7 +1694,9 @@ function layoutNative(days, importantStart, importantEnd, nowH, sunMarks, hourly
     }
 
     outDays.push({
-      label: d.label, label_short: d.labelShort, is_today: d.isToday,
+      label: d.label, label_short: d.labelShort,
+      label_short_weekday: d.labelShortWeekday, label_short_rest: d.labelShortRest,
+      is_today: d.isToday,
       temp: d.temp || null, icon: d.icon || null, people: dayPeople,
       allday: d.allday.map((a) => ({
         title: a.title, hue: colorClass(a.hue), fg: foregroundFor(a.hue),

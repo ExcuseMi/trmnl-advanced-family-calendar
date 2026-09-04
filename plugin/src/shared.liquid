@@ -198,8 +198,12 @@ elsewhere below) were written the obvious way, with the delimiters spelled out.
   {%- comment -%} half_horizontal: full 800px width but half SCREEN HEIGHT (~240px, same as
   quadrant) — width is ample so the FONT tier can be larger than half_vertical/quadrant, but
   badge sizing shares quadrant's tighter tier below since it's bound by the same short row
-  height (allday_row_pct/MIN_EVENT_PCT), not by width. {%- endcomment -%}
-  {%- assign head_title_cls = "title--large lg:title--xlarge" -%}
+  height (allday_row_pct/MIN_EVENT_PCT), not by width. head_title_cls dialed down one notch
+  from title--xlarge/xxlarge: that size already needed this view's ENTIRE header height for
+  the date label alone (confirmed — the label visibly clipped at the header's own top edge
+  once today's badge row needed to fit below it too), leaving zero room to ever add anything
+  else here regardless of header_pct. {%- endcomment -%}
+  {%- assign head_title_cls = "title--base lg:title--large" -%}
   {%- assign chip_title_cls = "title--small lg:title--base" -%}
   {%- assign axis_cls = "label--base lg:label--large" -%}
   {%- assign event_pad_cls = "pt--1 pb--2" -%}
@@ -307,62 +311,55 @@ where the axis was already a sane fraction and unchanged. {%- endcomment -%}
     <div class="grid gap--none h--[{{ header_pct }}cqh] bg--black" style="flex-shrink:0;flex-grow:0;height:{{ header_pct }}cqh;min-height:{{ header_pct }}cqh;">
       <div class="col--span-1"></div>
       {% for day in days %}
-        {% assign dlabel = day.label_short %}
         <div class="col--span-{{ day_span }} flex flex--col flex--center-x flex--center-y border--v-1">
           <!-- min-width:0 undoes the flex default of min-width:auto (natural content width),
                which otherwise silently defeats overflow/ellipsis truncation on the child —
                needed at 5-7 day columns, or in quadrant's narrower portrait slot, where the
-               label can genuinely run out of room. color:white inline, not a text--white
-               class: .title sets its own explicit color (not currentColor), so it wouldn't
-               pick up an ancestor's text--white by inheritance — same class of gotcha as
-               border--h-1's fixed color noted elsewhere in this file. No padding class on
-               the span itself (there used to be one, sized for the old today-pill's
-               background) — now that there's no pill, that padding just added dead space
-               on top of the font's own line-height, tall enough to blow past header_pct's
-               box in the shorter views (half_horizontal/quadrant) and get vertically
-               clipped; the wrapper div's own small px--[10px] py--[2px] is enough breathing
-               room against the header's edges. -->
-          <div class="rounded--small px--[10px] py--[2px] flex flex--row flex--center-y" style="max-width:100%;min-width:0;overflow:hidden;gap:4px;">
-            <span class="title {{ head_title_cls }}{% if view != 4 and view != 2 and view != 3 %} cal-full-daylabel{% endif %}" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;color:white;min-width:0;">{{ dlabel }}</span>
+               label can genuinely run out of room. No padding class on the span itself (there
+               used to be one, sized for the old today-pill's background) — now that there's no
+               pill, that padding just added dead space on top of the font's own line-height,
+               tall enough to blow past header_pct's box in the shorter views
+               (half_horizontal/quadrant) and get vertically clipped; the wrapper div's own
+               small px--[10px] py--[2px] is enough breathing room against the header's edges.
+
+               flex--col now (label on top, today's badges — if any — on their own row below)
+               instead of side by side: side by side meant the badges were eating into the
+               SAME width budget as the label text, so they had to wrap into 2 rows to avoid
+               crushing it or running off the header. Stacked below, they get the day column's
+               FULL width to spread across instead of sharing it, comfortably fitting a single
+               row even at 4+ people — simpler than the 2-row split it replaced, and shorter
+               overall too. -->
+          <div class="rounded--small px--[10px] py--[2px] flex flex--col flex--center-x" style="max-width:100%;min-width:0;overflow:hidden;gap:2px;">
+            <!-- Weekday abbreviation in a muted gray, day+month in bold white — splits what
+               used to be one plain string (dayLabelShort in transform.js) into
+               label_short_weekday/label_short_rest specifically so they can carry different
+               styling; joining them back into one string here couldn't have. Uppercased via
+               CSS (text-transform), not by upper-casing the source text in transform.js,
+               so this stays purely a display choice. color:white/#999 inline, not a
+               text--white class: .title sets its own explicit color (not currentColor), so it
+               wouldn't pick up an ancestor's color by inheritance — same gotcha as
+               border--h-1's fixed color noted elsewhere in this file. Plain space between the
+               two spans renders fine here (unlike the footer's Max/Min fix elsewhere in this
+               file) since .title, unlike .label, isn't itself a flex container. -->
+            <span class="title {{ head_title_cls }}{% if view != 4 and view != 2 and view != 3 %} cal-full-daylabel{% endif %}" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;min-width:0;text-transform:uppercase;"><span style="color:#999;">{{ day.label_short_weekday }}</span> <span style="color:white;font-weight:bold;">{{ day.label_short_rest }}</span></span>
             {%- if day.is_today and day.people.size > 0 -%}
-              <!-- Who has something on today, right in its own header — a glance answers "is
-                   anyone busy today" without reading every chip below. day.people (see run()
-                   in transform.js) is already deduped to one badge per declared person; a
-                   category icon never ends up here (it has no person attached). Each badge
+              <!-- Who has something on today, right under its own header — a glance answers
+                   "is anyone busy today" without reading every chip below. day.people (see
+                   run() in transform.js) is already deduped to one badge per declared person;
+                   a category icon never ends up here (it has no person attached). Each badge
                    uses that PERSON's own color (b.hue/b.fg — colorClass/foregroundFor'd in
                    run(), falling back to plain black/white for a person with no color set)
-                   rather than one shared black box for everyone, so the header strip itself
-                   hints at who before you even reach their initial. currentColor border keeps
-                   a visible ring around every badge regardless of its own fill, including
-                   against this row's own bg--black header a lighter fill would otherwise sit
-                   flush against.
-
-                   Split explicitly into 2 rows here (first ceil(n/2) people, then the rest)
-                   rather than relying on a flex-wrap:wrap trick to do it implicitly — however
-                   many people have something today, they land in exactly 2 rows instead of one
-                   ever-widening row that would either crush the date label or run off the
-                   header entirely. head_badge_d (see "main"), not badge_d: sized for its own
-                   2-row header strip, not an event chip's solo/paired rail. -->
-              {%- assign head_row1_n = day.people.size | plus: 1 | divided_by: 2 -%}
-              {%- assign head_row1 = day.people | slice: 0, head_row1_n -%}
-              {%- assign head_row2 = day.people | slice: head_row1_n, day.people.size -%}
-              <div class="flex" style="flex-direction:column;gap:1px;flex-shrink:0;">
-                <div class="flex" style="flex-direction:row;gap:1px;">
-                  {%- for b in head_row1 -%}
-                    <span class="rounded--small flex flex--center-x flex--center-y text--{{ b.fg }} bg--{{ b.hue }}" style="width:{{ head_badge_d }}px;height:{{ head_badge_d }}px;flex-shrink:0;overflow:hidden;border:1.5px solid currentColor;box-sizing:border-box;">
-                      {%- render "badge_content", b: b -%}
-                    </span>
-                  {%- endfor -%}
-                </div>
-                {%- if head_row2.size > 0 -%}
-                  <div class="flex" style="flex-direction:row;gap:1px;">
-                    {%- for b in head_row2 -%}
-                      <span class="rounded--small flex flex--center-x flex--center-y text--{{ b.fg }} bg--{{ b.hue }}" style="width:{{ head_badge_d }}px;height:{{ head_badge_d }}px;flex-shrink:0;overflow:hidden;border:1.5px solid currentColor;box-sizing:border-box;">
-                        {%- render "badge_content", b: b -%}
-                      </span>
-                    {%- endfor -%}
-                  </div>
-                {%- endif -%}
+                   rather than one shared black box for everyone, so the strip itself hints at
+                   who before you even reach their initial. currentColor border keeps a visible
+                   ring around every badge regardless of its own fill, including against this
+                   row's own bg--black header a lighter fill would otherwise sit flush
+                   against. -->
+              <div class="flex" style="flex-direction:row;gap:1px;">
+                {%- for b in day.people -%}
+                  <span class="rounded--small flex flex--center-x flex--center-y text--{{ b.fg }} bg--{{ b.hue }}" style="width:{{ head_badge_d }}px;height:{{ head_badge_d }}px;flex-shrink:0;overflow:hidden;border:1.5px solid currentColor;box-sizing:border-box;">
+                    {%- render "badge_content", b: b -%}
+                  </span>
+                {%- endfor -%}
               </div>
             {%- endif -%}
           </div>
