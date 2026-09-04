@@ -359,9 +359,24 @@ async function run(input) {
   let endH = Math.ceil(Math.max(...endCandidates));
   endH = Math.max(endH, startH + 1);
 
-  const grid = layoutNative(rawDays, startH, endH, nowH, sky.sunMarks, sky.hourlyWeather, calendarColors);
+  // Two full layoutNative() passes, not one: quadrant/half_horizontal always use the small
+  // header (see HEADER_PCT_SMALL — they never show today's badge row regardless of data), but
+  // full/half_vertical only need the taller one on a render where today actually HAS a badge
+  // to show — reusing one shared height for every render meant a busy day's own header size
+  // got reserved on every OTHER (badge-less) day too, and even on today itself once the row
+  // height needed for the WORST case left slack on a lighter one. Skipping the second pass
+  // entirely when nobody has anything today, rather than computing it and throwing it away.
+  const todayRaw = rawDays.find((d) => d.isToday);
+  const todayHasBadges = !!(todayRaw && [...todayRaw.allday, ...todayRaw.timed].some((item) => (item.personBadges || []).some((b) => b.person)));
+  const gridSmall = layoutNative(rawDays, startH, endH, nowH, sky.sunMarks, sky.hourlyWeather, calendarColors, HEADER_PCT_SMALL);
+  const gridLarge = todayHasBadges ? layoutNative(rawDays, startH, endH, nowH, sky.sunMarks, sky.hourlyWeather, calendarColors, HEADER_PCT_LARGE) : gridSmall;
 
-  return Object.assign({}, grid, {
+  return Object.assign({}, gridSmall, {
+    // _lg fields: what full/half_vertical actually render with (see those two view files) —
+    // the small ones above stay the default/primary shape quadrant/half_horizontal use as-is.
+    header_pct_lg: gridLarge.header_pct, allday_pct_lg: gridLarge.allday_pct,
+    grid_pct_lg: gridLarge.grid_pct, footer_pct_lg: gridLarge.footer_pct,
+    hour_rows_lg: gridLarge.hour_rows, days_lg: gridLarge.days,
     generated_at: Math.floor(nowEpoch / 1000),
     tz: tzname,
     error: err,
@@ -410,8 +425,14 @@ function emptyResult(tzname, tz, locale, daysN, msg) {
       allday: [],
     });
   }
-  const grid = layoutNative(days, 8, 22, null, null, null, null);
+  // No real days/events in this branch at all, so today never has a badge to show either —
+  // _lg mirrors the primary (small) fields rather than running a second, identical pass (see
+  // run()'s own header_pct_lg/etc. for why a real render needs the two to differ).
+  const grid = layoutNative(days, 8, 22, null, null, null, null, HEADER_PCT_SMALL);
   return Object.assign({}, grid, {
+    header_pct_lg: grid.header_pct, allday_pct_lg: grid.allday_pct,
+    grid_pct_lg: grid.grid_pct, footer_pct_lg: grid.footer_pct,
+    hour_rows_lg: grid.hour_rows, days_lg: grid.days,
     generated_at: Math.floor(nowEpoch / 1000),
     tz: tzname,
     error: msg,
@@ -1407,19 +1428,18 @@ async function fetchSky(location, daysN, fahrenheit) {
 // the same numbers render correctly on any device, including the larger TRMNL X. Liquid does
 // no layout math itself; it just loops over this pre-baked structure.
 
-const HEADER_PCT = 12; // day label, plus today's own "who's busy" badges on full/half_vertical
-                       // only (see shared.liquid — quadrant/half_horizontal never show them,
-                       // their much shorter ~240px screens don't have the room). One shared
-                       // value across every view (same cqh-percentage design as every other
-                       // *_PCT here), so it's bounded below by whichever tier needs the most:
-                       // used to be half_horizontal's own oversized title--large font eating
-                       // its entire header on text alone, with nothing to spare — dialing that
-                       // tier's font down to match quadrant's (shared.liquid) bought this back
-                       // down close to the original 13, and dropping badges from quadrant/
-                       // half_horizontal's header entirely (they never needed them as much as
-                       // full/half_vertical's own "which day is genuinely today" framing) freed
-                       // the rest. The footer's own cost comes entirely out of gridPct instead
-                       // (see below).
+const HEADER_PCT_SMALL = 7; // day label, one line, no badges — what quadrant/half_horizontal
+                            // always use (they never show today's badge row at all, their
+                            // ~240px screens don't have the room) and what full/half_vertical
+                            // fall back to on any day nobody has anything on today, so an empty
+                            // "who's busy" row doesn't leave dead black space reserved for
+                            // nothing. See run() for how this and HEADER_PCT_LARGE each drive
+                            // their own full layoutNative() pass.
+const HEADER_PCT_LARGE = 12; // full/half_vertical, only on a render where today actually has
+                             // at least one person's badge to show underneath the label —
+                             // reusing this for every render regardless (the previous design)
+                             // meant real content on a busy day forced this same reserved
+                             // height on every OTHER day too, most of it empty.
 const FOOTER_PCT = 7; // weather icon + daily high/low, its own zone at the bottom of the
                       // screen (see shared.liquid) rather than a second header line — kept
                       // out of gridBase (the hourly grid's own top-offset math) since it sits
@@ -1483,13 +1503,13 @@ function round4(x) {
   return Math.round(x * 10000) / 10000;
 }
 
-function layoutNative(days, importantStart, importantEnd, nowH, sunMarks, hourlyWeather, calendarColors) {
+function layoutNative(days, importantStart, importantEnd, nowH, sunMarks, hourlyWeather, calendarColors, headerPct) {
   importantStart = Math.max(0, Math.min(23, Math.trunc(importantStart)));
   importantEnd = Math.max(importantStart + 1, Math.min(24, Math.trunc(importantEnd)));
 
   const maxAdRows = days.length ? Math.max(...days.map((d) => d.allday.length)) : 0;
   const alldayPct = Math.min(3, maxAdRows) * ALLDAY_ROW_PCT;
-  const gridBase = HEADER_PCT + alldayPct;
+  const gridBase = headerPct + alldayPct;
   const gridPct = 100 - gridBase - FOOTER_PCT;
 
   // Hours outside [importantStart, importantEnd) are hidden entirely (0% height) — that
@@ -1717,5 +1737,5 @@ function layoutNative(days, importantStart, importantEnd, nowH, sunMarks, hourly
     });
   });
 
-  return { header_pct: HEADER_PCT, allday_pct: alldayPct, allday_row_pct: ALLDAY_ROW_PCT, grid_pct: gridPct, footer_pct: FOOTER_PCT, hour_rows: hourRows, days: outDays };
+  return { header_pct: headerPct, allday_pct: alldayPct, allday_row_pct: ALLDAY_ROW_PCT, grid_pct: gridPct, footer_pct: FOOTER_PCT, hour_rows: hourRows, days: outDays };
 }
