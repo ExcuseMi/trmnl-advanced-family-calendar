@@ -1,46 +1,21 @@
 {% comment %}
 A "template" block can't nest inside another one — TRMNL's TemplateTag closes on the first
-literal closing token with no nesting awareness. So badge_content/badge_circle/
-badge_image_row/chip_body/chip are top-level siblings of "main", rendered from inside its body
-instead.
+literal closing token with no nesting awareness. So badge_circle/chip_body/chip are top-level
+siblings of "main", rendered from inside its body instead.
 NOTE: this comment never spells out the actual curly-brace-percent tag delimiters as literal
 text — Liquid tokenizes the whole file on those delimiters before any tag's own semantics run,
 so writing them out here would itself parse as a malformed tag and corrupt the rest of the file.
 {% endcomment %}
 
-{% template badge_content %}
-  {%- comment -%} One badge's inner content — icon (inverted line-art) or a letter. Param: b.
-  Photos aren't rendered here: they dither to muddy noise at badge size on real e-ink (confirmed
-  on-device, not just in a browser preview), so a "photo" badge falls back to its person's own
-  first initial instead. Revisit once photos get pre-processed for e-ink or steered to a
-  flat/cartoon style (see imagetocartoon.com in CONFIG.md). {%- endcomment -%}
-  {%- if b.kind == "icon" -%}
-    <img src="{{ b.src }}" alt="" style="width:65%;height:65%;filter:invert(1);">
-  {%- elsif b.kind == "photo" -%}
-    {{ b.person | slice: 0, 1 | upcase }}
-  {%- else -%}
-    {{ b.text }}
-  {%- endif -%}
-{% endtemplate %}
-
 {% template badge_circle %}
-  {%- comment -%} One badge circle box — shared by the rail (chip_body), "image" display mode
-  (badge_image_row) and the header's people gutter. Only the header colors a badge per-person;
-  the other two always render a black chip, so color is a param rather than hardcoded here.
-  Params: b, size (px), border (px), hue, fg, extra (extra class(es), e.g. inter-badge gap). {%- endcomment -%}
+  {%- comment -%} One small circle badge — used only by the header's people gutter now
+  (category icons, "image" display mode, and photo badges were all removed together — see
+  chip's own comment below). Always a person's badge letter; color is a param since the header
+  colors each one per-person. Params: b, size (px), border (px), hue, fg, extra (extra
+  class(es), e.g. inter-badge gap). {%- endcomment -%}
   <span class="rounded--small w--[{{ size }}px] h--[{{ size }}px] shrink-0 flex flex--center-x flex--center-y text--{{ fg }} bg--{{ hue }} {{ extra }}" style="overflow:hidden;box-sizing:border-box;border:{{ border }}px solid currentColor;">
-    {%- render "badge_content", b: b -%}
+    {{- b.text -}}
   </span>
-{% endtemplate %}
-
-{% template badge_image_row %}
-  {%- comment -%} "image" display mode (categories[].display in transform.js): badge(s) fill the
-  whole chip, centered, no title. Params: badges, image_d. {%- endcomment -%}
-  <div class="flex flex--row flex--center-x flex--center-y w--full h--full gap--[4px]">
-    {%- for b in badges -%}
-      {%- render "badge_circle", b: b, size: image_d, border: 2, hue: "black", fg: "white" -%}
-    {%- endfor -%}
-  </div>
 {% endtemplate %}
 
 {% template chip_body %}
@@ -61,8 +36,8 @@ so writing them out here would itself parse as a malformed tag and corrupt the r
 
 {% template chip %}
   {%- comment -%}
-  The whole event/all-day chip box — fill, border, radius, and (via chip_body/badge_image_row)
-  its content — one render call for both chip types instead of two hand-kept-in-sync copies.
+  The whole event/all-day chip box — fill, border, radius, and (via chip_body) its content —
+  one render call for both chip types instead of two hand-kept-in-sync copies.
   Params only cover what's structurally forced to differ:
     - size_class/size_style: an all-day chip is normal-flow and needs an explicit h--[Ncqh] +
       inline height/flex-shrink; a timed event is sized by its absolutely-positioned ancestor,
@@ -73,18 +48,13 @@ so writing them out here would itself parse as a malformed tag and corrupt the r
     - box_radius/border_left/border_right/margin_left/margin_right: only an all-day chip can be
       one fragment of a multi-day banner needing a squared-off mid-span edge; a timed event never
       spans day columns, so it always gets the full radius and every border side.
-  badges/image_d only matter for display:"image" (badge_image_row) — the text-chip path
-  (chip_body) is title-only, no icon.
-  Params: hue, fg, title, badges, display, flex_dir, size_class, size_style, pad_cls,
-  box_radius, border_left, border_right, margin_left, margin_right, title_cls, fit_min, clip,
-  pad_right, image_d.
+  Every chip is title-only now (chip_body) — category icons, "image" display mode, and photo
+  badges were all removed together (categories were the only thing that ever set any of them).
+  Params: hue, fg, title, flex_dir, size_class, size_style, pad_cls, box_radius, border_left,
+  border_right, margin_left, margin_right, title_cls, fit_min, clip, pad_right.
   {%- endcomment -%}
   <div class="{{ size_class }} bg--{{ hue }} text--{{ fg }} w--full {{ pad_cls }} flex {{ flex_dir }} flex--center-y cal-fit-box relative" style="overflow:hidden;box-sizing:border-box;{{ size_style }}border-radius:{{ box_radius }};border-top:2px solid currentColor;border-bottom:2px solid currentColor;{% if border_left %}border-left:2px solid currentColor;{% endif %}{% if border_right %}border-right:2px solid currentColor;{% endif %}{% if margin_left %}margin-left:-4px;{% endif %}{% if margin_right %}margin-right:-4px;{% endif %}">
-    {%- if display == "image" -%}
-      {%- render "badge_image_row", badges: badges, image_d: image_d -%}
-    {%- else -%}
-      {%- render "chip_body", title: title, fg: fg, title_cls: title_cls, fit_min: fit_min, clip: clip, pad_right: pad_right -%}
-    {%- endif -%}
+    {%- render "chip_body", title: title, fg: fg, title_cls: title_cls, fit_min: fit_min, clip: clip, pad_right: pad_right -%}
   </div>
 {% endtemplate %}
 
@@ -96,10 +66,9 @@ so writing them out here would itself parse as a malformed tag and corrupt the r
    badge size (24px). Clamp back down only there — no plain utility class covers "different
    fixed pixel size on this one responsive combo" for an arbitrary w--[Npx]/h--[Npx] pair. */
 .trmnl .screen--lg.screen--portrait .cal-head-badge { width: 16px !important; height: 16px !important; }
-/* Positioned/sized by run()'s script (search cal-axis-minute below), not here — top/left are
-   set per-row from the hour span's own real rendered box, and font-size from its computed
-   size. Only the truly static, data-independent part lives in this rule. */
-.cal-axis-minute { position: absolute; color: #999; font-weight: normal; white-space: nowrap; }
+/* font-size set in run() (a fraction of the sibling hour span's real computed size — see the
+   hour-row markup below); only the static, data-independent part lives in this rule. */
+.cal-axis-period { color: #999; font-weight: normal; white-space: nowrap; margin-right: 2px; }
 </style>
 {%- if view == 4 -%}
   {%- comment -%} quadrant: a quarter of the full-view screen area — its own, smaller floor.
@@ -112,15 +81,13 @@ so writing them out here would itself parse as a malformed tag and corrupt the r
   {%- assign event_title_cls = "title--small" -%}
   {%- assign pad_right = 4 -%}
   {%- assign head_badge_d = 11 -%}
-  {%- assign image_d = 24 -%}
 {%- elsif view == 3 -%}
   {%- comment -%} half_vertical: only ~400px WIDE (narrow day columns) — width-constrained
   rather than area-constrained, so fonts follow quadrant's tighter tier even though the screen
   is full-height. head_badge_d is its own case: the header gutter's WIDTH is the same 1/13
   share of this view's narrow 400px (so still width-bound), but its HEIGHT is the full-height
   view's own tall header row (unlike quadrant/half_horizontal's short one) — so it lands on
-  its own tier, not simply quadrant's. image_d stays on the full view's larger tier since
-  "image" mode has no title competing for room. {%- endcomment -%}
+  its own tier, not simply quadrant's. {%- endcomment -%}
   {%- assign head_title_cls = "title--small" -%}
   {%- assign chip_title_cls = "title--small" -%}
   {%- assign axis_cls = "label--base lg:label--large" -%}
@@ -128,7 +95,6 @@ so writing them out here would itself parse as a malformed tag and corrupt the r
   {%- assign event_title_cls = "title--small" -%}
   {%- assign pad_right = 4 -%}
   {%- assign head_badge_d = 13 -%}
-  {%- assign image_d = 42 -%}
 {%- elsif view == 2 -%}
   {%- comment -%} half_horizontal: full 800px width but half screen HEIGHT (~240px, same as
   quadrant) — width is ample so chip_title_cls can run bigger, but head_badge_d shares
@@ -141,7 +107,6 @@ so writing them out here would itself parse as a malformed tag and corrupt the r
   {%- assign event_title_cls = "title--small" -%}
   {%- assign pad_right = 8 -%}
   {%- assign head_badge_d = 11 -%}
-  {%- assign image_d = 24 -%}
 {%- else -%}
   {%- comment -%} full / "OG" 800x480 device: the hour axis reads too big at xlarge/xxlarge in
   practice, so one tier down. Rotated to portrait the device has taller rows/narrower columns, so
@@ -157,35 +122,46 @@ so writing them out here would itself parse as a malformed tag and corrupt the r
   {%- assign event_title_cls = "title--base" -%}
   {%- assign pad_right = 8 -%}
   {%- assign head_badge_d = 24 -%}
-  {%- assign image_d = 42 -%}
 {%- endif -%}
 
-{%- comment -%} No category icons anywhere any more — neither a timed event's own chip
-(chip_body, title-only) nor an all-day bar (also title-only now). image_d is "image" display
-mode's own circle size (badges become the whole chip there — a genuinely different mode, not
-a category icon beside a title). pad_right is the title's fixed breathing room (kept for
-chip_body's centered title so it isn't flush against the box edge).
+{%- comment -%} No category icons, photo badges, or "image" display mode anywhere any more —
+every timed event chip and all-day bar is title-only (chip_body). pad_right is the title's
+fixed breathing room so it isn't flush against the box edge.
 {%- endcomment -%}
+
+{%- comment -%} The "OG" 800x480 full view is the only one wide enough for multiple day
+columns to stay legible — every other view (quadrant/half_horizontal/half_vertical) always
+shows just today, regardless of the Days to Show setting. `days` itself (transform.js's
+output) is shared across all 4 view templates unchanged — transform.js has no idea which
+view will actually render it, so this is a render-time restriction here, not a data one:
+everything below reads shown_days_n (this view's real visible day count) instead of
+days.size (the setting's own, possibly larger, day count) wherever a column count or
+column-index math is involved. {%- endcomment -%}
+{%- if view == 1 -%}
+  {%- assign shown_days_n = days.size -%}
+{%- else -%}
+  {%- assign shown_days_n = 1 -%}
+{%- endif -%}
 
 {%- comment -%} Every tier above assumes the original 3-day layout's column width — force the
 day-label down a tier once there are more columns than that (5-7 day views get much narrower
 columns), regardless of view. {%- endcomment -%}
-{%- if days.size >= 6 -%}
+{%- if shown_days_n >= 6 -%}
   {%- assign head_title_cls = "title--small" -%}
   {%- assign chip_title_cls = "title--small" -%}
-{%- elsif days.size >= 4 -%}
+{%- elsif shown_days_n >= 4 -%}
   {%- assign head_title_cls = "title--base lg:title--large" -%}
   {%- assign chip_title_cls = "title--small" -%}
 {%- endif -%}
 
 {%- comment -%} The hour-axis column is a fixed col--span-1 against each day column's
 col--span-4; the framework's grid auto-sizes tracks from the SUM of spans present in the row, so
-the axis's width share is 1/(1 + 4*days.size) — fine at the 3-day baseline this was tuned
+the axis's width share is 1/(1 + 4*shown_days_n) — fine at the 3-day baseline this was tuned
 against, but a wildly disproportionate ~20% at 1 day. Scale each day column's own span up as
-days.size drops below 3 so the total stays pinned at 13 (the 3-day baseline). {%- endcomment -%}
-{%- if days.size == 1 -%}
+shown_days_n drops below 3 so the total stays pinned at 13 (the 3-day baseline). {%- endcomment -%}
+{%- if shown_days_n == 1 -%}
   {%- assign day_span = 12 -%}
-{%- elsif days.size == 2 -%}
+{%- elsif shown_days_n == 2 -%}
   {%- assign day_span = 6 -%}
 {%- else -%}
   {%- assign day_span = 4 -%}
@@ -215,7 +191,11 @@ days.size drops below 3 so the total stays pinned at 13 (the 3-day baseline). {%
            duplicate badge row under every day, which used to force the header taller on some
            renders than others and misalign one day's own label against the rest. -->
       <div class="flex flex--col flex--center-x flex--center-y" style="overflow:hidden;box-sizing:border-box;padding:1px;">
-        {%- if people.size > 0 -%}
+        {%- comment -%} Person badges are full-view only — the smaller/narrower views
+        (quadrant/half_horizontal/half_vertical) don't have room to spare in this gutter once
+        it's also carrying the hour axis below it (see head_badge_d's own per-view tiers
+        above); the badge grid stays reserved for the one view wide/tall enough for it. {%- endcomment -%}
+        {%- if people.size > 0 and view == 1 -%}
           <!-- justify-content:center overrides the base .grid utility's own width:100% (it
                forces the grid to fill the flex parent's cross axis, which otherwise defeats
                the parent's flex--center-x — the fixed-width columns below then sat flush left
@@ -228,7 +208,7 @@ days.size drops below 3 so the total stays pinned at 13 (the 3-day baseline). {%
           </div>
         {%- endif -%}
       </div>
-      {% for day in days %}
+      {% for day in days limit: shown_days_n %}
         <!-- flex--center-y: the gutter cell beside these can be taller than a bare label line
              once it's hosting a badge grid, so this keeps the date line centered against the
              header's own full height rather than pinned to its top edge. -->
@@ -269,7 +249,7 @@ days.size drops below 3 so the total stays pinned at 13 (the 3-day baseline). {%
       list in all four view files (not just returned from transform.js/added to .trmnlp.yml) —
       lost real time to this reading like a trmnlp mock-data limitation before it clicked.
       {%- endcomment -%}
-      {%- assign allday_total_units = day_span | times: days.size | plus: 1 -%}
+      {%- assign allday_total_units = day_span | times: shown_days_n | plus: 1 -%}
       <div class="grid gap--none h--[{{ allday_pct }}cqh] shrink-0 relative" style="grid-template-columns:repeat({{ allday_total_units }}, 1fr);flex-grow:0;height:{{ allday_pct }}cqh;min-height:{{ allday_pct }}cqh;overflow:hidden;">
         <!-- Gutter marker for the all-day band, same column the hour axis sits in below — a
              fixed-size glyph instead of all_day_label's own translated word (see allDayText in
@@ -281,14 +261,29 @@ days.size drops below 3 so the total stays pinned at 13 (the 3-day baseline). {%
           <img src="https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/today/default/24px.svg" alt="{{ all_day_label }}" style="width:85%;max-width:24px;height:auto;">
         </div>
         {% for bar in allday_bars %}
+          {% if bar.start_col < shown_days_n %}
+          <!-- A bar's start_col/span are relative to the FULL days.size window (transform.js has
+               no idea a non-full view is about to clip that down to shown_days_n) — a bar
+               starting beyond what this view actually shows is skipped entirely (the if above),
+               and one that starts within it but would normally span past it gets its rendered
+               span clamped to what's left, forced into the "continues_after" squared-off edge
+               regardless of its own real continues_after (true or not, it now visibly runs off
+               the edge of what this view shows, same visual promise either way). -->
+          {% assign allday_visible_span = shown_days_n | minus: bar.start_col %}
+          {% assign ad_continues_after = bar.continues_after %}
+          {% if bar.span > allday_visible_span %}
+            {% assign ad_continues_after = true %}
+          {% else %}
+            {% assign allday_visible_span = bar.span %}
+          {% endif %}
           <!-- Square off whichever edge extends past the visible window (continues_before/after
                are relative to the WHOLE window now, not one day's own boundary) — a hint that
                this keeps going, rather than a fully-rounded pill implying it starts/ends right
                there. No more per-fragment border/margin bleeding: this is really one element
                now, nothing to visually stitch back together. -->
-          {% if bar.continues_before and bar.continues_after %}
+          {% if bar.continues_before and ad_continues_after %}
             {% assign ad_radius = "0px" %}
-          {% elsif bar.continues_after %}
+          {% elsif ad_continues_after %}
             {% assign ad_radius = "7px 0 0 7px" %}
           {% elsif bar.continues_before %}
             {% assign ad_radius = "0 7px 7px 0" %}
@@ -297,11 +292,12 @@ days.size drops below 3 so the total stays pinned at 13 (the 3-day baseline). {%
           {% endif %}
           <!-- Column 1 is the gutter; day 0 starts at line 2, day N at line 2 + day_span*N. -->
           {% assign allday_col_start = day_span | times: bar.start_col | plus: 2 %}
-          {% assign allday_bar_span = day_span | times: bar.span %}
+          {% assign allday_bar_span = day_span | times: allday_visible_span %}
           {% assign allday_row_num = bar.row | plus: 1 %}
           <div class="bg--{{ bar.hue }} text--{{ bar.fg }} flex flex--row flex--center-x flex--center-y cal-fit-box" style="grid-column:{{ allday_col_start }} / span {{ allday_bar_span }};grid-row:{{ allday_row_num }};margin:0 1px;overflow:hidden;box-sizing:border-box;border-radius:{{ ad_radius }};border:2px solid currentColor;">
             <span class="title {{ chip_title_cls }} text--{{ bar.fg }} cal-fit-text cal-fit-clip" data-fit-min="9" data-fit-max="90" style="min-width:0;">{{ bar.title }}</span>
           </div>
+          {% endif %}
         {% endfor %}
       </div>
     {% endif %}
@@ -312,37 +308,32 @@ days.size drops below 3 so the total stays pinned at 13 (the 3-day baseline). {%
           <!-- Zebra-stripe by hour instead of drawing boundary lines: thin-line techniques
                rendered fine locally but never once showed up on the actual device. A per-hour
                background shade is a large-area fill instead of a 1-2px sliver. -->
-          <div class="h--[{{ row.pct }}cqh] w--full flex flex--row flex--start cal-row cal-fit-box relative {% if row.shade == 1 %}bg--gray-65{% endif %}" style="padding-left:2px;">
+          <div class="h--[{{ row.pct }}cqh] w--full flex flex--row cal-row cal-fit-box relative {% if row.shade == 1 %}bg--gray-65{% endif %}" style="justify-content:flex-end;padding-right:8px;">
             <!-- Row height varies a lot with the configured hour range/view size, so this reuses
-                 the same fit-text sizing as event titles rather than a hand-tuned fixed size.
-                 row.minute/row.period (see run() in transform.js) only have a real value on the
-                 next upcoming event's own hour (minute) or in 12h mode (period), turning
-                 "sometime in this hour" into the actual time for the one row already calling out
-                 attention to it. font-family:monospace + a fixed-width, right-aligned span for
-                 just the hour digits is what keeps every row's ones-place lined up vertically:
-                 centering plain "7"/"20" text directly (proportional font, variable width) put
-                 each row's OWN glyphs at the row's center, a different on-screen position for a
-                 1-digit vs 2-digit hour — no framework class reaches "fixed-width monospace
-                 digit column" so this is real CSS, not a utility swap. The row is deliberately
-                 LEFT-aligned (no flex--center-x, just a small padding-left), not centered: a
-                 centered hour digit leaves equal empty space on both sides, but only the RIGHT
-                 side ever hosts anything (the minute/period suffix) — on a narrow gutter
-                 (quadrant/half_vertical) centering left no room for that suffix and it clipped.
-                 Pushing the whole axis left instead gives the suffix the entire rest of the row
-                 to grow into. The minute/period suffix is a SEPARATE sibling, not nested inside
-                 the hour span: nesting it there (an earlier version of this) made whatever
-                 alignment the row used act on hour+suffix together, so the one row with a suffix
-                 got a wider combined box and its hour digit visibly shifted relative to every
-                 other row's — exactly the alignment bug this markup exists to prevent. Kept out
-                 of the flex flow entirely (position:absolute, sized/positioned by run()'s own
-                 script below right after the hour span's real rendered box) so it can never move
-                 the hour digit: the hour span is the row's only flex child and its width is the
-                 fixed 2ch box always, regardless of whether a suffix trails it. -->
-              <span class="label {{ axis_cls }} {% if row.bold %}font--bold {% endif %}cal-fit-text cal-axis-text{% if row.important %} cal-axis-important{% endif %}" data-fit-min="8" data-fit-max="40" style="font-family:monospace;display:inline-block;width:2ch;text-align:right;">{{ row.hour }}</span>{% if row.minute or row.period %}<span class="cal-axis-minute">{% if row.minute %}:{{ row.minute }}{% endif %}{% if row.period %}{{ row.period }}{% endif %}</span>{% endif %}
+                 the same fit-text sizing as event titles rather than a hand-tuned fixed size. No
+                 minute suffix on any row any more (removed). row.period (only ever set in 12h
+                 mode — see run() in transform.js) still shows, but BEFORE the hour digit now,
+                 not after: the whole row is right-aligned (justify-content:flex-end +
+                 padding-right, not a framework flex--end class — see the flex--center-x/-y note
+                 elsewhere in this file on why an explicit style beats a utility class here), and
+                 the hour span is the row's LAST flex child — flex-end always packs the row's
+                 children flush against its own right edge, so the hour digit's own right edge
+                 stays put regardless of whether a period happens to precede it that row, instead
+                 of the digit itself shifting per-row the way it would if period trailed after
+                 (the exact alignment bug a fixed-width monospace hour span exists to prevent —
+                 see below). font-family:monospace + a fixed-width span for just the hour digits
+                 keeps every row's ones-place lined up vertically: centering plain "7"/"20" text
+                 directly (proportional font, variable width) put each row's OWN glyphs at a
+                 different on-screen position for a 1-digit vs 2-digit hour — no framework class
+                 reaches "fixed-width monospace digit column" so this is real CSS, not a utility
+                 swap. cal-axis-period's own font-size is set in run() as a fraction of its
+                 sibling hour span's real computed size (CSS alone can't express "a fraction of a
+                 DIFFERENT element's dynamically-fitted size"). -->
+              {% if row.period %}<span class="cal-axis-period">{{ row.period }}</span>{% endif %}<span class="label {{ axis_cls }} {% if row.bold %}font--bold {% endif %}cal-fit-text cal-axis-text{% if row.important %} cal-axis-important{% endif %}" data-fit-min="8" data-fit-max="40" style="font-family:monospace;display:inline-block;width:2ch;text-align:right;">{{ row.hour }}</span>
           </div>
         {% endfor %}
       </div>
-      {% for day in days %}
+      {% for day in days limit: shown_days_n %}
         <div class="col--span-{{ day_span }} flex flex--col gap--none border--v-1 relative">
           <!-- Background bands always render at full per-hour granularity even where an event
                is running — events are a separate absolutely-positioned overlay (below), painted
@@ -409,7 +400,7 @@ days.size drops below 3 so the total stays pinned at 13 (the 3-day baseline). {%
                    row budget — that's also why fit_min=11/clip=false here (vs. the all-day
                    call's 9/true): fit() can safely leave an oversized title visible-overflow on
                    this overlay. -->
-              {% render "chip", hue: event.hue, fg: event.fg, title: event.title, badges: event.badges, display: event.display, flex_dir: "flex--col", size_class: "h--full w--full", size_style: "", pad_cls: event_pad_cls, box_radius: "7px", border_left: true, border_right: true, margin_left: false, margin_right: false, title_cls: event_title_cls, fit_min: 11, clip: false, pad_right: pad_right, image_d: image_d %}
+              {% render "chip", hue: event.hue, fg: event.fg, title: event.title, flex_dir: "flex--col", size_class: "h--full w--full", size_style: "", pad_cls: event_pad_cls, box_radius: "7px", border_left: true, border_right: true, margin_left: false, margin_right: false, title_cls: event_title_cls, fit_min: 11, clip: false, pad_right: pad_right %}
             </div>
           {% endfor %}
         </div>
@@ -423,7 +414,7 @@ days.size drops below 3 so the total stays pinned at 13 (the 3-day baseline). {%
          that day's own column. -->
     <div class="grid gap--none h--[{{ footer_pct }}cqh] bg--black shrink-0" style="flex-grow:0;height:{{ footer_pct }}cqh;min-height:{{ footer_pct }}cqh;overflow:hidden;">
       <div class="col--span-1"></div>
-      {% for day in days %}
+      {% for day in days limit: shown_days_n %}
         <div class="col--span-{{ day_span }} flex flex--row flex--center-x flex--center-y gap--xsmall border--v-1" style="overflow:hidden;">
           {% if day.icon %}
             <!-- height:1.6em ties the icon to chip_title_cls's font-size (grows/shrinks across
@@ -536,9 +527,9 @@ days.size drops below 3 so the total stays pinned at 13 (the 3-day baseline). {%
     // duration, e.g. an 8-hour "Work" block split into 2 lanes) accept a font size so huge
     // "Work" wrapped into 4 near-empty lines ("W"/"o"/"r"/"k") and spilled ~170px past its own
     // box — only a single WRAPPED CHARACTER's own sideways width ever stopped the search from
-    // climbing further, nothing ever stopped it vertically. Always prefer the largest size
-    // that fits on one line; only fall back to allowing wrap at all once not even the FLOOR
-    // size fits on one line (a box narrow enough that some wrapping is genuinely unavoidable).
+    // climbing further, nothing ever stopped it vertically. The largest one-line size and the
+    // largest whole-word-wrapped size are searched independently below and the bigger one
+    // wins — never an unbounded character-by-character wrap search.
     function fitsOneLine(px) {
       return el.scrollWidth <= el.clientWidth + 1 && el.scrollHeight <= Math.round(px * 1.15) + 2 && el.scrollHeight <= contentH + 1;
     }
@@ -562,29 +553,21 @@ days.size drops below 3 so the total stays pinned at 13 (the 3-day baseline). {%
     // fits) are completely unaffected — this only ever helps the tight cases.
     var absMin = 4;
 
-    function searchOneLine(lo, hi) {
-      if (!fitsOneLine(hi)) { setSize(hi); if (!fitsOneLine(hi)) { /* hi already tried */ } }
+    // Binary-searches [lo, hi] for the largest size where `test(px)` holds, assuming test is
+    // monotonic (true below some threshold, false above it) — same assumption the original
+    // single-range search already made. Returns null if not even `lo` passes.
+    function searchMax(lo, hi, test) {
       setSize(lo);
-      if (!fitsOneLine(lo)) return null;
+      if (!test(lo)) return null;
       while (hi - lo > 1) {
         var mid = Math.floor((lo + hi) / 2);
         setSize(mid);
-        if (fitsOneLine(mid)) { lo = mid; } else { hi = mid; }
-      }
-      return lo;
-    }
-    function searchWrapped(lo, hi) {
-      setSize(lo);
-      if (!fitsWrapped()) return null;
-      while (hi - lo > 1) {
-        var mid = Math.floor((lo + hi) / 2);
-        setSize(mid);
-        if (fitsWrapped()) { lo = mid; } else { hi = mid; }
+        if (test(mid)) { lo = mid; } else { hi = mid; }
       }
       return lo;
     }
 
-    var oneLineSize = searchOneLine(absMin, max);
+    var oneLineSize = searchMax(absMin, max, fitsOneLine);
 
     // A multi-word title may fit a LARGER size wrapped across 2-3 lines than squeezed onto
     // one — "Sports Day Mia" in a tall 2-hour block shouldn't shrink to fit one line when the
@@ -600,13 +583,7 @@ days.size drops below 3 so the total stays pinned at 13 (the 3-day baseline). {%
     var wrappedSize = null;
     if (isMultiWord) {
       el.style.overflowWrap = 'normal';
-      if (fitsWrapped()) { // still set from oneLineSize's own last size(*) check above, but
-                            // re-check explicitly at max first — same "already at ceiling" fast
-                            // path as the one-line search.
-        setSize(max);
-      }
-      setSize(max);
-      wrappedSize = fitsWrapped() ? max : searchWrapped(absMin, max);
+      wrappedSize = searchMax(absMin, max, fitsWrapped);
     }
 
     if (oneLineSize !== null && (wrappedSize === null || wrappedSize <= oneLineSize)) {
@@ -675,29 +652,17 @@ days.size drops below 3 so the total stays pinned at 13 (the 3-day baseline). {%
     fitAxisGroup('.cal-axis-important', lgPortrait ? '48' : null);
     fitAxisGroup('.cal-axis-text:not(.cal-axis-important)', lgPortrait ? '48' : null);
 
-    // The minute/period suffix (cal-axis-minute, see shared.liquid's hour-row markup) sits
-    // outside the hour span's own flex-centered box on purpose — nesting it there would widen
-    // just that one row's box and visibly shift its hour digit left of every other row's (the
-    // exact bug this whole fixed-width-monospace setup exists to avoid). So it can't inherit a
-    // size/position from CSS alone; place it here, now that fit() has settled each hour span's
-    // real font-size and box. font-size is a fraction of the hour span's own (computed, not the
-    // stale data-fit-max attribute) size; left/top come from the hour span's real rendered
-    // rect relative to its row, not a guessed ch-based offset — "ch" would resolve against the
-    // SUFFIX's own (smaller) font, not the hour span's, and the two spans can legitimately
-    // differ in computed size across the important/compressed axis groups above.
-    var minuteEls = root.querySelectorAll('.cal-axis-minute');
-    for (var m = 0; m < minuteEls.length; m++) {
-      var minuteEl = minuteEls[m];
-      var hourEl = minuteEl.previousElementSibling;
-      var row = minuteEl.parentElement;
-      if (!hourEl || !row) continue;
+    // AM/PM (12h mode only — see row.period in transform.js) is a normal flex sibling now, not
+    // absolutely positioned (no per-row placement math needed once it's just another child of
+    // the same flex-end row) — only its font-size can't come from CSS alone, since it has to
+    // track its sibling hour span's own real FITTED size, which varies per axis group above.
+    var periodEls = root.querySelectorAll('.cal-axis-period');
+    for (var p = 0; p < periodEls.length; p++) {
+      var periodEl = periodEls[p];
+      var hourEl = periodEl.nextElementSibling;
+      if (!hourEl) continue;
       var hourPx = parseFloat(hourEl.style.fontSize) || 16;
-      minuteEl.style.fontSize = Math.round(hourPx * 0.72) + 'px';
-      var rowRect = row.getBoundingClientRect();
-      var hourRect = hourEl.getBoundingClientRect();
-      minuteEl.style.left = Math.round(hourRect.right - rowRect.left) + 'px';
-      minuteEl.style.top = '50%';
-      minuteEl.style.transform = 'translateY(-50%)';
+      periodEl.style.fontSize = Math.round(hourPx * 0.72) + 'px';
     }
   }
 
@@ -707,12 +672,23 @@ days.size drops below 3 so the total stays pinned at 13 (the 3-day baseline). {%
   // render sandbox with restricted font fetches), and never running fit() at all is worse than
   // running it once against the fallback. Race a hard timeout against fonts.ready so fit()
   // always runs at least once quickly, then again (idempotent) once fonts.ready resolves.
+  //
+  // The FIRST call used to only ever happen via setTimeout(400)/fonts.ready — both always at
+  // least one tick away, never synchronous — so a render pipeline that screenshots right after
+  // DOMContentLoaded/'load' (TRMNL's own device screenshot, some headless tools) could capture
+  // the page with EVERY title still at its raw, un-fitted CSS default size: exactly what a
+  // single word breaking mid-word looks like (a large default size on a box too narrow for it,
+  // wrapping — with no explicit overflow-wrap set yet either way — at whatever break the
+  // browser's own default text layout allows). Calling run() synchronously here too closes
+  // that gap: by the time this function returns, at least one real fit pass has already
+  // happened against whatever font is available RIGHT NOW, before any external tool gets a
+  // chance to screenshot. The later calls still matter (this first pass may be against a
+  // fallback font, or an even-earlier viewport/layout state) but are no longer the ONLY chance.
   function runAfterFonts() {
+    run();
     setTimeout(run, 400);
     if (document.fonts && document.fonts.ready) {
       document.fonts.ready.then(run).catch(run);
-    } else {
-      run();
     }
   }
 

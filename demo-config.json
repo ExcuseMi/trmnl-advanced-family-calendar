@@ -1,33 +1,33 @@
 {
-  "hours": { "start": 7, "end": 21 },
+  "locale": "en",
   "calendars": [
     {
       "id": "Family",
-      "url": "https://trmnl.bettens.dev/advanced-family-calendar/demo/family.ics"
+      "url": "https://raw.githubusercontent.com/ExcuseMi/trmnl-family-calendar/main/demo/family.ics"
     },
     {
       "id": "Alex",
-      "url": "https://trmnl.bettens.dev/advanced-family-calendar/demo/alex.ics",
+      "url": "https://raw.githubusercontent.com/ExcuseMi/trmnl-family-calendar/main/demo/alex.ics",
       "defaultPerson": "Alex"
     },
     {
       "id": "Jordan",
-      "url": "https://trmnl.bettens.dev/advanced-family-calendar/demo/jordan.ics",
+      "url": "https://raw.githubusercontent.com/ExcuseMi/trmnl-family-calendar/main/demo/jordan.ics",
       "defaultPerson": "Jordan"
     },
     {
       "id": "Mia",
-      "url": "https://trmnl.bettens.dev/advanced-family-calendar/demo/mia.ics",
+      "url": "https://raw.githubusercontent.com/ExcuseMi/trmnl-family-calendar/main/demo/mia.ics",
       "defaultPerson": "Mia"
     },
     {
       "id": "Leo",
-      "url": "https://trmnl.bettens.dev/advanced-family-calendar/demo/leo.ics",
+      "url": "https://raw.githubusercontent.com/ExcuseMi/trmnl-family-calendar/main/demo/leo.ics",
       "defaultPerson": "Leo"
     },
     {
       "id": "School",
-      "url": "https://trmnl.bettens.dev/advanced-family-calendar/demo/school.ics",
+      "url": "https://raw.githubusercontent.com/ExcuseMi/trmnl-family-calendar/main/demo/school.ics",
       "color": "gray-70",
       "exclude": "(?=.*\\b(?:L[1345]|K[123])\\b)(?!.*\\b(?:L2|L6)\\b)",
       "personRules": [
