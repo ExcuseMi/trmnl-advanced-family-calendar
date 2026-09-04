@@ -1407,18 +1407,19 @@ async function fetchSky(location, daysN, fahrenheit) {
 // the same numbers render correctly on any device, including the larger TRMNL X. Liquid does
 // no layout math itself; it just loops over this pre-baked structure.
 
-const HEADER_PCT = 17; // day label only, one line. Tried dropping this back toward 11 once
-                       // the daily high/low moved out to its own footer zone (see FOOTER_PCT)
-                       // and stopped sharing this bar as a second line, on the assumption
-                       // that a single line needs less room — measured wrong: half_horizontal
-                       // alone uses a title--large tier whose real rendered line-height (36px
-                       // at that view's own 240px-tall screen) already needs close to the full
-                       // amount on its own, pill padding or not. Eased down from 15 to 13 (not
-                       // further) once that turned out to still be the binding constraint —
-                       // verified against real content (today's own 2-row "who's busy" badges,
-                       // see shared.liquid, which need close to as much height as
-                       // half_horizontal's own label text does at the compact tier). The
-                       // footer's own cost comes entirely out of gridPct instead (see below).
+const HEADER_PCT = 12; // day label, plus today's own "who's busy" badges on full/half_vertical
+                       // only (see shared.liquid — quadrant/half_horizontal never show them,
+                       // their much shorter ~240px screens don't have the room). One shared
+                       // value across every view (same cqh-percentage design as every other
+                       // *_PCT here), so it's bounded below by whichever tier needs the most:
+                       // used to be half_horizontal's own oversized title--large font eating
+                       // its entire header on text alone, with nothing to spare — dialing that
+                       // tier's font down to match quadrant's (shared.liquid) bought this back
+                       // down close to the original 13, and dropping badges from quadrant/
+                       // half_horizontal's header entirely (they never needed them as much as
+                       // full/half_vertical's own "which day is genuinely today" framing) freed
+                       // the rest. The footer's own cost comes entirely out of gridPct instead
+                       // (see below).
 const FOOTER_PCT = 7; // weather icon + daily high/low, its own zone at the bottom of the
                       // screen (see shared.liquid) rather than a second header line — kept
                       // out of gridBase (the hourly grid's own top-offset math) since it sits

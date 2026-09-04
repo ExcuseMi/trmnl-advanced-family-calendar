@@ -196,14 +196,16 @@ elsewhere below) were written the obvious way, with the delimiters spelled out.
   {%- assign image_d = 42 -%}
 {%- elsif view == 2 -%}
   {%- comment -%} half_horizontal: full 800px width but half SCREEN HEIGHT (~240px, same as
-  quadrant) — width is ample so the FONT tier can be larger than half_vertical/quadrant, but
+  quadrant) — width is ample so chip_title_cls can be larger than half_vertical/quadrant's, but
   badge sizing shares quadrant's tighter tier below since it's bound by the same short row
-  height (allday_row_pct/MIN_EVENT_PCT), not by width. head_title_cls dialed down one notch
-  from title--xlarge/xxlarge: that size already needed this view's ENTIRE header height for
-  the date label alone (confirmed — the label visibly clipped at the header's own top edge
-  once today's badge row needed to fit below it too), leaving zero room to ever add anything
-  else here regardless of header_pct. {%- endcomment -%}
-  {%- assign head_title_cls = "title--base lg:title--large" -%}
+  height (allday_row_pct/MIN_EVENT_PCT), not by width. head_title_cls matches quadrant's
+  smallest tier now, not its own bigger one: this view never shows today's badges (see
+  view != 4/2 on the header's own badge block) so it no longer NEEDS the extra room a bigger
+  font used to justify, and a small header on THIS tier is what let full/half_vertical's own
+  header shrink too — header_pct (transform.js) is one shared value across every view, bounded
+  below by whichever tier needs the most room, so a smaller need here directly bought back
+  height everywhere else. {%- endcomment -%}
+  {%- assign head_title_cls = "title--small" -%}
   {%- assign chip_title_cls = "title--small lg:title--base" -%}
   {%- assign axis_cls = "label--base lg:label--large" -%}
   {%- assign event_pad_cls = "pt--1 pb--2" -%}
@@ -311,7 +313,12 @@ where the axis was already a sane fraction and unchanged. {%- endcomment -%}
     <div class="grid gap--none h--[{{ header_pct }}cqh] bg--black" style="flex-shrink:0;flex-grow:0;height:{{ header_pct }}cqh;min-height:{{ header_pct }}cqh;">
       <div class="col--span-1"></div>
       {% for day in days %}
-        <div class="col--span-{{ day_span }} flex flex--col flex--center-x flex--center-y border--v-1">
+        <!-- flex--top, not flex--center-y: only today's column has a badge row under its
+             label, so vertically centering this whole column would float every OTHER day's
+             label lower (centered alone) than today's (centered as label+badges together) —
+             the date line itself would sit at a different height per column instead of lining
+             up. Top-aligning fixes that regardless of which columns do or don't have badges. -->
+        <div class="col--span-{{ day_span }} flex flex--col flex--center-x flex--top border--v-1">
           <!-- min-width:0 undoes the flex default of min-width:auto (natural content width),
                which otherwise silently defeats overflow/ellipsis truncation on the child —
                needed at 5-7 day columns, or in quadrant's narrower portrait slot, where the
@@ -342,7 +349,7 @@ where the axis was already a sane fraction and unchanged. {%- endcomment -%}
                two spans renders fine here (unlike the footer's Max/Min fix elsewhere in this
                file) since .title, unlike .label, isn't itself a flex container. -->
             <span class="title {{ head_title_cls }}{% if view != 4 and view != 2 and view != 3 %} cal-full-daylabel{% endif %}" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;min-width:0;text-transform:uppercase;"><span style="color:#999;">{{ day.label_short_weekday }}</span> <span style="color:white;font-weight:bold;">{{ day.label_short_rest }}</span></span>
-            {%- if day.is_today and day.people.size > 0 -%}
+            {%- if day.is_today and day.people.size > 0 and view != 4 and view != 2 -%}
               <!-- Who has something on today, right under its own header — a glance answers
                    "is anyone busy today" without reading every chip below. day.people (see
                    run() in transform.js) is already deduped to one badge per declared person;
@@ -352,8 +359,13 @@ where the axis was already a sane fraction and unchanged. {%- endcomment -%}
                    rather than one shared black box for everyone, so the strip itself hints at
                    who before you even reach their initial. currentColor border keeps a visible
                    ring around every badge regardless of its own fill, including against this
-                   row's own bg--black header a lighter fill would otherwise sit flush
-                   against. -->
+                   row's own bg--black header a lighter fill would otherwise sit flush against.
+
+                   full/half_vertical (the two full-SCREEN-HEIGHT views) only — view != 4 and
+                   != 2 excludes quadrant/half_horizontal, whose much shorter ~240px screens
+                   don't have the spare header room this needs without either crushing the
+                   date label or growing the header well past what those two tiers otherwise
+                   need for text alone. -->
               <div class="flex" style="flex-direction:row;gap:1px;">
                 {%- for b in day.people -%}
                   <span class="rounded--small flex flex--center-x flex--center-y text--{{ b.fg }} bg--{{ b.hue }}" style="width:{{ head_badge_d }}px;height:{{ head_badge_d }}px;flex-shrink:0;overflow:hidden;border:1.5px solid currentColor;box-sizing:border-box;">
@@ -369,17 +381,16 @@ where the axis was already a sane fraction and unchanged. {%- endcomment -%}
 
     {% if allday_pct > 0 %}
       <div class="grid gap--none h--[{{ allday_pct }}cqh]" style="flex-shrink:0;flex-grow:0;height:{{ allday_pct }}cqh;min-height:{{ allday_pct }}cqh;">
-        <!-- Gutter label for the all-day band, same column the hour axis sits in below it —
+        <!-- Gutter marker for the all-day band, same column the hour axis sits in below it —
              without this the gutter here was just blank, giving no hint what the colored bars
-             above the hour grid actually are. Deliberately its own small fixed size (label--
-             small) rather than axis_cls (the hour numbers' own per-view tier): axis_cls can run
-             up to label--xxlarge on the full view, sized for a 1-2 digit number, not a word —
-             translated via all_day_label (see allDayText in transform.js), so it's kept short
-             in every language on purpose. Left un-clamped (free to wrap to two lines) rather
-             than truncated: the row is tall enough now (ALLDAY_ROW_PCT) that two short lines
-             fit comfortably, and a wrapped real word reads better than an ellipsis on this one. -->
-        <div class="col--span-1 flex flex--col flex--center-x flex--center-y" style="overflow:hidden;box-sizing:border-box;padding:0 2px;text-align:center;">
-          <span class="label label--small">{{ all_day_label }}</span>
+             above the hour grid actually are. A small icon instead of all_day_label's own
+             translated word (see allDayText in transform.js) — language-independent, and a
+             fixed-size glyph fits this narrow gutter column more predictably than a word that
+             needs translating short enough not to wrap badly in every locale. all_day_label
+             still comes through as alt text, so the semantic label survives for anything that
+             reads it (a screen reader, e.g.) even though it's not painted on screen. -->
+        <div class="col--span-1 flex flex--col flex--center-x flex--center-y" style="overflow:hidden;box-sizing:border-box;padding:0 2px;">
+          <img src="https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/calendar_view_day/default/24px.svg" alt="{{ all_day_label }}" style="width:70%;max-width:20px;height:auto;">
         </div>
         {% for day in days %}
           <div class="col--span-{{ day_span }} flex flex--col gap--xsmall px--[4px] border--v-1">
