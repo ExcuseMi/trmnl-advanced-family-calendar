@@ -328,11 +328,14 @@ where the axis was already a sane fraction and unchanged. {%- endcomment -%}
               <!-- Who has something on today, right in its own header — a glance answers "is
                    anyone busy today" without reading every chip below. day.people (see run()
                    in transform.js) is already deduped to one badge per declared person; a
-                   category icon never ends up here (it has no person attached). Same badge
-                   span styling chip_body's own rail uses (bg--black/text--white box,
-                   currentColor border) — against this row's own bg--black header, that border
-                   renders white, giving each badge a visible ring instead of vanishing flush
-                   into the background.
+                   category icon never ends up here (it has no person attached). Each badge
+                   uses that PERSON's own color (b.hue/b.fg — colorClass/foregroundFor'd in
+                   run(), falling back to plain black/white for a person with no color set)
+                   rather than one shared black box for everyone, so the header strip itself
+                   hints at who before you even reach their initial. currentColor border keeps
+                   a visible ring around every badge regardless of its own fill, including
+                   against this row's own bg--black header a lighter fill would otherwise sit
+                   flush against.
 
                    Split explicitly into 2 rows here (first ceil(n/2) people, then the rest)
                    rather than relying on a flex-wrap:wrap trick to do it implicitly — however
@@ -346,7 +349,7 @@ where the axis was already a sane fraction and unchanged. {%- endcomment -%}
               <div class="flex" style="flex-direction:column;gap:1px;flex-shrink:0;">
                 <div class="flex" style="flex-direction:row;gap:1px;">
                   {%- for b in head_row1 -%}
-                    <span class="rounded--small flex flex--center-x flex--center-y text--white bg--black" style="width:{{ head_badge_d }}px;height:{{ head_badge_d }}px;flex-shrink:0;overflow:hidden;border:1.5px solid currentColor;box-sizing:border-box;">
+                    <span class="rounded--small flex flex--center-x flex--center-y text--{{ b.fg }} bg--{{ b.hue }}" style="width:{{ head_badge_d }}px;height:{{ head_badge_d }}px;flex-shrink:0;overflow:hidden;border:1.5px solid currentColor;box-sizing:border-box;">
                       {%- render "badge_content", b: b -%}
                     </span>
                   {%- endfor -%}
@@ -354,7 +357,7 @@ where the axis was already a sane fraction and unchanged. {%- endcomment -%}
                 {%- if head_row2.size > 0 -%}
                   <div class="flex" style="flex-direction:row;gap:1px;">
                     {%- for b in head_row2 -%}
-                      <span class="rounded--small flex flex--center-x flex--center-y text--white bg--black" style="width:{{ head_badge_d }}px;height:{{ head_badge_d }}px;flex-shrink:0;overflow:hidden;border:1.5px solid currentColor;box-sizing:border-box;">
+                      <span class="rounded--small flex flex--center-x flex--center-y text--{{ b.fg }} bg--{{ b.hue }}" style="width:{{ head_badge_d }}px;height:{{ head_badge_d }}px;flex-shrink:0;overflow:hidden;border:1.5px solid currentColor;box-sizing:border-box;">
                         {%- render "badge_content", b: b -%}
                       </span>
                     {%- endfor -%}

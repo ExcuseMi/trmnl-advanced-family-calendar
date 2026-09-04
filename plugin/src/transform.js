@@ -704,9 +704,14 @@ function applyCalendarPerson(title, cal, people) {
       // rendering ignores it, it's only read back out by run()'s "who has something today"
       // pass (see the day.people assembly below), which needs to tell a person-badge apart
       // from a Category's own icon badge (never tagged) and dedupe by WHO, not by badge
-      // appearance alone (two people could share a badge letter).
-      if (p.image) badges.push({ kind: "photo", src: p.image, person: p.name });
-      else badges.push({ kind: "letter", text: p.badge, person: p.name });
+      // appearance alone (two people could share a badge letter). badgeHue/badgeFg: the
+      // person's OWN color (colorClass'd into a real bg-- suffix), not the shared plain
+      // black every badge used before — falls back to black/white for a person with no
+      // color set, the same look as before this existed.
+      const badgeHue = p.color ? colorClass(p.color) : "black";
+      const badgeFg = p.color ? foregroundFor(p.color) : "white";
+      if (p.image) badges.push({ kind: "photo", src: p.image, person: p.name, hue: badgeHue, fg: badgeFg });
+      else badges.push({ kind: "letter", text: p.badge, person: p.name, hue: badgeHue, fg: badgeFg });
     }
   }
   return { title, hue, badges };
@@ -1388,15 +1393,19 @@ async function fetchSky(location, daysN, fahrenheit) {
 // the same numbers render correctly on any device, including the larger TRMNL X. Liquid does
 // no layout math itself; it just loops over this pre-baked structure.
 
-const HEADER_PCT = 15; // day label only, one line. Tried dropping this back toward 11 once
+const HEADER_PCT = 13; // day label only, one line. Tried dropping this back toward 11 once
                        // the daily high/low moved out to its own footer zone (see FOOTER_PCT)
                        // and stopped sharing this bar as a second line, on the assumption
                        // that a single line needs less room — measured wrong: half_horizontal
                        // alone uses a title--large tier whose real rendered line-height (36px
-                       // at that view's own 240px-tall screen) already needs the full 15% on
-                       // its own, pill padding or not. Kept at 15; the footer's own cost comes
-                       // entirely out of gridPct instead (see below).
-const FOOTER_PCT = 9; // weather icon + daily high/low, its own zone at the bottom of the
+                       // at that view's own 240px-tall screen) already needs close to the full
+                       // amount on its own, pill padding or not. Eased down from 15 to 13 (not
+                       // further) once that turned out to still be the binding constraint —
+                       // verified against real content (today's own 2-row "who's busy" badges,
+                       // see shared.liquid, which need close to as much height as
+                       // half_horizontal's own label text does at the compact tier). The
+                       // footer's own cost comes entirely out of gridPct instead (see below).
+const FOOTER_PCT = 7; // weather icon + daily high/low, its own zone at the bottom of the
                       // screen (see shared.liquid) rather than a second header line — kept
                       // out of gridBase (the hourly grid's own top-offset math) since it sits
                       // AFTER the grid, not before it; only gridPct's own size shrinks for it.
@@ -1665,7 +1674,9 @@ function layoutNative(days, importantStart, importantEnd, nowH, sunMarks, hourly
       // reads it to show an initial instead of the (currently unrendered) photo; stripping it
       // here left the header's own badges rendering as empty boxes, invisible instead of
       // falling back the way an event chip's own badge already did.
-      dayPeople.push(b.kind === "photo" ? { kind: "photo", src: b.src, person: b.person } : { kind: "letter", text: b.text, person: b.person });
+      dayPeople.push(b.kind === "photo"
+        ? { kind: "photo", src: b.src, person: b.person, hue: b.hue, fg: b.fg }
+        : { kind: "letter", text: b.text, person: b.person, hue: b.hue, fg: b.fg });
     }
 
     outDays.push({
