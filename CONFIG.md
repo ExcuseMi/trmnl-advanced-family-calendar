@@ -152,10 +152,9 @@ more than one rule matches the same event, the **last** one wins.
 
 ## `people[]`
 
-A person is just a **color + a badge (or photo)** — a small circle shown in the left-edge rail
-of their events (see [how a color or icon gets decided](#how-a-color-or-icon-gets-decided)).
-People don't do any matching themselves; *where* a person's name gets attached to an event is
-entirely controlled by that calendar's
+A person is a **color**, plus one small badge shown in the header's own corner (not repeated on
+every one of their events — see below). People don't do any matching themselves; *where* a
+person's name gets attached to an event is entirely controlled by that calendar's
 [`personRules`/`defaultPerson`](#calendarspersonrules).
 
 ```json
@@ -169,18 +168,20 @@ entirely controlled by that calendar's
 |---|---|---|---|---|
 | `name` | text | **yes** | — | Also the name `personRules[].person` / `defaultPerson` reference to attach this person. |
 | `color` | [color name](#colors) | no | — | If set, overrides the calendar's own color for this person's events. |
-| `badge` | short text (1–3 characters) | no | `name`'s first letter | Shown in a small circle on the event, unless `image` is also set (then `image` wins) — either way, unless a [category icon](#categories) takes that spot instead. |
-| `image` | direct `https://` photo/avatar URL | no | — | Replaces the badge letter with an actual picture in that same circle. Still just one slot — set either `badge` or `image` for a given look, `image` wins if both are set. |
+| `badge` | short text (1–3 characters) | no | `name`'s first letter | Shown in the header's small per-person badge. |
+| `image` | direct `https://` photo/avatar URL | no | — | Replaces that same header badge's letter with an actual picture. `image` wins if both are set. |
 
-A person with no `color` set still gets the badge circle (or photo) — it just doesn't change the
-event's color, which stays whatever the calendar itself uses.
+A person with no `color` set still gets the header badge — it just doesn't change the event's own
+color, which stays whatever the calendar/category alone would produce.
 
-Today's own header also shows a small badge for every person with at least one event that day —
-a glance at the top of the grid answers "does anyone have something on today" without reading
-every chip below it. Automatic: no setting to turn it on, it just reflects whoever's actually
-tagged (by `personRules`/`defaultPerson`) on today's events.
+The header's own top-left corner shows one small badge for every person with at least one event
+anywhere in the visible range — a glance at the top of the grid answers "does anyone have
+something coming up" without reading every chip below it. Automatic: no setting to turn it on, it
+just reflects whoever's actually tagged (by `personRules`/`defaultPerson`) somewhere in view. This
+is the *only* place a person's badge/photo shows — individual event chips never carry one (see
+[`categories[].icon`](#categories) for what an event chip's own icon shows instead).
 
-That badge circle is small and TRMNL's panels are grayscale/dithered, so a real photo often turns
+That header badge is small and TRMNL's panels are grayscale/dithered, so a real photo often turns
 muddy at that size — a flat, high-contrast cartoon/illustrated version of the same photo reads
 much more clearly. [imagetocartoon.com](https://imagetocartoon.com/) is one free way to make one
 before uploading it (the [Configuration Editor](https://trmnl.bettens.dev/advanced-family-calendar/)
@@ -196,11 +197,10 @@ key difference from `people[]`: a person is scoped to one calendar's `personRule
 category isn't scoped to any *particular* calendar unless you ask it to be — the same "Birthday"
 category can catch a birthday on your family calendar *and* your work calendar with one rule.
 
-Every event always shows a small color rail down its left edge — a category's `color`, when one
-matches, is what that rail shows (otherwise it's just a muted shade of the event's own color).
-That same rail is also where badge circles live (a category's icon, a person's badge/photo, or
-both) — up to 2 slots, see [how a color or icon gets decided](#how-a-color-or-icon-gets-decided)
-below.
+A matched category can recolor the event and/or give its chip an icon — shown bare (no circle, no
+background) right in front of the title, tinted to the chip's own text color, not a separate
+rail. An event with no matching category, or a category with no `icon` set, just shows its plain
+title with no icon at all.
 
 ```json
 "categories": [
@@ -215,9 +215,9 @@ below.
 |---|---|---|---|---|
 | `name` | text | no | — | A label purely for your own reference — no effect on rendering. |
 | `match` | regex, or list of regex | **yes** | — | Tested against every event's title. Any one matching is enough. |
-| `color` | [color name](#colors) | no | — | Recolors the event (and its left-edge rail) when this category matches. |
-| `icon` | [icon](#icons), or a list of up to two | no | — | Fills the rail's badge slot(s). Two icons take both slots — e.g. `["work", "home"]` for "Work From Home"; one icon leaves the second slot free for a matched person's own badge/photo. |
-| `display` | `"image"` | no | normal text chip | Drops the title entirely — the rail's badge(s) fill the whole chip instead, for a recurring event an icon alone already says everything about. Falls back to a normal chip if nothing real ended up in a slot (no icon matched and no person attached). |
+| `color` | [color name](#colors) | no | — | Recolors the event when this category matches. |
+| `icon` | [icon](#icons), or a list of up to two | no | — | Shown on the chip. Two icons (e.g. `["work", "home"]` for "Work From Home") show side by side; one icon just shows the one. |
+| `display` | `"image"` | no | normal text chip | Drops the title entirely — the icon(s) fill the whole chip instead, for a recurring event an icon alone already says everything about. Falls back to a normal chip if no icon actually matched. |
 | `calendars` | list of calendar ids | no | every calendar | A whitelist — this category only checks events from these calendars. Reference a calendar by its `calendars[].id` (or `.url`, if it has no id). |
 | `excludeCalendars` | list of calendar ids | no | — | A blacklist — this category checks every calendar *except* these. |
 
@@ -286,25 +286,23 @@ starting from the least to the most specific:
 3. **Category color** — if any category matches *and* has a `color` set, it overrides
    everything above.
 
-For the **badge rail** (the left-edge strip every event shows), think of it as **2 slots** rather
-than a replace-the-previous-step ladder:
+For the event chip's own **icon**, it's simpler — no slot-sharing with a person, since a
+person's badge/photo never shows on the chip itself (only in the header — see
+[`people[]`](#people)):
 
-1. Attached, *declared* people fill the front slot(s) first, one each, in the order
-   `personRules`/`defaultPerson` listed them — a photo if that person has `image` set,
-   otherwise their badge letter.
-2. Whatever slot(s) are still free get filled by a matched category's `icon`(s) — one icon
-   takes 1 slot, `["a", "b"]` takes both — or, failing that, the calendar's own default `icon`.
-3. With nothing in any slot, the rail is just a plain color accent (no badge circle at all).
+1. A matched category's `icon`(s) win first — one icon shows just the one, `["a", "b"]` shows
+   both side by side.
+2. Failing that, the calendar's own default `icon` (if it has one) shows instead.
+3. With neither, the chip just shows its plain title, no icon at all.
 
-So a category icon and a person's own badge routinely show **together** — icon = what kind of
-event, badge/photo = whose — as long as the category only used one of its two icon slots. A
-category scoped `display: "image"` then takes whatever ended up filling the rail and blows it up
-to fill the whole chip, with no title text.
+A category scoped `display: "image"` then takes whatever icon(s) resulted from step 1 and blows
+them up to fill the whole chip, with no title text — falling back to a normal text chip if
+nothing actually matched there.
 
 A category only ever reaches step 1 for an event if it's actually allowed to see that event's
 calendar in the first place — see [`calendars`/`excludeCalendars`](#categories) above. A category
 scoped away from a calendar behaves, for that calendar, as if it didn't exist — the chain falls
-straight through to whatever the calendar/person alone would have produced.
+straight through to the calendar's own default icon, or no icon at all.
 
 ### Worked example
 
@@ -393,7 +391,8 @@ Any of:
   `tabler:` narrows it to just this one).
 - **A direct image URL** (`https://...`) for any custom/self-hosted icon of your own —
   already works today with no special setup, just paste the link.
-- **A list of up to two** of any of the above, shown as two small overlapping circles.
+- **A list of up to two** of any of the above, shown bare side by side (no circles, no
+  background), tinted to the chip's own text color.
 
 ---
 
@@ -409,7 +408,8 @@ Any of:
   match, not a regex.
 - **A person with no color pinned still needing to look different.** If you want Alex's events
   to visually stand out, `people[].color` has to actually be set — otherwise their events just
-  keep whatever color the calendar itself uses, with only the badge circle to tell them apart.
+  keep whatever color the calendar itself uses, with only the header's own badge to tell them
+  apart (see [`people[]`](#people) — no per-event badge exists to fall back on).
 - **A trailing comma, or a stray quote**, breaking the whole JSON. Paste it into the
   [Configuration Editor](tools/config-editor.html) or any JSON validator to check before saving —
   malformed JSON falls back to showing nothing configured at all.

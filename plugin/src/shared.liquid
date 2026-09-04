@@ -1,6 +1,6 @@
 {% comment %}
 A "template" block can't nest inside another one — TRMNL's TemplateTag closes on the first
-literal closing token with no nesting awareness. So badge_content/badge_bare/badge_circle/
+literal closing token with no nesting awareness. So badge_content/badge_circle/
 badge_image_row/chip_body/chip are top-level siblings of "main", rendered from inside its body
 instead.
 NOTE: this comment never spells out the actual curly-brace-percent tag delimiters as literal
@@ -20,22 +20,6 @@ so writing them out here would itself parse as a malformed tag and corrupt the r
     {{ b.person | slice: 0, 1 | upcase }}
   {%- else -%}
     {{ b.text }}
-  {%- endif -%}
-{% endtemplate %}
-
-{% template badge_bare %}
-  {%- comment -%} A badge rendered bare — no circle, no border, no background — tinted to the
-  chip's own font color instead (fg, always exactly "white" or "black" for an event —
-  foregroundFor in transform.js). Real category badges are always kind:"icon" (see run()'s badge
-  assembly in transform.js — person badges never reach the chip rail), so recoloring a plain
-  black line-art icon (no currentColor fill of its own to just inherit) is a two-way
-  filter:invert(1) branch. photo/plain-letter stay defensive fallbacks matching badge_content's
-  own branches (a photo has no bare line-art form to recolor), never expected from real data
-  here. Params: b, size (px), fg, margin_left (px). {%- endcomment -%}
-  {%- if b.kind == "icon" -%}
-    <img src="{{ b.src }}" alt="" class="shrink-0" style="width:{{ size }}px;height:{{ size }}px;margin-left:{{ margin_left }}px;{% if fg == "white" %}filter:invert(1);{% endif %}">
-  {%- else -%}
-    <span class="shrink-0 flex flex--center-x flex--center-y text--{{ fg }}" style="width:{{ size }}px;height:{{ size }}px;margin-left:{{ margin_left }}px;font-weight:bold;">{%- if b.kind == "photo" -%}{{ b.person | slice: 0, 1 | upcase }}{%- else -%}{{ b.text }}{%- endif -%}</span>
   {%- endif -%}
 {% endtemplate %}
 
@@ -60,47 +44,18 @@ so writing them out here would itself parse as a malformed tag and corrupt the r
 {% endtemplate %}
 
 {% template chip_body %}
-  {%- comment -%} Category icon(s) — bare, no circle/border/background, just the icon tinted to
-  the chip's own font color — plus the title, as REAL flex siblings in their own row (not just
-  children of the outer chip div, so they stay side by side regardless of the chip's own
-  flex_dir). Every all-day and timed-event chip renders this same template rather than each
-  carrying its own copy. Icons here are always kind:"icon" (see run()'s badge assembly in
-  transform.js — person badges never reach this rail), and an event's fg is always exactly
-  "white" or "black" (foregroundFor), so recoloring a plain black line-art icon (no currentColor
-  fill of its own — see the img recoloring note in badge_content) is just a two-way
-  filter:invert(1) branch, never a general recolor.
-
-  Two earlier versions of this both broke on a heavily-overlapping day (many lanes, each lane
-  genuinely narrow):
-  - Icon as a real flex sibling with no shrink protection: fit()'s binary search sizes the title
-    against `box.clientWidth` (the WHOLE chip), with no idea a same-row icon sibling is also
-    claiming real width — so the icon's fixed badge_d width ate most of a narrow lane while
-    fit() kept assuming the title had the FULL chip width to grow into, landing on a font size
-    that then had nowhere near enough ACTUAL room, and overflow-wrap:anywhere wrapped the title
-    one character per line.
-  - Icon taken out of flex flow (position:absolute) with the title's own padding-left reserving
-    its space instead: fit()'s math was accurate again, but padding isn't flexible — once the
-    chip shrank below (reserved padding + a readable minimum), flex-shrink still had to claw
-    the title down to the container's actual width, and ALL of that shrinkage landed on the
-    unshrinkable-padding item's small remaining content box, character-wrapping just as badly.
-  Fixed by doing BOTH right: the icon rail is `shrink-0` (flex-shrink:0) so it can never be the
-  one that gives, and fit() (see run()'s script) explicitly subtracts the rail's own real
-  rendered width from the title's available-width ceiling instead of assuming the title gets
-  the whole chip — so the browser's native flex-shrink also has accurate, non-negotiable icon
-  width to shrink AROUND, and 100% of any real space deficit falls on the title alone, same as
-  a plain title-only chip already handled it.
-  Params: badges, title, fg, title_cls, fit_min, clip, pad_right, badge_d.
+  {%- comment -%} Title only, centered both axes — no category icon in this rail any more.
+  Icons used to float top-left here with the title wrapping around them, but competing with
+  the title for width AND height produced erratic font sizes (a short title stuck small next
+  to an icon while a longer, icon-free title elsewhere rendered huge) — removed so fit() can
+  scale purely on the box's own room. Still flex-centered rather than plain block flow so a
+  single-line title actually sits in the middle of a tall box instead of pinned to the top.
+  min-width:0 on both the flex container and the title keeps the title free to shrink/wrap
+  instead of a flex child's default min-width:auto refusing to narrow past its content size.
+  Params: title, fg, title_cls, fit_min, clip, pad_right.
   {%- endcomment -%}
-  <div class="flex flex--row flex--center-y w--full h--full" style="min-width:0;">
-    {%- if badges.size > 0 -%}
-      <div class="cal-icon-rail flex flex--row flex--center-y shrink-0">
-        {%- for b in badges -%}
-          {%- if forloop.first -%}{%- assign badge_margin = 0 -%}{%- else -%}{%- assign badge_margin = 4 -%}{%- endif -%}
-          {%- render "badge_bare", b: b, size: badge_d, fg: fg, margin_left: badge_margin -%}
-        {%- endfor -%}
-      </div>
-    {%- endif -%}
-    <span class="title {{ title_cls }} text--{{ fg }} cal-fit-text{% if clip %} cal-fit-clip{% endif %}" data-fit-min="{{ fit_min }}" data-fit-max="90" style="min-width:0;padding-left:8px;padding-right:{{ pad_right }}px;">{{ title }}</span>
+  <div class="w--full h--full flex flex--row flex--center-x flex--center-y" style="min-width:0;">
+    <span class="title {{ title_cls }} text--{{ fg }} cal-fit-text{% if clip %} cal-fit-clip{% endif %}" data-fit-min="{{ fit_min }}" data-fit-max="90" style="padding-right:{{ pad_right }}px;min-width:0;text-align:center;">{{ title }}</span>
   </div>
 {% endtemplate %}
 
@@ -118,15 +73,17 @@ so writing them out here would itself parse as a malformed tag and corrupt the r
     - box_radius/border_left/border_right/margin_left/margin_right: only an all-day chip can be
       one fragment of a multi-day banner needing a squared-off mid-span edge; a timed event never
       spans day columns, so it always gets the full radius and every border side.
+  badges/image_d only matter for display:"image" (badge_image_row) — the text-chip path
+  (chip_body) is title-only, no icon.
   Params: hue, fg, title, badges, display, flex_dir, size_class, size_style, pad_cls,
   box_radius, border_left, border_right, margin_left, margin_right, title_cls, fit_min, clip,
-  pad_right, badge_d, image_d.
+  pad_right, image_d.
   {%- endcomment -%}
   <div class="{{ size_class }} bg--{{ hue }} text--{{ fg }} w--full {{ pad_cls }} flex {{ flex_dir }} flex--center-y cal-fit-box relative" style="overflow:hidden;box-sizing:border-box;{{ size_style }}border-radius:{{ box_radius }};border-top:2px solid currentColor;border-bottom:2px solid currentColor;{% if border_left %}border-left:2px solid currentColor;{% endif %}{% if border_right %}border-right:2px solid currentColor;{% endif %}{% if margin_left %}margin-left:-4px;{% endif %}{% if margin_right %}margin-right:-4px;{% endif %}">
     {%- if display == "image" -%}
       {%- render "badge_image_row", badges: badges, image_d: image_d -%}
     {%- else -%}
-      {%- render "chip_body", badges: badges, title: title, fg: fg, title_cls: title_cls, fit_min: fit_min, clip: clip, pad_right: pad_right, badge_d: badge_d -%}
+      {%- render "chip_body", title: title, fg: fg, title_cls: title_cls, fit_min: fit_min, clip: clip, pad_right: pad_right -%}
     {%- endif -%}
   </div>
 {% endtemplate %}
@@ -154,29 +111,27 @@ so writing them out here would itself parse as a malformed tag and corrupt the r
   {%- assign event_pad_cls = "pt--0 pb--1" -%}
   {%- assign event_title_cls = "title--small" -%}
   {%- assign pad_right = 4 -%}
-  {%- assign badge_d = 20 -%}
   {%- assign head_badge_d = 11 -%}
   {%- assign image_d = 24 -%}
 {%- elsif view == 3 -%}
   {%- comment -%} half_vertical: only ~400px WIDE (narrow day columns) — width-constrained
-  rather than area-constrained, so fonts/badge_d follow quadrant's tighter tier even though the
-  screen is full-height. head_badge_d is its own case: the header gutter's WIDTH is the same
-  1/13 share of this view's narrow 400px (so still width-bound like badge_d), but its HEIGHT is
-  the full-height view's own tall header row (unlike quadrant/half_horizontal's short one) — so
-  it lands on its own tier, not simply quadrant's. image_d stays on the full view's larger tier
-  since "image" mode has no title competing for room. {%- endcomment -%}
+  rather than area-constrained, so fonts follow quadrant's tighter tier even though the screen
+  is full-height. head_badge_d is its own case: the header gutter's WIDTH is the same 1/13
+  share of this view's narrow 400px (so still width-bound), but its HEIGHT is the full-height
+  view's own tall header row (unlike quadrant/half_horizontal's short one) — so it lands on
+  its own tier, not simply quadrant's. image_d stays on the full view's larger tier since
+  "image" mode has no title competing for room. {%- endcomment -%}
   {%- assign head_title_cls = "title--small" -%}
   {%- assign chip_title_cls = "title--small" -%}
   {%- assign axis_cls = "label--base lg:label--large" -%}
   {%- assign event_pad_cls = "pt--0 pb--1" -%}
   {%- assign event_title_cls = "title--small" -%}
   {%- assign pad_right = 4 -%}
-  {%- assign badge_d = 18 -%}
   {%- assign head_badge_d = 13 -%}
   {%- assign image_d = 42 -%}
 {%- elsif view == 2 -%}
   {%- comment -%} half_horizontal: full 800px width but half screen HEIGHT (~240px, same as
-  quadrant) — width is ample so chip_title_cls/badge_d can run bigger, but head_badge_d shares
+  quadrant) — width is ample so chip_title_cls can run bigger, but head_badge_d shares
   quadrant's short tier since the gutter's HEIGHT (not width — it's still 800px wide here) is
   the same short header_pct row height both views are bound by. {%- endcomment -%}
   {%- assign head_title_cls = "title--small" -%}
@@ -185,7 +140,6 @@ so writing them out here would itself parse as a malformed tag and corrupt the r
   {%- assign event_pad_cls = "pt--1 pb--2" -%}
   {%- assign event_title_cls = "title--small" -%}
   {%- assign pad_right = 8 -%}
-  {%- assign badge_d = 20 -%}
   {%- assign head_badge_d = 11 -%}
   {%- assign image_d = 24 -%}
 {%- else -%}
@@ -202,15 +156,15 @@ so writing them out here would itself parse as a malformed tag and corrupt the r
   {%- assign event_pad_cls = "pt--1 pb--2" -%}
   {%- assign event_title_cls = "title--base" -%}
   {%- assign pad_right = 8 -%}
-  {%- assign badge_d = 38 -%}
   {%- assign head_badge_d = 24 -%}
   {%- assign image_d = 42 -%}
 {%- endif -%}
 
-{%- comment -%} Category icon on every event/all-day chip (see chip_body): badge_d is its bare
-pixel size, one size regardless of how many icons a chip hosts (up to 2 — see run()'s badge
-assembly in transform.js). image_d is "image" display mode's own, larger circle size (badges
-become the whole chip). pad_right is the title's fixed breathing room on its non-icon side.
+{%- comment -%} No category icons anywhere any more — neither a timed event's own chip
+(chip_body, title-only) nor an all-day bar (also title-only now). image_d is "image" display
+mode's own circle size (badges become the whole chip there — a genuinely different mode, not
+a category icon beside a title). pad_right is the title's fixed breathing room (kept for
+chip_body's centered title so it isn't flush against the box edge).
 {%- endcomment -%}
 
 {%- comment -%} Every tier above assumes the original 3-day layout's column width — force the
@@ -297,59 +251,56 @@ days.size drops below 3 so the total stays pinned at 13 (the 3-day baseline). {%
     </div>
 
     {% if allday_pct > 0 %}
-      <div class="grid gap--none h--[{{ allday_pct }}cqh] shrink-0" style="flex-grow:0;height:{{ allday_pct }}cqh;min-height:{{ allday_pct }}cqh;overflow:hidden;">
+      {%- comment -%} A multi-day all-day event used to repeat as an identical, fully-rounded
+      pill in every day column it touched, reading as several unrelated events instead of one.
+      allday_bars (see layoutNative in transform.js) is a flat list — each bar already knows its
+      own real start_col/span/row (a bar spanning several days is one array entry, not one per
+      day) — placed with an EXPLICIT grid-column-start computed from start_col, rather than this
+      file's usual auto-placement-infers-the-column-count trick (see the day-column comment
+      above): that trick only ever needed to work for one auto-placed row of items, and explicit
+      placement needs the total column count stated up front anyway (below), so there's nothing
+      left for it to infer here. Explicit placement also means gaps between bars need no filler
+      cells at all — an unoccupied explicit grid cell is just blank space.
+      NOTE for next time this goes quiet locally: `{% render "main", ... %}` (in each view's own
+      full.liquid/quadrant.liquid/etc) is a real Liquid `render`, which — unlike `include` —
+      never inherits the outer scope; a variable only exists inside "main" if it's listed as a
+      named param THERE. allday_bars/allday_max_rows both being newly-added top-level output
+      fields, they silently read as empty inside "main" until also added to that render-param
+      list in all four view files (not just returned from transform.js/added to .trmnlp.yml) —
+      lost real time to this reading like a trmnlp mock-data limitation before it clicked.
+      {%- endcomment -%}
+      {%- assign allday_total_units = day_span | times: days.size | plus: 1 -%}
+      <div class="grid gap--none h--[{{ allday_pct }}cqh] shrink-0 relative" style="grid-template-columns:repeat({{ allday_total_units }}, 1fr);flex-grow:0;height:{{ allday_pct }}cqh;min-height:{{ allday_pct }}cqh;overflow:hidden;">
         <!-- Gutter marker for the all-day band, same column the hour axis sits in below — a
              fixed-size glyph instead of all_day_label's own translated word (see allDayText in
              transform.js), so it fits this narrow column regardless of locale. all_day_label
-             still comes through as alt text for anything that reads it. Was calendar_view_day
-             (three thin stacked bars/a box) — read as an ambiguous gray blob at this size,
-             especially once e-ink dithering hits those thin close-together lines; swapped for
-             "today"'s bolder, simpler calendar-page glyph (single thick outline, no fine
-             internal linework), which stays legible much smaller. Sized up too (was
-             width:70%/max-width:20px) since the old glyph's problem was partly scale, not just
-             shape — 24px still comfortably fits even quadrant/half_vertical's narrower ~31px
-             gutter width alongside this cell's own 2px side padding. -->
-        <div class="col--span-1 flex flex--col flex--center-x flex--center-y" style="overflow:hidden;box-sizing:border-box;padding:0 2px;">
+             still comes through as alt text for anything that reads it. Spans every stacking
+             row (allday_max_rows) the band actually has, so it stays one single icon for the
+             whole band regardless of how many rows that turns out to be. -->
+        <div class="col--span-1 flex flex--col flex--center-x flex--center-y" style="grid-row:1 / span {{ allday_max_rows }};overflow:hidden;box-sizing:border-box;padding:0 2px;">
           <img src="https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/today/default/24px.svg" alt="{{ all_day_label }}" style="width:85%;max-width:24px;height:auto;">
         </div>
-        {% for day in days %}
-          <div class="col--span-{{ day_span }} flex flex--col gap--xsmall px--[4px] border--v-1">
-            {% for a in day.allday %}
-              <!-- A multi-day all-day event used to repeat as an identical, fully-rounded pill
-                   in every day column it touched, reading as several unrelated events. Square
-                   off whichever edge is mid-span (continues_before/after) and pull it out past
-                   the column's own px--[4px] inset with a matching negative margin, so the two
-                   neighboring pieces sit flush against the day divider instead of leaving a gap. -->
-              {% if a.continues_before and a.continues_after %}
-                {% assign ad_radius = "0px" %}
-              {% elsif a.continues_after %}
-                {% assign ad_radius = "7px 0 0 7px" %}
-              {% elsif a.continues_before %}
-                {% assign ad_radius = "0 7px 7px 0" %}
-              {% else %}
-                {% assign ad_radius = "7px" %}
-              {% endif %}
-              <!-- Whichever edge is mid-span gets no outline there either, so a border doesn't
-                   reintroduce the seam the negative margins above already hide. -->
-              {% assign allday_border_left = true %}
-              {% if a.continues_before %}{% assign allday_border_left = false %}{% endif %}
-              {% assign allday_border_right = true %}
-              {% if a.continues_after %}{% assign allday_border_right = false %}{% endif %}
-              {% capture allday_size_class %}h--[{{ allday_row_pct }}cqh]{% endcapture %}
-              {% capture allday_size_style %}height:{{ allday_row_pct }}cqh;min-height:{{ allday_row_pct }}cqh;flex-shrink:0;flex-grow:0;{% endcapture %}
-              <!-- a.hue/a.fg are computed server-side (colorClass/foregroundFor in
-                   transform.js) — a.hue is already the full bg-- suffix, a.fg the matching
-                   black/white foreground. -->
-              <!-- Every all-day row is exactly h--[{{ allday_row_pct }}cqh], period — not
-                   content-driven, so cal-fit-text/cal-fit-clip have a real ceiling to shrink
-                   against and every row gets a genuine minimum regardless of content. (History:
-                   this used to silently render as h--[cqh] — allday_row_pct wasn't threaded
-                   through every view file's own render call, so it read nil here and the row
-                   fell back to content-driven auto-height, letting fit()'s search lock in max
-                   font size unconditionally. Fixed by adding allday_row_pct to every view's
-                   render call; flex-shrink:0/flex-grow:0 above are cheap extra insurance.) -->
-              {% render "chip", hue: a.hue, fg: a.fg, title: a.title, badges: a.badges, display: a.display, flex_dir: "flex--row", size_class: allday_size_class, size_style: allday_size_style, pad_cls: "py--[1px]", box_radius: ad_radius, border_left: allday_border_left, border_right: allday_border_right, margin_left: a.continues_before, margin_right: a.continues_after, title_cls: chip_title_cls, fit_min: 9, clip: true, pad_right: pad_right, badge_d: badge_d, image_d: image_d %}
-            {% endfor %}
+        {% for bar in allday_bars %}
+          <!-- Square off whichever edge extends past the visible window (continues_before/after
+               are relative to the WHOLE window now, not one day's own boundary) — a hint that
+               this keeps going, rather than a fully-rounded pill implying it starts/ends right
+               there. No more per-fragment border/margin bleeding: this is really one element
+               now, nothing to visually stitch back together. -->
+          {% if bar.continues_before and bar.continues_after %}
+            {% assign ad_radius = "0px" %}
+          {% elsif bar.continues_after %}
+            {% assign ad_radius = "7px 0 0 7px" %}
+          {% elsif bar.continues_before %}
+            {% assign ad_radius = "0 7px 7px 0" %}
+          {% else %}
+            {% assign ad_radius = "7px" %}
+          {% endif %}
+          <!-- Column 1 is the gutter; day 0 starts at line 2, day N at line 2 + day_span*N. -->
+          {% assign allday_col_start = day_span | times: bar.start_col | plus: 2 %}
+          {% assign allday_bar_span = day_span | times: bar.span %}
+          {% assign allday_row_num = bar.row | plus: 1 %}
+          <div class="bg--{{ bar.hue }} text--{{ bar.fg }} flex flex--row flex--center-x flex--center-y cal-fit-box" style="grid-column:{{ allday_col_start }} / span {{ allday_bar_span }};grid-row:{{ allday_row_num }};margin:0 1px;overflow:hidden;box-sizing:border-box;border-radius:{{ ad_radius }};border:2px solid currentColor;">
+            <span class="title {{ chip_title_cls }} text--{{ bar.fg }} cal-fit-text cal-fit-clip" data-fit-min="9" data-fit-max="90" style="min-width:0;">{{ bar.title }}</span>
           </div>
         {% endfor %}
       </div>
@@ -458,7 +409,7 @@ days.size drops below 3 so the total stays pinned at 13 (the 3-day baseline). {%
                    row budget — that's also why fit_min=11/clip=false here (vs. the all-day
                    call's 9/true): fit() can safely leave an oversized title visible-overflow on
                    this overlay. -->
-              {% render "chip", hue: event.hue, fg: event.fg, title: event.title, badges: event.badges, display: event.display, flex_dir: "flex--col", size_class: "h--full w--full", size_style: "", pad_cls: event_pad_cls, box_radius: "7px", border_left: true, border_right: true, margin_left: false, margin_right: false, title_cls: event_title_cls, fit_min: 11, clip: false, pad_right: pad_right, badge_d: badge_d, image_d: image_d %}
+              {% render "chip", hue: event.hue, fg: event.fg, title: event.title, badges: event.badges, display: event.display, flex_dir: "flex--col", size_class: "h--full w--full", size_style: "", pad_cls: event_pad_cls, box_radius: "7px", border_left: true, border_right: true, margin_left: false, margin_right: false, title_cls: event_title_cls, fit_min: 11, clip: false, pad_right: pad_right, image_d: image_d %}
             </div>
           {% endfor %}
         </div>
@@ -513,6 +464,29 @@ days.size drops below 3 so the total stays pinned at 13 (the 3-day baseline). {%
   function fit(el, forced) {
     var box = el.closest('.cal-fit-box');
     if (!box) return null;
+    // A very short event box (many overlapping lanes AND a brief duration, e.g. a 30-minute
+    // "Assembly" squeezed into a 3-lane split) can have its own fixed vertical padding
+    // (event_pad_cls, a per-view constant with no idea how short THIS SPECIFIC box ended up)
+    // alone add up to MORE than the box's whole content height — box.clientHeight already
+    // INCLUDES padding (it's fixed by the box's own top/height% positioning either way, padding
+    // can't change it), so the space actually left for children is
+    // box.clientHeight - padTop - padBottom, which this same padding can push negative. Shrink
+    // padding-top/padding-bottom first, proportionally, whenever that's happening, reclaiming
+    // real room.
+    var boxCsForPad = getComputedStyle(box);
+    var padTop = parseFloat(boxCsForPad.paddingTop) || 0;
+    var padBottom = parseFloat(boxCsForPad.paddingBottom) || 0;
+    var minContentH = 14; // roughly one line of floor-size text
+    var contentH = box.clientHeight - padTop - padBottom;
+    if (contentH < minContentH && (padTop > 0 || padBottom > 0)) {
+      var totalPad = padTop + padBottom;
+      var shrink = Math.min(totalPad, minContentH - contentH);
+      padTop = Math.max(0, padTop - shrink * (padTop / totalPad));
+      padBottom = Math.max(0, padBottom - shrink * (padBottom / totalPad));
+      box.style.paddingTop = padTop + 'px';
+      box.style.paddingBottom = padBottom + 'px';
+      contentH = box.clientHeight - padTop - padBottom;
+    }
     // cal-axis-text/cal-fit-clip need real clipping: a normal-flow box that contributes real
     // height to its row's own budget (the hour axis, an all-day chip title) would otherwise
     // auto-expand and misalign the rest of the grid if left too tall. An event title has no
@@ -521,8 +495,6 @@ days.size drops below 3 so the total stays pinned at 13 (the 3-day baseline). {%
     // TRMNL's own official calendar plugin: fixed size, overflow visible).
     var mustClip = el.classList.contains('cal-axis-text') || el.classList.contains('cal-fit-clip');
     box.style.overflow = mustClip ? 'hidden' : 'visible';
-    el.style.overflowWrap = 'anywhere'; // let a single long word break rather than overflow
-                                         // a narrow (multi-lane) block sideways
     el.style.display = 'block';         // make width/maxWidth apply predictably
     var min = parseInt(el.getAttribute('data-fit-min'), 10) || 11;
     var max = parseInt(el.getAttribute('data-fit-max'), 10) || 90;
@@ -542,77 +514,119 @@ days.size drops below 3 so the total stays pinned at 13 (the 3-day baseline). {%
     var boxCs = getComputedStyle(box);
     var padX = (parseFloat(boxCs.paddingLeft) || 0) + (parseFloat(boxCs.paddingRight) || 0);
     var availW = box.clientWidth - padX - 2;
-    // box.clientWidth is the WHOLE chip — box.clientWidth also being what an event title's own
-    // real flex-shrink:0 icon rail (see chip_body in shared.liquid) claims real space from, so
-    // subtract that sibling's own actual rendered width here too, or this ceiling overstates
-    // what the title truly has room for and the mismatch between "what fit() assumed" and "what
-    // flex-shrink actually left it" character-wraps the title (see chip_body's own comment for
-    // the two ways this broke before this line existed).
-    var iconRail = el.previousElementSibling;
-    if (iconRail && iconRail.classList.contains('cal-icon-rail')) {
-      availW -= iconRail.getBoundingClientRect().width;
-    }
     if (availW <= 0) { setSize(min); return min; }
     // Give the element its own hard width ceiling and compare it against ITSELF (scrollWidth
     // vs its own clientWidth) rather than a separate ancestor's measurements — cross-element
     // comparison proved unreliable here.
     el.style.maxWidth = availW + 'px';
 
-    function fits() {
-      return box.scrollHeight <= box.clientHeight + 1 && el.scrollWidth <= el.clientWidth + 1;
+    // fitsOneLine: genuinely one line, no wrap at all. fitsWrapped: fits within the box's own
+    // real available height, whatever that takes (could be several wrapped lines). Both compare
+    // EL's own scrollHeight against `contentH` (computed above: box.clientHeight minus the
+    // box's own real padding) — NOT box.clientHeight directly, which INCLUDES that padding and
+    // so overstates how much room text actually has by exactly the padding amount (confirmed:
+    // "Grocery Shopping" measured as fitting one line against clientHeight alone, then had its
+    // real bottom few pixels silently eaten by the padding it never accounted for). Also never
+    // box.scrollHeight: an event title's box is deliberately left overflow:visible (see
+    // mustClip below, a MODESTLY oversized title is allowed to spill past its pill and stay
+    // readable), and a visible-overflow element's scrollHeight doesn't grow to reflect a child
+    // overflowing it (confirmed in Chrome) — comparing box.scrollHeight to box.clientHeight was
+    // really just comparing box.clientHeight to itself, always true no matter how enormously el
+    // had actually overflowed. That let a tall-but-narrow box (many overlapping lanes AND a long
+    // duration, e.g. an 8-hour "Work" block split into 2 lanes) accept a font size so huge
+    // "Work" wrapped into 4 near-empty lines ("W"/"o"/"r"/"k") and spilled ~170px past its own
+    // box — only a single WRAPPED CHARACTER's own sideways width ever stopped the search from
+    // climbing further, nothing ever stopped it vertically. Always prefer the largest size
+    // that fits on one line; only fall back to allowing wrap at all once not even the FLOOR
+    // size fits on one line (a box narrow enough that some wrapping is genuinely unavoidable).
+    function fitsOneLine(px) {
+      return el.scrollWidth <= el.clientWidth + 1 && el.scrollHeight <= Math.round(px * 1.15) + 2 && el.scrollHeight <= contentH + 1;
+    }
+    function fitsWrapped() {
+      return el.scrollHeight <= contentH + 1 && el.scrollWidth <= el.clientWidth + 1;
     }
 
     setSize(max);
-    if (fits()) return max;
+    if (fitsOneLine(max)) return max; // already at the ceiling — wrapping could never beat it
+    var isMultiWord = /\s/.test(el.textContent);
+    // Both searches below range all the way down to absMin (well below the configured floor,
+    // `min`) rather than stopping at `min` — a title can be genuinely too WIDE for one line
+    // and, independently, its box genuinely too SHORT to wrap even at the floor size (a tight
+    // 1-hour slot: two lines need roughly double one line's height, and a floor-size line
+    // alone can already exceed a short box). Searching only down to `min` used to fall through
+    // to a crude last-resort fallback in exactly that case — always the same tiny floor size,
+    // one line, wrap-anywhere — instead of ever trying a still-smaller size that might
+    // actually fit cleanly (one line OR whole-word-wrapped). Extending both searches this far
+    // is always safe: a binary search for the LARGEST fitting size finds the same answer
+    // whether the range below it is searched or not, so ordinary boxes (where `min` already
+    // fits) are completely unaffected — this only ever helps the tight cases.
+    var absMin = 4;
 
-    var lo = min, hi = max;
-    setSize(lo);
-    if (!fits()) {
-      // Even the minimum doesn't fit. For a mustClip box this already clips (line above). For
-      // an event title (mustClip false, box.style.overflow left 'visible' so a MODESTLY
-      // oversized title can spill past its pill and stay readable) this used to spill too —
-      // but at the true floor size with overflow-wrap:anywhere, "doesn't fit" usually means
-      // there's only room for a character or two per line, so what actually spilled was a
-      // tall column of single characters running through whatever rows/lanes happen to sit
-      // below it, not a readable title. Clip here specifically (overriding the box's own
-      // deliberate visible-overflow default) rather than let that render.
-      box.style.overflow = 'hidden';
+    function searchOneLine(lo, hi) {
+      if (!fitsOneLine(hi)) { setSize(hi); if (!fitsOneLine(hi)) { /* hi already tried */ } }
+      setSize(lo);
+      if (!fitsOneLine(lo)) return null;
+      while (hi - lo > 1) {
+        var mid = Math.floor((lo + hi) / 2);
+        setSize(mid);
+        if (fitsOneLine(mid)) { lo = mid; } else { hi = mid; }
+      }
+      return lo;
+    }
+    function searchWrapped(lo, hi) {
+      setSize(lo);
+      if (!fitsWrapped()) return null;
+      while (hi - lo > 1) {
+        var mid = Math.floor((lo + hi) / 2);
+        setSize(mid);
+        if (fitsWrapped()) { lo = mid; } else { hi = mid; }
+      }
       return lo;
     }
 
-    while (hi - lo > 1) {
-      var mid = Math.floor((lo + hi) / 2);
-      setSize(mid);
-      if (fits()) { lo = mid; } else { hi = mid; }
-    }
-    setSize(lo);
-    // Binary search assumes fit is monotonic in font size, but wrapping can make a slightly
-    // larger size measure as "fits" (reflows to fewer/narrower lines) right next to a smaller
-    // size that doesn't. Step down further, re-checking each step, until it genuinely fits.
-    while (!fits() && lo > min) {
-      lo -= 1;
-      setSize(lo);
+    var oneLineSize = searchOneLine(absMin, max);
+
+    // A multi-word title may fit a LARGER size wrapped across 2-3 lines than squeezed onto
+    // one — "Sports Day Mia" in a tall 2-hour block shouldn't shrink to fit one line when the
+    // box has room to spare stacked. Searched with overflowWrap:'normal' (word boundaries
+    // only, never mid-word) specifically so this can never repeat the one-word "Work"
+    // disaster below: a single word has no boundary to break at, so fitsWrapped's width check
+    // (scrollWidth <= clientWidth) still fails past that word's own natural one-line width no
+    // matter how tall the box is — bounded exactly like the one-line search above, just now
+    // allowed to stack whole words onto more lines instead of only checking the first. A
+    // single-word title (isMultiWord false) skips this entirely and always keeps its one-line
+    // result, so this can only ever help, never regress, the one-word case — a single word
+    // NEVER wraps or splits mid-word (see the "Work" -> "Wor"/"k" incident), full stop.
+    var wrappedSize = null;
+    if (isMultiWord) {
+      el.style.overflowWrap = 'normal';
+      if (fitsWrapped()) { // still set from oneLineSize's own last size(*) check above, but
+                            // re-check explicitly at max first — same "already at ceiling" fast
+                            // path as the one-line search.
+        setSize(max);
+      }
+      setSize(max);
+      wrappedSize = fitsWrapped() ? max : searchWrapped(absMin, max);
     }
 
-    // Maximizing font size happily picks one that wraps a single word to a near-empty second
-    // line (e.g. "Speelpun"/"t") if that barely satisfies the height budget — technically
-    // fits, reads as broken. If the chosen size doesn't fit on one line, look for a modestly
-    // smaller size that does, and prefer that over the bigger, badly-split result.
-    var lineH = Math.round(lo * 1.15);
-    if (el.scrollHeight > lineH + 2) {
-      var found = null;
-      var floor = Math.max(min, Math.floor(lo * 0.7));
-      for (var s = lo - 1; s >= floor; s--) {
-        setSize(s);
-        if (el.scrollWidth <= el.clientWidth + 1 && el.scrollHeight <= Math.round(s * 1.15) + 2) {
-          found = s;
-          break;
-        }
-      }
-      lo = found !== null ? found : lo;
-      setSize(lo);
+    if (oneLineSize !== null && (wrappedSize === null || wrappedSize <= oneLineSize)) {
+      el.style.overflowWrap = 'anywhere';
+      setSize(oneLineSize);
+      return oneLineSize;
     }
-    return lo;
+    if (wrappedSize !== null) {
+      el.style.overflowWrap = 'normal';
+      setSize(wrappedSize);
+      return wrappedSize;
+    }
+
+    // Neither a whole one-line render nor whole-word wrapping fits even at absMin — a
+    // pathologically small box (narrower than a single glyph at the smallest legible size).
+    // Clip rather than ever break a word apart, single- or multi-word alike.
+    el.style.overflowWrap = isMultiWord ? 'normal' : 'anywhere';
+    setSize(absMin);
+    box.style.overflow = 'hidden';
+    return absMin;
   }
 
   function run() {

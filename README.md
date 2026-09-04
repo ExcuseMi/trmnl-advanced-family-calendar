@@ -28,23 +28,23 @@ time.
 - One color per configured calendar — auto-assigned in order (cycled if you add more than the
   palette covers) or pinned per calendar — so you can combine as many ICS feeds as you like and
   still tell them apart at a glance.
-- **People**: tag specific events (by regex, across every calendar) with a person's own color
-  and a small badge circle next to the event — e.g. give a kid their own color and initial,
-  independent of which calendar their events land on, optionally renaming a class code to their
-  actual name at the same time. A photo/avatar URL can replace that badge circle's letter with
-  their actual picture instead, and a shared event can tag more than one person at once (e.g. a
-  family trip) — every matched, declared person gets their own badge, up to the 2 slots
-  available.
-- **Categories**: every event gets a small color "meaning" rail down its left edge — a darker
-  shade of its own color by default, or a Category's own color when one matches (by regex,
-  across every calendar, independent of People). That rail also hosts up to 2 badge circles: a
-  Category's own icon (reused from [Google's Material Symbols](https://fonts.google.com/icons)
-  or [Tabler Icons](https://tabler.io/icons) — the latter for sport/activity coverage Material
-  Symbols lacks, like yoga or pilates — by plain name, searchable live in the
-  [Configuration Editor](#configuration-editor); a custom image URL works too) takes the front
-  slot(s), and any matched person's badge/photo fills whatever's left. A Category can also be
-  set to show as just that badge — icon and/or photo filling the whole chip, no title text — for
-  the kind of recurring event an icon alone already says everything about.
+- **People**: tag specific events (by regex, across every calendar) with a person's own color —
+  e.g. give a kid their own color, independent of which calendar their events land on — optionally
+  renaming a class code to their actual name at the same time. Every distinct person with anything
+  anywhere in the visible range also gets one small badge in the header's own corner — a shared
+  "who has something going on" strip, not repeated on every one of their events — showing their
+  initial, or a photo/avatar URL in place of it. A shared event can tag more than one person at
+  once (e.g. a family trip).
+- **Categories**: match an event (by regex, across every calendar, independent of People) to give
+  it its own color and/or an icon (reused from [Google's Material
+  Symbols](https://fonts.google.com/icons) or [Tabler Icons](https://tabler.io/icons) — the latter
+  for sport/activity coverage Material Symbols lacks, like yoga or pilates — by plain name,
+  searchable live in the [Configuration Editor](#configuration-editor); a custom image URL works
+  too) shown bare — no circle, no background — tinted to the chip's own text color, right in
+  front of the title. Two icons can be set at once (e.g. `["work", "home"]` for "Work From
+  Home") and sit side by side. A Category can also be set to show as just that icon — filling the
+  whole chip, no title text — for the kind of recurring event an icon alone already says
+  everything about.
 - **Public holidays**: the Configuration Editor has a one-click "Add public holidays" picker (50
   countries) that adds a real Google-hosted holiday ICS feed as a normal calendar, with color and
   a flag icon pre-filled — nothing holiday-specific in the plugin itself, it's just a calendar
@@ -73,6 +73,23 @@ time.
      Leave blank to hide sun times and weather, and emphasize hours by meetings alone.
    - **Temperature Unit**: Celsius or Fahrenheit (requires Location above).
    - **Days to Show**: 1, 2, 3, 5 days, or a full week.
+
+## Try it with the demo calendar
+
+No calendar of your own handy, or just want to see a genuinely busy grid (overlapping events,
+multi-day banners, recurring classes, a couple of kids each with their own color) before wiring
+up your real one? Paste [`demo-config.json`](demo-config.json) straight into the plugin's
+Calendar Configuration field as-is — it's a complete, working config, not a fragment to edit
+first. It points at a small fictional family (parents Alex/Jordan, kids Mia/Leo — nobody real)
+spread across a few ICS feeds this project's own [backend](#backend) hosts at
+`/demo/*.ics`, every event `RRULE`-recurring (weekly or yearly) so it stays "today, busy"
+regardless of when you actually load it, plus the same public-Google-holiday calendar the
+Configuration Editor's own "Add public holidays" picker would add. It's also how this project's
+own layout work gets tested end to end — Mia's and Leo's Thursday "Gymnastics" deliberately land
+at the exact same time, so the grid always has at least one genuinely overlapping pair of events
+to check, and the School feed carries the same class-code style
+(`exclude`/`personRules`/renaming) the placeholder example below demonstrates, with real matching
+and non-matching classes side by side.
 
 ## Configuration Editor
 
@@ -142,27 +159,22 @@ The JSON shape it produces:
 - `calendars[].defaultPerson` — optional, applied when no `personRules` matched. Same shape as
   `personRules[].person` above (one name or an array).
 - `people[].name` — required, the lookup key `personRules[].person`/`defaultPerson` reference.
-  `people[].color` / `people[].badge` — optional; overrides that event's chip color and/or
-  attaches a small badge circle (defaults to `name`'s first letter). `people[].image` —
-  optional, a direct photo/avatar URL shown in that same circle instead of the badge letter
-  (a matched category icon still takes the slot in front of it, same as with a plain badge; a
-  photo wins over the letter if both are set).
+  `people[].color` — optional; overrides that event's chip color. `people[].image` — optional, a
+  direct photo/avatar URL shown in the header's own small per-person badge instead of their
+  initial (that badge is shared/header-only — see People above — never repeated per event).
 - `categories[].match` — required, a regex or array of them (case-insensitive). Unlike
   `people`/`personRules`, a category isn't scoped to one calendar — it's tested against every
   surviving event's title, from any calendar, in array order (later matches win for color/icon).
 - `categories[].color` — optional, overrides the event's calendar/person color (a category wins
-  over both — it's the most specific signal). Every event always gets a left-edge "meaning" rail;
-  a matched category's color applies there too, independent of the chip's own fill color.
+  over both — it's the most specific signal).
 - `categories[].icon` — optional, a [Material Symbols](https://fonts.google.com/icons) name
   (e.g. `"cake"`), a [Tabler Icons](https://tabler.io/icons) name prefixed `tabler:` (e.g.
   `"tabler:yoga"` — a second set for the sport/activity coverage Material Symbols lacks), or a
-  custom image URL, or an array of up to two of any of those (rendered as two small circles
-  stacked in that left rail, e.g. `["work", "home"]`). Takes the rail's front slot(s); any
-  matched person's badge/photo fills whatever's left, up to 2 slots total.
-- `categories[].display` — optional, `"image"` drops the title text entirely and lets whatever's
-  in the rail (icon and/or badge/photo) fill the whole chip instead — for the kind of recurring
-  event an icon alone already says everything about. Falls back to the normal text chip if
-  nothing real ended up in a slot.
+  custom image URL, or an array of up to two of any of those (shown bare, side by side, tinted to
+  the chip's own text color — e.g. `["work", "home"]` for "Work From Home").
+- `categories[].display` — optional, `"image"` drops the title text entirely and lets the icon(s)
+  fill the whole chip instead — for the kind of recurring event an icon alone already says
+  everything about. Falls back to the normal text chip if no icon actually matched.
 - `categories[].calendars` / `categories[].excludeCalendars` — optional, both by
   `calendars[].id` (or `.url` for a calendar with no id). `calendars` is a whitelist (only those
   calendars); `excludeCalendars` is a blacklist (every calendar except those). Omit both for the

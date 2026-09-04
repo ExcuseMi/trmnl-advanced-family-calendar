@@ -95,6 +95,40 @@ async def _no_cache(resp_coro) -> Response:
     return resp
 
 
+# --------------------------------------------------------------------------- demo calendars
+#
+# A fictional family (Alex/Jordan + kids Mia/Leo, none of them a real person) spread across
+# static/demo/*.ics (backend/static/demo/, copied in verbatim by `COPY backend/ .` in
+# Dockerfile — no separate COPY line needed, unlike config-editor.html/transform.js above,
+# since those two are copied FROM elsewhere in the repo while these already live under
+# backend/). Every event is RRULE-recurring (WEEKLY or YEARLY) with no one-off dated
+# occurrences at all — a fixed one-off event just stops appearing once its date is in the
+# past, which would make the demo look increasingly empty the longer it sits deployed;
+# recurring means it's still "today, busy" whenever someone actually loads it. Deliberately
+# includes a real same-time overlap (Mia's and Leo's own Thursday "Gymnastics", both
+# 17:00-18:00) — the exact multi-lane-narrow-icon shape that broke chip_body earlier this
+# project, so this doubles as a standing regression check, not just a demo. See README's
+# "Try the demo" section for the calendars/people/categories config that ties these
+# together (personRules/exclude on demo/school.ics especially — it carries the same
+# class-code style, "Zwemles L2"/"Turnen L6" alongside other classes that should stay
+# hidden, as the placeholder example in settings.yml).
+
+DEMO_CALENDARS = {'family', 'alex', 'jordan', 'mia', 'leo', 'school'}
+
+
+@app.route('/demo/<name>.ics')
+async def demo_ics(name):
+    if name not in DEMO_CALENDARS:
+        return _cors(jsonify({'error': 'Not found'})), 404
+    resp = await send_from_directory(app.static_folder, f'demo/{name}.ics')
+    resp.headers['Content-Type'] = 'text/calendar; charset=utf-8'
+    # Static demo content, not user data — a real cache window is fine (unlike the no-store
+    # editor assets above), just short enough that an occasional edit to the demo data itself
+    # doesn't sit stale at Cloudflare's edge for too long.
+    resp.headers['Cache-Control'] = 'public, max-age=3600'
+    return _cors(resp)
+
+
 # ------------------------------------------------------------------ ICS proxy (CORS-free)
 #
 # The Configuration Editor (tools/config-editor.html) runs entirely in the user's browser,

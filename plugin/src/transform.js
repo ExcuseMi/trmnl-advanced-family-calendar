@@ -81,32 +81,6 @@ function foregroundFor(color) {
   return parseInt(m[1], 10) < 45 ? "white" : "black";
 }
 
-// The accent-bar color for an event: a darker/more-saturated step of the SAME color family as
-// its fill (colorClass), so every event gets a two-tone card by default (light fill, darker
-// bar) even with no Category configured — see the "accent bar" markup in shared.liquid. Step
-// 45 for a chromatic hue is the framework's peak-saturation step (colorClass uses 65, a lighter
-// pastel step for the fill) — same hue, visibly darker. A pinned gray shade has no separate
-// "saturated" step, so this just steps two positions darker within GRAY_SHADES instead (clamped
-// at the darkest, gray-10).
-function accentColor(color) {
-  if (HUES.includes(color)) return color + "-45";
-  // "black" has nowhere darker to step to, same as gray-10 below (index already clamped to 0)
-  // — the bar and fill end up the same color, which reads as "no separate accent" rather than
-  // a bug; that's an acceptable ceiling for the single darkest option. "white" is the opposite
-  // problem — gray-N's darker-by-two-steps logic doesn't apply (it isn't in GRAY_SHADES), and
-  // returning "white" unchanged would make the bar invisible against its own fill, unlike every
-  // other color here. gray-30 gives a genuinely visible dark stripe against a white card.
-  if (color === "black") return "black";
-  if (color === "white") return "gray-30";
-  const m = /^gray-(\d+)$/.exec(color);
-  if (m) {
-    const idx = GRAY_SHADES.indexOf(parseInt(m[1], 10));
-    const steppedIdx = idx === -1 ? 0 : Math.max(0, idx - 2);
-    return "gray-" + GRAY_SHADES[steppedIdx];
-  }
-  return color;
-}
-
 // ---------------------------------------------------------------------------- category icons
 //
 // Category icons reference an icon by plain name, same lookup /tools/config-editor.html's
@@ -190,7 +164,7 @@ async function run(input) {
   const tz = resolveTz(tzname, input);
 
   if (!calendars.length) {
-    return emptyResult(tzname, tz, locale, daysN, "No ICS URL configured");
+    return emptyResult(tzname, tz, locale, daysN, is12h, "No ICS URL configured");
   }
 
   const nowEpoch = Date.now();
@@ -263,35 +237,33 @@ async function run(input) {
     e.display = c.display === "image" && badges.length > 0 ? "image" : "text";
   }
 
-  // Bucket occurrences into day columns, split into timed vs all-day.
+  // Bucket occurrences into day columns (timed only now — see alldayBars below for all-day).
+  const dayBounds = [];
   const rawDays = [];
   for (let i = 0; i < daysN; i++) {
     const d0Civil = addCivilDays({ ...winSCivil, h: 0, mi: 0, s: 0 }, i);
     const d0Epoch = zonedTimeToUtc(d0Civil.y, d0Civil.mo, d0Civil.d, 0, 0, 0, tz);
     const d1Civil = addCivilDays(d0Civil, 1);
     const d1Epoch = zonedTimeToUtc(d1Civil.y, d1Civil.mo, d1Civil.d, 0, 0, 0, tz);
+    dayBounds.push({ d0Epoch, d1Epoch });
 
     const timed = [];
-    const allday = [];
     for (const e of filtered) {
+      if (e.allDay || e.endEpoch - e.startEpoch >= 86400000) continue;
       if (!(e.startEpoch < d1Epoch && e.endEpoch > d0Epoch)) continue;
-      if (e.allDay || e.endEpoch - e.startEpoch >= 86400000) {
-        allday.push(e);
-      } else {
-        const vs = Math.max(e.startEpoch, d0Epoch);
-        const ve = Math.min(e.endEpoch, d1Epoch);
-        timed.push({
-          h0: (vs - d0Epoch) / 3600000,
-          h1: (ve - d0Epoch) / 3600000,
-          title: e.title,
-          calIdx: e.calIdx,
-          hueOverride: e.hueOverride,
-          badges: e.badges,
-          personBadges: e.personBadges,
-          display: e.display,
-          label: fmtTime(vs, tz, is12h) + "–" + fmtTime(ve, tz, is12h),
-        });
-      }
+      const vs = Math.max(e.startEpoch, d0Epoch);
+      const ve = Math.min(e.endEpoch, d1Epoch);
+      timed.push({
+        h0: (vs - d0Epoch) / 3600000,
+        h1: (ve - d0Epoch) / 3600000,
+        title: e.title,
+        calIdx: e.calIdx,
+        hueOverride: e.hueOverride,
+        badges: e.badges,
+        personBadges: e.personBadges,
+        display: e.display,
+        label: fmtTime(vs, tz, is12h) + "–" + fmtTime(ve, tz, is12h),
+      });
     }
     timed.sort((a, b) => a.h0 - b.h0);
     rawDays.push({
@@ -301,20 +273,62 @@ async function run(input) {
       labelShortRest: dayLabelShortParts(d0Civil, locale).rest,
       isToday: i === 0,
       timed,
-      allday: allday.slice(0, 3).map((a) => ({
-        title: a.title,
-        hue: a.hueOverride || hueOf(a.calIdx, calendarColors),
-        badges: a.badges,
-        personBadges: a.personBadges,
-        display: a.display,
-        // Lets the template draw multi-day all-day events as one continuous banner (square
-        // off the edge that's mid-span) instead of a separate fully-rounded pill repeating
-        // in every day column it touches.
-        continuesBefore: a.startEpoch < d0Epoch,
-        continuesAfter: a.endEpoch > d1Epoch,
-      })),
     });
   }
+
+  // All-day events are computed ONCE for the whole visible window, not per day — a single
+  // event spanning several days becomes ONE bar (start_col/span identify its real range),
+  // rendered as one spanning grid item with its title centered once, instead of a separate
+  // fully-rounded pill repeating in every day column it happens to touch (each with its own
+  // copy of the title). Every all-day event is checked against every visible day's own bounds
+  // once (daysN is at most 7, and there are rarely more than a handful of these per week) to
+  // find its first/last touched day — always contiguous, since a day range is by definition.
+  const alldaySpans = [];
+  for (const e of filtered) {
+    if (!(e.allDay || e.endEpoch - e.startEpoch >= 86400000)) continue;
+    let startCol = -1, endCol = -1;
+    for (let i = 0; i < daysN; i++) {
+      if (e.startEpoch < dayBounds[i].d1Epoch && e.endEpoch > dayBounds[i].d0Epoch) {
+        if (startCol === -1) startCol = i;
+        endCol = i;
+      }
+    }
+    if (startCol === -1) continue; // doesn't actually touch any visible day
+    alldaySpans.push({
+      e, startCol, span: endCol - startCol + 1,
+      // Square off the edge that's mid-span (extends before/after the whole VISIBLE window
+      // now, not just one day's own boundary) instead of rendering a fully-rounded pill that
+      // implies the event starts/ends right there.
+      continuesBefore: e.startEpoch < dayBounds[startCol].d0Epoch,
+      continuesAfter: e.endEpoch > dayBounds[endCol].d1Epoch,
+    });
+  }
+  // Greedy row assignment, like timed events' own lane-splitting but at all-day's coarser
+  // day-column granularity: process left-to-right (longest-first among same-start spans, so a
+  // multi-day banner claims its row before a same-day single claims a lower one out from under
+  // it), placing each into the lowest row whose last-occupied column doesn't overlap it yet.
+  // Capped at 3 rows, same ceiling the old per-day `.slice(0, 3)` enforced — a real week can
+  // have more all-day events than there's reasonable room to show at once.
+  alldaySpans.sort((a, b) => a.startCol - b.startCol || b.span - a.span);
+  const rowEnds = [];
+  for (const s of alldaySpans) {
+    const endCol = s.startCol + s.span - 1;
+    let row = 0;
+    while (row < rowEnds.length && rowEnds[row] >= s.startCol) row++;
+    if (row >= 3) { s.row = -1; continue; }
+    s.row = row;
+    rowEnds[row] = endCol;
+  }
+  const alldayBars = alldaySpans.filter((s) => s.row !== -1).map((s) => ({
+    title: s.e.title,
+    hue: s.e.hueOverride || hueOf(s.e.calIdx, calendarColors),
+    personBadges: s.e.personBadges,
+    startCol: s.startCol,
+    span: s.span,
+    row: s.row,
+    continuesBefore: s.continuesBefore,
+    continuesAfter: s.continuesAfter,
+  }));
 
   // Fractional hour of "now" within today's column, e.g. 14:30 -> 14.5 — used to draw a
   // current-time marker. winSEpoch (today's midnight) is always "now" with the clock zeroed,
@@ -359,27 +373,25 @@ async function run(input) {
   let endH = Math.ceil(Math.max(...endCandidates));
   endH = Math.max(endH, startH + 1);
 
-  const grid = layoutNative(rawDays, startH, endH, nowH, sky.sunMarks, sky.hourlyWeather, calendarColors, HEADER_PCT);
+  const grid = layoutNative(rawDays, alldayBars, startH, endH, nowH, sky.sunMarks, sky.hourlyWeather, calendarColors, HEADER_PCT, is12h);
 
   // Who has ANYTHING in the whole visible range (every day, not just today) — the header's
   // own top-left gutter cell (see shared.liquid) was otherwise unused space, and showing
   // "who's on today" only, once, under just one day's label, forced the header taller on
   // every render that had it and misaligned that one day's own label against every other day's
   // (see git history — both real, since-reverted problems). One small badge grid in a cell
-  // that already existed sidesteps both: scans every day's own allday+timed personBadges
-  // (set in applyCalendarPerson) and keeps the first badge seen per declared person — a
-  // category icon never ends up here (it has no person attached), and someone appearing on
-  // 5 different events across the week still only shows once.
+  // that already existed sidesteps both: scans every all-day bar's and every day's own timed
+  // personBadges (set in applyCalendarPerson) and keeps the first badge seen per declared
+  // person — a category icon never ends up here (it has no person attached), and someone
+  // appearing on 5 different events across the week still only shows once.
   const viewPeopleSeen = new Set();
   const viewPeople = [];
-  for (const d of rawDays) {
-    for (const b of [...d.allday.flatMap((a) => a.personBadges || []), ...d.timed.flatMap((t) => t.personBadges || [])]) {
-      if (!b.person || viewPeopleSeen.has(b.person)) continue;
-      viewPeopleSeen.add(b.person);
-      viewPeople.push(b.kind === "photo"
-        ? { kind: "photo", src: b.src, person: b.person, hue: b.hue, fg: b.fg }
-        : { kind: "letter", text: b.text, person: b.person, hue: b.hue, fg: b.fg });
-    }
+  for (const b of [...alldayBars.flatMap((a) => a.personBadges || []), ...rawDays.flatMap((d) => d.timed.flatMap((t) => t.personBadges || []))]) {
+    if (!b.person || viewPeopleSeen.has(b.person)) continue;
+    viewPeopleSeen.add(b.person);
+    viewPeople.push(b.kind === "photo"
+      ? { kind: "photo", src: b.src, person: b.person, hue: b.hue, fg: b.fg }
+      : { kind: "letter", text: b.text, person: b.person, hue: b.hue, fg: b.fg });
   }
 
   return Object.assign({}, grid, {
@@ -389,7 +401,7 @@ async function run(input) {
     error: err,
     unavailable_label: unavailableText(locale),
     all_day_label: allDayText(locale),
-    has_events: rawDays.some((d) => d.timed.length || d.allday.length),
+    has_events: alldayBars.length > 0 || rawDays.some((d) => d.timed.length),
     weather_error: sky.error,
     temp_unit: fahrenheit ? "F" : "C",
   });
@@ -415,7 +427,7 @@ function toInt(raw, def, lo, hi) {
   return Math.max(lo, Math.min(hi, Math.trunc(f)));
 }
 
-function emptyResult(tzname, tz, locale, daysN, msg) {
+function emptyResult(tzname, tz, locale, daysN, is12h, msg) {
   const nowEpoch = Date.now();
   const nowCivil = fromEpoch(nowEpoch, tz);
   const winSCivil = { y: nowCivil.y, mo: nowCivil.mo, d: nowCivil.d, h: 0, mi: 0, s: 0 };
@@ -429,10 +441,9 @@ function emptyResult(tzname, tz, locale, daysN, msg) {
       labelShortRest: dayLabelShortParts(d0Civil, locale).rest,
       isToday: i === 0,
       timed: [],
-      allday: [],
     });
   }
-  const grid = layoutNative(days, 8, 22, null, null, null, null, HEADER_PCT);
+  const grid = layoutNative(days, [], 8, 22, null, null, null, null, HEADER_PCT, is12h);
   return Object.assign({}, grid, {
     people: [], // no real days/events in this branch, so nobody to show in the gutter either
     generated_at: Math.floor(nowEpoch / 1000),
@@ -1430,13 +1441,9 @@ async function fetchSky(location, daysN, fahrenheit) {
 // the same numbers render correctly on any device, including the larger TRMNL X. Liquid does
 // no layout math itself; it just loops over this pre-baked structure.
 
-const HEADER_PCT = 13; // day label (one line) plus the header's own top-left gutter cell,
-                      // which hosts a small badge grid of everyone with anything in the whole
-                      // visible range (see shared.liquid and run()'s own viewPeople) — same
-                      // reserved height on every day/view now rather than only today's column
-                      // needing extra room for a badge row of its own, which is what used to
-                      // force this value up and down depending on view tier and whether today
-                      // specifically had anyone on it.
+const HEADER_PCT = 11; // day label (one line) plus the header's own top-left gutter cell
+                      // (everyone with anything in the visible range, see shared.liquid's
+                      // people badges) — same reserved height on every day/view.
 const FOOTER_PCT = 7; // weather icon + daily high/low, its own zone at the bottom of the
                       // screen (see shared.liquid) rather than a second header line — kept
                       // out of gridBase (the hourly grid's own top-offset math) since it sits
@@ -1500,11 +1507,13 @@ function round4(x) {
   return Math.round(x * 10000) / 10000;
 }
 
-function layoutNative(days, importantStart, importantEnd, nowH, sunMarks, hourlyWeather, calendarColors, headerPct) {
+function layoutNative(days, alldayBars, importantStart, importantEnd, nowH, sunMarks, hourlyWeather, calendarColors, headerPct, is12h) {
   importantStart = Math.max(0, Math.min(23, Math.trunc(importantStart)));
   importantEnd = Math.max(importantStart + 1, Math.min(24, Math.trunc(importantEnd)));
 
-  const maxAdRows = days.length ? Math.max(...days.map((d) => d.allday.length)) : 0;
+  // Row assignment (run()'s own greedy pass) already capped every bar's `row` at 0-2, so the
+  // real row COUNT is just the highest one actually used, not a separate re-count.
+  const maxAdRows = alldayBars.length ? Math.max(...alldayBars.map((b) => b.row)) + 1 : 0;
   const alldayPct = Math.min(3, maxAdRows) * ALLDAY_ROW_PCT;
   const gridBase = headerPct + alldayPct;
   const gridPct = 100 - gridBase - FOOTER_PCT;
@@ -1578,10 +1587,16 @@ function layoutNative(days, importantStart, importantEnd, nowH, sunMarks, hourly
     const totalMin = Math.round(nextEventH0 * 60);
     nextMinute = String(totalMin % 60).padStart(2, "0");
   }
+  // is12h: the axis shows plain 24h hour numbers by default; in 12h mode each hour converts to
+  // its 1-12 form plus an AM/PM period string (shared.liquid renders that smaller and gray,
+  // trailing after the hour digits — same convention as fmtTime's event-time formatting, just
+  // computed per-row here instead of per-event there).
   const hourRows = [];
   for (let h = 0; h < 24; h++) {
+    const hourDisplay = is12h ? (h % 12 || 12) : h;
+    const period = is12h ? (h < 12 ? "AM" : "PM") : null;
     hourRows.push({
-      hour: h, pct: hourPct[h], shade: h % 2, bold: h === nextHour,
+      hour: hourDisplay, period, pct: hourPct[h], shade: h % 2, bold: h === nextHour,
       minute: h === nextHour ? nextMinute : null,
       important: importantStart <= h && h < importantEnd,
     });
@@ -1685,6 +1700,12 @@ function layoutNative(days, importantStart, importantEnd, nowH, sunMarks, hourly
         height = Math.min(MIN_EVENT_PCT, Math.max(0, nextTop - top));
       }
       const color = ev.hueOverride || hueOf(ev.calIdx, calendarColors);
+      // Category icons (briefcase, paint palette, ...) are dropped for standard text chips —
+      // they competed with the title for both width and height, producing erratic font sizes
+      // (a short title stuck tiny next to an icon while a longer title elsewhere rendered
+      // huge). "image" display is a different, deliberate mode (badge_image_row: icon+photo
+      // grid IS the chip's content, no title at all) and keeps its badges.
+      const isImage = ev.display === "image";
       events.push({
         top_pct: round4((top / gridPct) * 100),
         height_pct: round4((height / gridPct) * 100),
@@ -1692,12 +1713,8 @@ function layoutNative(days, importantStart, importantEnd, nowH, sunMarks, hourly
         nlanes: item.nlanes,
         title: ev.title,
         hue: colorClass(color),
-        // Left accent bar (see shared.liquid) — every event gets one, a darker/more-saturated
-        // step of its own fill color by default, or a Category's own color when one matched
-        // (see applyCategory) so the bar can carry a second, independent signal from the fill.
-        bar: accentColor(color),
         fg: foregroundFor(color),
-        badges: ev.badges || [],
+        badges: isImage ? ev.badges || [] : [],
         display: ev.display || "text",
       });
     });
@@ -1707,23 +1724,27 @@ function layoutNative(days, importantStart, importantEnd, nowH, sunMarks, hourly
       label_short_weekday: d.labelShortWeekday, label_short_rest: d.labelShortRest,
       is_today: d.isToday,
       temp: d.temp || null, icon: d.icon || null,
-      allday: d.allday.map((a) => ({
-        title: a.title, hue: colorClass(a.hue), fg: foregroundFor(a.hue),
-        // Left accent bar (see shared.liquid's chip_body) — every timed event already got one
-        // (see the `bar: accentColor(color)` a few lines up); this was missing here entirely,
-        // so an all-day chip with no badges (the plain-bar fallback in chip_body) rendered
-        // bg--{{ bar }} as literally "bg--" (bar undefined) — no accent color at all, not the
-        // same code path timed events actually exercise despite {% render %}ing the identical
-        // template. a.hue here is the same raw (pre-colorClass) value passed to colorClass
-        // just above, mirroring how the timed-event loop derives both hue and bar from one
-        // shared `color` variable.
-        bar: accentColor(a.hue),
-        badges: a.badges || [], display: a.display || "text",
-        continues_before: a.continuesBefore, continues_after: a.continuesAfter,
-      })),
       segments, events, now_marker: nowMarker,
     });
   });
 
-  return { header_pct: headerPct, allday_pct: alldayPct, allday_row_pct: ALLDAY_ROW_PCT, grid_pct: gridPct, footer_pct: FOOTER_PCT, hour_rows: hourRows, days: outDays };
+  // One bar per all-day event, spanning start_col/span day columns — see run()'s alldaySpans
+  // for how those (and row, the 0-2 stacking slot within the alldayPct band) got computed.
+  // Rendered as a single grid item in shared.liquid, positioned with an EXPLICIT
+  // grid-column-start (computed from start_col) rather than relying on this file's usual
+  // auto-placement-infers-the-column-count trick (see the day-column comment elsewhere in this
+  // file) — that trick only ever needed to work for one auto-placed row; here shared.liquid
+  // instead states the band's total column count explicitly (once) and places each bar/row
+  // explicitly too, which also means gaps between bars need no filler cells at all — an
+  // unoccupied explicit grid cell is just blank space. A flat array, deliberately: trmnlp's
+  // own YAML-to-Liquid mock conversion (confirmed) doesn't expose an array-of-arrays at all —
+  // a flat list of bars each carrying its own start_col/row is both simpler AND the only shape
+  // actually renderable locally.
+  const alldayBarsOut = alldayBars.map((b) => ({
+    title: b.title, hue: colorClass(b.hue), fg: foregroundFor(b.hue),
+    start_col: b.startCol, span: b.span, row: b.row,
+    continues_before: b.continuesBefore, continues_after: b.continuesAfter,
+  }));
+
+  return { header_pct: headerPct, allday_pct: alldayPct, allday_row_pct: ALLDAY_ROW_PCT, allday_bars: alldayBarsOut, allday_max_rows: maxAdRows, grid_pct: gridPct, footer_pct: FOOTER_PCT, hour_rows: hourRows, days: outDays };
 }

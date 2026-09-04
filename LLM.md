@@ -39,9 +39,11 @@ an error.
   "people"?: [
     {
       "name": string, "color"?: Color,
-      "badge"?: string,                             // defaults to name's first letter
-      "image"?: string                               // https:// photo URL; replaces badge in
-                                                        // the same circle if both are set
+      "badge"?: string,                             // shown in the header's own per-person badge
+                                                        // (defaults to name's first letter) —
+                                                        // never on individual event chips
+      "image"?: string                               // https:// photo URL; replaces that same
+                                                        // header badge's letter if both are set
     }
   ],
   "categories"?: [
@@ -73,25 +75,22 @@ N in `10 15 20 25 30 35 40 45 50 55 60 65 70 75` (10=darkest, 75=lightest), or l
 Tabler Icons name prefixed `tabler:` (e.g. `"tabler:yoga"`, `"tabler:barbell"` — browse
 [tabler.io/icons](https://tabler.io/icons); use this set for sport/activity icons Material
 Symbols doesn't have — no "pilates"/"yoga"/"meditation" there at all), OR a direct `https://`
-image URL, OR an array of up to two of any of those (rendered as two small overlapping badge
-circles, e.g. `["work", "home"]`).
+image URL, OR an array of up to two of any of those (shown bare, side by side, tinted to the
+chip's own text color — no circle, no background — e.g. `["work", "home"]`).
 
 ## How matching/precedence actually works
 
 - **Color**: calendar's own pinned color (else auto-assigned by position) → person's color (if
   `personRules`/`defaultPerson` attached one) → matched category's color. Later/more-specific
   wins; a category's color is checked last and wins if set.
-- **Badge rail** (the left-edge strip every event shows) has exactly 2 slots: each attached,
-  DECLARED person fills the front slot(s) first, one per person, in the order
-  `personRules`/`defaultPerson` listed them — their `image` photo if set, else their `badge`
-  letter — then a matched category's `icon`(s) fill whatever slot(s) are left (one icon = 1
-  slot, `["a","b"]` = both, falling back to the calendar's own default `icon` if no category
-  matched). Nothing in any slot = a plain color accent, no circle. This is why a person's own
-  badge and a category icon routinely show together (badge = whose, icon = what kind) as long
-  as only one person was declared on that event.
-- **`display: "image"`** on a category takes whatever ended up in the rail and blows it up to
-  fill the whole chip, dropping the title — only takes effect if something real is actually in
-  a slot (an icon matched, or a person got attached); otherwise it's a normal text chip.
+- **Event chip icon**: a matched category's `icon`(s) show first (one icon shows just the one,
+  `["a","b"]` shows both), else the calendar's own default `icon` if it has one, else no icon —
+  just the plain title. No person badge/photo ever shows on an event chip; that only ever
+  appears once, in the header's own per-person badge (see `people[].badge`/`.image` above),
+  covering every distinct person with anything anywhere in the visible range — not per event.
+- **`display: "image"`** on a category takes whatever icon(s) resulted above and blows them up
+  to fill the whole chip, dropping the title — only takes effect if an icon actually matched;
+  otherwise it's a normal text chip.
 - **Categories are NOT calendar-scoped by default** — a bare category with no `calendars`/
   `excludeCalendars` is checked against every event on every calendar. Use `excludeCalendars` to
   keep a broad category (e.g. `"match": "work|werk"`) off one calendar that's already "someone's
@@ -106,8 +105,8 @@ circles, e.g. `["work", "home"]`).
 - Treating `id` as something that renames or matches events — it's purely a lookup key for
   `categories[].calendars`/`excludeCalendars` and `personRules`/`defaultPerson`.
 - Giving a person a `badge` but no `color` when the intent was "make their events look
-  different" — without `color`, their events keep the calendar's own color; only the badge
-  circle differs.
+  different" — without `color`, their events keep the calendar's own color; only the header's
+  own badge differs.
 - Writing a category with no `match` — it's required; a color/icon-only category still needs a
   regex, even a broad one like `".*"` if truly "everything on this calendar."
 - Guessing an icon name instead of noting the set — a Material Symbols name and a Tabler name

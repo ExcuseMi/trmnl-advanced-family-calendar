@@ -20,11 +20,58 @@ variables:
         calendars: '{"calendars":[{"url":"https://cloud.example.com/x.ics"}]}'
         time_zone: Europe/Brussels
         view_days: '3'
-  header_pct: 15
-  allday_pct: 12
+  header_pct: 11
+  allday_pct: 24
   allday_row_pct: 12
-  grid_pct: 64
+  allday_max_rows: 2
+  allday_bars:
+  - title: Grandparents Visiting
+    hue: blue-65
+    fg: black
+    start_col: 0
+    span: 3
+    row: 0
+    continues_before: true
+    continues_after: true
+  - title: Verjaardag Alex
+    hue: pink-65
+    fg: black
+    start_col: 0
+    span: 1
+    row: 1
+    continues_before: false
+    continues_after: false
+  - title: Public Holiday
+    hue: red-65
+    fg: black
+    start_col: 3
+    span: 1
+    row: 1
+    continues_before: false
+    continues_after: false
+  grid_pct: 68
   footer_pct: 9
+  people:
+  - kind: letter
+    text: M
+    person: Mama
+    hue: pink-65
+    fg: black
+  - kind: letter
+    text: P
+    person: Papa
+    hue: blue-65
+    fg: black
+  - kind: photo
+    src: https://i.pravatar.cc/150?img=5
+    person: Alex
+    hue: orange-65
+    fg: black
+  - kind: letter
+    text: R
+    person: Robin
+    hue: green-65
+    fg: black
   hour_rows:
   - hour: 0
     pct: 2
@@ -54,6 +101,7 @@ variables:
     pct: 4
     shade: 0
     bold: true
+    period: "AM"
   - hour: 7
     pct: 4
     shade: 1
@@ -82,10 +130,12 @@ variables:
     pct: 4
     shade: 1
     bold: false
-  - hour: 14
+  - hour: 2
     pct: 4
     shade: 0
     bold: true
+    minute: "15"
+    period: "PM"
   - hour: 15
     pct: 4
     shade: 1
@@ -114,10 +164,11 @@ variables:
     pct: 4
     shade: 1
     bold: false
-  - hour: 22
+  - hour: 10
     pct: 4
     shade: 0
     bold: true
+    period: "PM"
   - hour: 23
     pct: 2
     shade: 1
@@ -125,24 +176,13 @@ variables:
   days:
   - label: Za 4 Juli
     label_short: Za 4 Jul
+    label_short_weekday: Za
+    label_short_rest: 4 Jul
     is_today: true
     temp:
       high: 28
       low: 16
     icon: https://trmnl.com/images/plugins/weather/wi-day-sunny.svg
-    allday:
-    - title: Verjaardag Alex
-      hue: pink-65
-      fg: black
-      bar: pink-45
-      badges:
-      - kind: icon
-        src: https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/cake/default/24px.svg
-      - kind: photo
-        src: https://i.pravatar.cc/150?img=5
-      display: text
-      continues_before: false
-      continues_after: false
     segments:
     - pct: 2
       shade: 0
@@ -249,19 +289,23 @@ variables:
       night: true
       weather: null
     events:
+    - top_pct: 14.0
+      height_pct: 10.0
+      lane_index: 0
+      nlanes: 1
+      title: Grocery Shopping
+      hue: orange-65
+      fg: black
+      badges: []
+      display: text
     - top_pct: 38.0
       height_pct: 9.0
       lane_index: 0
       nlanes: 1
       title: Thuiswerken
       hue: blue-65
-      bar: violet-45
       fg: black
-      badges:
-      - kind: icon
-        src: https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/work/default/24px.svg
-      - kind: icon
-        src: https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/home/default/24px.svg
+      badges: []
       display: text
     - top_pct: 55.2941
       height_pct: 11.7647
@@ -269,23 +313,21 @@ variables:
       nlanes: 1
       title: Alex's verjaardagsfeest
       hue: pink-65
-      bar: pink-45
       fg: black
-      badges:
-      - kind: icon
-        src: https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/cake/default/24px.svg
+      badges: []
       display: text
     now_marker:
       top_pct: 89.9439
       night: false
   - label: Zo 5 Juli
     label_short: Zo 5 Jul
+    label_short_weekday: Zo
+    label_short_rest: 5 Jul
     is_today: false
     temp:
       high: 25
       low: 18
     icon: https://trmnl.com/images/plugins/weather/wi-day-sunny.svg
-    allday: []
     segments:
     - pct: 2
       shade: 0
@@ -398,7 +440,6 @@ variables:
       nlanes: 1
       title: Vroege zwemles
       hue: green-65
-      bar: green-45
       fg: black
       badges:
       - kind: icon
@@ -409,12 +450,13 @@ variables:
     now_marker: null
   - label: Ma 6 Juli
     label_short: Ma 6 Jul
+    label_short_weekday: Ma
+    label_short_rest: 6 Jul
     is_today: false
     temp:
       high: 29
       low: 19
     icon: https://trmnl.com/images/plugins/weather/wi-day-sunny.svg
-    allday: []
     segments:
     - pct: 2
       shade: 0
@@ -527,8 +569,282 @@ variables:
       nlanes: 1
       title: Laat etentje
       hue: gray-25
-      bar: gray-15
       fg: white
+      badges: []
+      display: text
+    now_marker: null
+  - label: Di 7 Juli — Chip Test Matrix
+    label_short: Di 7 Jul
+    label_short_weekday: Di
+    label_short_rest: 7 Jul
+    is_today: false
+    temp:
+      high: 24
+      low: 15
+    icon: https://trmnl.com/images/plugins/weather/wi-day-sunny.svg
+    segments:
+    - pct: 2
+      shade: 0
+      night: true
+      weather: null
+    - pct: 2
+      shade: 1
+      night: true
+      weather: null
+    - pct: 2
+      shade: 0
+      night: true
+      weather: null
+    - pct: 2
+      shade: 1
+      night: true
+      weather: null
+    - pct: 2
+      shade: 0
+      night: true
+      weather: null
+    - pct: 3
+      shade: 1
+      night: true
+      weather: null
+    - pct: 2
+      shade: 1
+      night: false
+      weather: null
+    - pct: 4
+      shade: 0
+      night: false
+      weather: null
+    - pct: 4
+      shade: 1
+      night: false
+      weather: null
+    - pct: 4
+      shade: 0
+      night: false
+      weather: null
+    - pct: 4
+      shade: 1
+      night: false
+      weather: null
+    - pct: 4
+      shade: 0
+      night: false
+      weather: null
+    - pct: 4
+      shade: 1
+      night: false
+      weather: null
+    - pct: 4
+      shade: 0
+      night: false
+      weather: null
+    - pct: 4
+      shade: 1
+      night: false
+      weather: null
+    - pct: 4
+      shade: 0
+      night: false
+      weather: null
+    - pct: 4
+      shade: 1
+      night: false
+      weather: null
+    - pct: 4
+      shade: 0
+      night: false
+      weather: null
+    - pct: 4
+      shade: 1
+      night: false
+      weather: null
+    - pct: 4
+      shade: 0
+      night: false
+      weather: null
+    - pct: 4
+      shade: 1
+      night: false
+      weather: null
+    - pct: 0
+      shade: 1
+      night: true
+      weather: null
+    - pct: 4
+      shade: 0
+      night: true
+      weather: null
+    - pct: 2
+      shade: 1
+      night: true
+      weather: null
+    events:
+    # Chip-rendering dimension matrix — text length x icon count x lane width x box height.
+    # Exercises chip_body/fit()'s one-line-vs-wrap logic deliberately, not just whatever
+    # combination a real calendar happens to produce. Two "narrow" bands (3 lanes sharing a
+    # time slot) cover width; each event's own height_pct covers short vs tall; title covers
+    # short vs long text; badges covers 0/1/2 icons.
+    #
+    # Band A: narrow (3 lanes) x TALL — lane 0 is the exact shape that broke chip_body
+    # earlier (short text, 1 icon, narrow, tall: an 8-hour "Work" split into 2 lanes wrapped
+    # into "W"/"o"/"r"/"k" at a huge size) — kept here as a standing regression check.
+    - top_pct: 2
+      height_pct: 20
+      lane_index: 0
+      nlanes: 3
+      title: Gym
+      hue: blue-65
+      fg: black
+      badges: []
+      display: text
+    - top_pct: 2
+      height_pct: 20
+      lane_index: 1
+      nlanes: 3
+      title: Quarterly Budget Review Meeting
+      hue: green-65
+      fg: black
+      badges: []
+      display: text
+    - top_pct: 2
+      height_pct: 20
+      lane_index: 2
+      nlanes: 3
+      title: Gym
+      hue: purple-65
+      fg: black
+      badges: []
+      display: text
+    # Band B: narrow (3 lanes) x SHORT.
+    - top_pct: 23
+      height_pct: 4
+      lane_index: 0
+      nlanes: 3
+      title: Gym
+      hue: blue-65
+      fg: black
+      badges: []
+      display: text
+    - top_pct: 23
+      height_pct: 4
+      lane_index: 1
+      nlanes: 3
+      title: Quarterly Budget Review Meeting
+      hue: green-65
+      fg: black
+      badges: []
+      display: text
+    - top_pct: 23
+      height_pct: 4
+      lane_index: 2
+      nlanes: 3
+      title: Quarterly Budget Review Meeting
+      hue: purple-65
+      fg: black
+      badges: []
+      display: text
+    # Wide (1 lane, full width) x every text/icon/height combination.
+    - top_pct: 28
+      height_pct: 3
+      lane_index: 0
+      nlanes: 1
+      title: Gym
+      hue: orange-65
+      fg: black
+      badges: []
+      display: text
+    - top_pct: 32
+      height_pct: 12
+      lane_index: 0
+      nlanes: 1
+      title: Gym
+      hue: cyan-65
+      fg: black
+      badges: []
+      display: text
+    - top_pct: 45
+      height_pct: 3
+      lane_index: 0
+      nlanes: 1
+      title: Quarterly Budget Review Meeting
+      hue: yellow-65
+      fg: black
+      badges: []
+      display: text
+    - top_pct: 49
+      height_pct: 12
+      lane_index: 0
+      nlanes: 1
+      title: Quarterly Budget Review Meeting
+      hue: lime-65
+      fg: black
+      badges: []
+      display: text
+    - top_pct: 62
+      height_pct: 3
+      lane_index: 0
+      nlanes: 1
+      title: Gym
+      hue: orange-65
+      fg: black
+      badges: []
+      display: text
+    - top_pct: 66
+      height_pct: 12
+      lane_index: 0
+      nlanes: 1
+      title: Gym
+      hue: cyan-65
+      fg: black
+      badges: []
+      display: text
+    - top_pct: 79
+      height_pct: 3
+      lane_index: 0
+      nlanes: 1
+      title: Quarterly Budget Review Meeting
+      hue: yellow-65
+      fg: black
+      badges: []
+      display: text
+    - top_pct: 83
+      height_pct: 12
+      lane_index: 0
+      nlanes: 1
+      title: Quarterly Budget Review Meeting
+      hue: lime-65
+      fg: black
+      badges: []
+      display: text
+    # Concurrent-lane regression check: "Work" holds a continuous single card for its whole
+    # 08:30-17:00 span in the left lane; short overlapping events sit in the right lane during
+    # their own specific slots only. One continuous bounding card per event, never split.
+    - top_pct: 30
+      height_pct: 30
+      lane_index: 0
+      nlanes: 2
+      title: Work
+      hue: blue-65
+      fg: black
+      badges: []
+      display: text
+    - top_pct: 33
+      height_pct: 7
+      lane_index: 1
+      nlanes: 2
+      title: Assembly
+      hue: yellow-65
+      fg: black
+      badges: []
+      display: text
+    - top_pct: 44
+      height_pct: 10
+      lane_index: 1
+      nlanes: 2
+      title: Sports Day Mia
+      hue: orange-65
+      fg: black
       badges: []
       display: text
     now_marker: null
