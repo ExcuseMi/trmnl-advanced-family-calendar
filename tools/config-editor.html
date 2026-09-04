@@ -66,7 +66,7 @@
   a { color: #1a5fb4; }
 </style>
 </head>
-<body>
+<body class="trmnl">
 <div class="wrap">
   <h1>Family Calendar</h1>
   <p class="lede">Build the <strong>Calendar Configuration</strong> field visually, test it against real (fetched, uploaded, or pasted) ICS data, and preview colors using TRMNL's actual CSS — then copy the JSON into the plugin's settings. This page runs <code>plugin/src/transform.js</code> directly, unmodified — the same code that runs on TRMNL.</p>
@@ -239,15 +239,26 @@
   // framework's own palette ever changes. Cached since every option in every select reuses
   // the same small color set.
   var _colorStyleCache = {};
+  var colorProbeRoot = null;
   function colorOptionStyle(colorValue) {
     if (!colorValue) return "";
     if (!(colorValue in _colorStyleCache)) {
+      // Framework color custom properties (--bg-{hue}-color etc.) are only ever defined
+      // under ".trmnl .screen" (confirmed against the framework's own shipped CSS the hard
+      // way) — but `.screen` also carries real device-viewport sizing that broke this page's
+      // own layout the first time it landed on the actual visible .wrap container. A
+      // dedicated, permanently hidden probe root (own .trmnl + .screen, never shown, never
+      // part of the real page flow) gets the color scoping right without that side effect.
+      if (!colorProbeRoot) {
+        colorProbeRoot = el("div", { class: "trmnl", style: "position:absolute;width:0;height:0;overflow:hidden;visibility:hidden;" });
+        colorProbeRoot.appendChild(el("div", { class: "screen" }));
+        document.body.appendChild(colorProbeRoot);
+      }
       var probe = el("span", { class: "bg--" + colorClass(colorValue) + " text--" + foregroundFor(colorValue) });
-      probe.style.cssText = "position:absolute;visibility:hidden;";
-      document.body.appendChild(probe);
+      colorProbeRoot.firstChild.appendChild(probe);
       var cs = getComputedStyle(probe);
       _colorStyleCache[colorValue] = "background-color:" + cs.backgroundColor + ";color:" + cs.color + ";";
-      document.body.removeChild(probe);
+      colorProbeRoot.firstChild.removeChild(probe);
     }
     return _colorStyleCache[colorValue];
   }
