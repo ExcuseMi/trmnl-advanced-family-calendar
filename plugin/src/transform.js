@@ -1657,7 +1657,11 @@ function layoutNative(days, importantStart, importantEnd, nowH, sunMarks, hourly
     for (const b of [...d.allday.flatMap((a) => a.badges || []), ...events.flatMap((ev) => ev.badges || [])]) {
       if (!b.person || dayPeopleSeen.has(b.person)) continue;
       dayPeopleSeen.add(b.person);
-      dayPeople.push(b.kind === "photo" ? { kind: "photo", src: b.src } : { kind: "letter", text: b.text });
+      // person rides along too — badge_content's own photo-kind fallback (see shared.liquid)
+      // reads it to show an initial instead of the (currently unrendered) photo; stripping it
+      // here left the header's own badges rendering as empty boxes, invisible instead of
+      // falling back the way an event chip's own badge already did.
+      dayPeople.push(b.kind === "photo" ? { kind: "photo", src: b.src, person: b.person } : { kind: "letter", text: b.text, person: b.person });
     }
 
     outDays.push({

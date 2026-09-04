@@ -14,13 +14,23 @@ elsewhere below) were written the obvious way, with the delimiters spelled out.
 {% endcomment %}
 
 {% template badge_content %}
-  {%- comment -%} One badge's inner content — icon (inverted line-art), photo (cover-fit), or a
-  plain letter — identical wherever it's hosted (the rail, or "image" display mode's whole-chip
-  row). Param: b. {%- endcomment -%}
+  {%- comment -%} One badge's inner content — icon (inverted line-art) or a plain letter —
+  identical wherever it's hosted (the rail, or "image" display mode's whole-chip row). Param:
+  b. Photos are DELIBERATELY not rendered here for now: a real photo dithers to muddy noise at
+  badge size on TRMNL's actual e-ink output (confirmed against a real device render, not just
+  a browser preview — browsers never applied that dithering, so it looked fine there right up
+  until it didn't on the device) regardless of how big the badge itself is; fixing that for
+  real needs either pre-processing uploaded photos for e-ink legibility (posterize/contrast
+  before TRMNL's own dither ever sees them) or steering people toward a flat/cartoon image
+  (already suggested elsewhere — see imagetocartoon.com in CONFIG.md/the editor's Photo field)
+  — either is a bigger change than this. A person with `image` set falls back to their badge
+  letter (b.person's own first initial) instead of a blank box in the meantime; kind is still
+  "photo" upstream (transform.js/run()) so this reverts cleanly once photos are worth showing
+  again. {%- endcomment -%}
   {%- if b.kind == "icon" -%}
     <img src="{{ b.src }}" alt="" style="width:65%;height:65%;filter:invert(1);">
   {%- elsif b.kind == "photo" -%}
-    <img src="{{ b.src }}" alt="" style="width:100%;height:100%;object-fit:cover;">
+    {{ b.person | slice: 0, 1 | upcase }}
   {%- else -%}
     {{ b.text }}
   {%- endif -%}

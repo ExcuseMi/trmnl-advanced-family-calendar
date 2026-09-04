@@ -1390,12 +1390,17 @@
   }
 
   // One badge-rail circle (icon/photo/letter), sized `d`px — mirrors the real template's badge
-  // rendering (see shared.liquid) closely enough for a preview: icon = inverted line art,
-  // photo = object-fit:cover, letter = the plain text.
+  // rendering (see shared.liquid's badge_content) closely enough for a preview: icon =
+  // inverted line art, letter = the plain text. Photos are deliberately NOT rendered here
+  // either, same as badge_content right now — falls back to the person's own initial instead
+  // (see shared.liquid for why: a real photo dithers to muddy noise at badge size on TRMNL's
+  // actual e-ink output, confirmed against a real device, not just a browser preview like this
+  // one — a browser preview showing it fine is exactly what made that gap invisible for a
+  // while).
   function badgeSpanFor(b, d) {
     var content;
     if (b.kind === "icon") content = [el("img", { src: b.src, style: "width:65%;height:65%;filter:invert(1);", alt: "" })];
-    else if (b.kind === "photo") content = [el("img", { src: b.src, style: "width:100%;height:100%;object-fit:cover;", alt: "" })];
+    else if (b.kind === "photo") content = [document.createTextNode((b.person || "").slice(0, 1).toUpperCase())];
     else content = [document.createTextNode(b.text || "")];
     return el("span", {
       class: "text--white bg--black rounded--small",
