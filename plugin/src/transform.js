@@ -243,25 +243,23 @@ async function run(input) {
     if (c.color) e.hueOverride = c.color;
     const catIcon = c.icon || calendars[e.calIdx].icon || null;
 
-    // The badge rail (see shared.liquid) has exactly 2 slots, same budget as before this
-    // supported more than one person or a real image mode. Person badges/photos ("whose") take
-    // the front slot(s) first — the more immediately recognizable signal (a face beats an
-    // abstract icon) — and a category icon ("what kind") fills whatever's left, one icon if a
-    // person already took a slot, both if none did, silently dropping any icon that doesn't
-    // fit rather than growing the rail unpredictably.
+    // The badge rail (see shared.liquid) has exactly 2 slots. Category icons ("what kind")
+    // only, for now — person badges/photos ("whose") are left out of the rail entirely, since
+    // a photo dithers unreadable at badge size on real e-ink (see badge_content's own comment
+    // in shared.liquid) and a plain initial letter turned out to matter less than giving a
+    // 2-icon category both its slots. r.badges (the person side) still gets tracked below as
+    // e.personBadges, kept alive purely for the header's own "who has something today" strip
+    // (see day.people further down) — that reads independently of what the rail itself shows.
     const badges = [];
-    for (const pb of r.badges) {
-      if (badges.length >= 2) break;
-      badges.push(pb);
-    }
     if (catIcon) {
-      if (badges.length < 2) badges.push({ kind: "icon", src: catIcon.first });
-      if (badges.length < 2 && catIcon.second) badges.push({ kind: "icon", src: catIcon.second });
+      badges.push({ kind: "icon", src: catIcon.first });
+      if (catIcon.second) badges.push({ kind: "icon", src: catIcon.second });
     }
     e.badges = badges;
+    e.personBadges = r.badges;
     // "image" display mode only actually takes effect once there's a real badge to show as
-    // the image — a category set to image mode that matched an event with no icon and no
-    // taggable person falls back to the normal text chip instead of rendering an empty rail.
+    // the image — a category set to image mode that matched an event with no icon falls back
+    // to the normal text chip instead of rendering an empty rail.
     e.display = c.display === "image" && badges.length > 0 ? "image" : "text";
   }
 
@@ -289,6 +287,7 @@ async function run(input) {
           calIdx: e.calIdx,
           hueOverride: e.hueOverride,
           badges: e.badges,
+          personBadges: e.personBadges,
           display: e.display,
           label: fmtTime(vs, tz, is12h) + "–" + fmtTime(ve, tz, is12h),
         });
@@ -304,6 +303,7 @@ async function run(input) {
         title: a.title,
         hue: a.hueOverride || hueOf(a.calIdx, calendarColors),
         badges: a.badges,
+        personBadges: a.personBadges,
         display: a.display,
         // Lets the template draw multi-day all-day events as one continuous banner (square
         // off the edge that's mid-span) instead of a separate fully-rounded pill repeating
@@ -1652,9 +1652,13 @@ function layoutNative(days, importantStart, importantEnd, nowH, sunMarks, hourly
     // badge already assembled above for this day and keeps the first one seen per declared
     // person (person, set in applyCalendarPerson) — a category icon's badge has no `person`
     // and is skipped, and a person tagged on 3 events today still only shows once here.
+    // personBadges (see e.personBadges above), not badges — the rail itself is category-icons-
+    // only now, so scanning badges here would find nothing; d.timed is the ORIGINAL per-day
+    // timed list (personBadges attached there directly), not the transformed `events` array
+    // below, which never carried personBadges through in the first place.
     const dayPeopleSeen = new Set();
     const dayPeople = [];
-    for (const b of [...d.allday.flatMap((a) => a.badges || []), ...events.flatMap((ev) => ev.badges || [])]) {
+    for (const b of [...d.allday.flatMap((a) => a.personBadges || []), ...d.timed.flatMap((ev) => ev.personBadges || [])]) {
       if (!b.person || dayPeopleSeen.has(b.person)) continue;
       dayPeopleSeen.add(b.person);
       // person rides along too — badge_content's own photo-kind fallback (see shared.liquid)
