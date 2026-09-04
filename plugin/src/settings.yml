@@ -34,14 +34,14 @@ custom_fields:
 - keyname: author_info
   name: About This Plugin
   field_type: author_bio
-  description: A smart-scaling agenda from any ICS calendar feed, where the timeline auto-expands the hours that matter (daylight and your meetings) and shrinks the quiet ones, so your day never gets squeezed into a tiny sliver of the screen. Combine multiple calendars, each shown in its own color, with sunrise/sunset and daily weather right alongside your events. 1 day to a week of coverage. Auto-detects your language and time format from your TRMNL account.<br /><br />Runs on TRMNL <strong>Serverless</strong>, no server to host.
+  description: A smart-scaling agenda from any ICS calendar feed, where the timeline auto-expands the hours that matter (daylight and your meetings) and shrinks the quiet ones, so your day never gets squeezed into a tiny sliver of the screen. Combine multiple calendars, each shown in its own color, with sunrise/sunset and daily weather right alongside your events. 1 to 3 days of coverage. Auto-detects your language and time format from your TRMNL account.<br /><br />Runs on TRMNL <strong>Serverless</strong>, no server to host.
   github_url: https://github.com/ExcuseMi/trmnl-advanced-family-calendar
   category: calendar
   help_text: TRMNL X Ready
 - keyname: calendars
   field_type: code
   name: Calendar Configuration
-  description: One JSON object describing the hours you want shown, your calendars, and (optionally) the people and categories you want events colored/labeled/iconed by. Most calendar apps have a private ICS link tucked away in settings, e.g. Nextcloud (Calendar → hover a calendar → ⋯ → <strong>Copy private link</strong>) or Google Calendar (Settings → your calendar → <strong>Secret address in iCal format</strong>). <code>webcal://</code> links work too.<br /><br />Build this visually at <a href="https://trmnl.bettens.dev/advanced-family-calendar/" target="_blank">the Calendar Configuration Editor</a> rather than hand-writing it — paste the result here (it can also load an existing configuration back in, to keep editing it). For the full field-by-field reference, see <a href="https://github.com/ExcuseMi/trmnl-advanced-family-calendar/blob/main/CONFIG.md" target="_blank">CONFIG.md</a>; if an LLM is writing this JSON for you, point it at <a href="https://github.com/ExcuseMi/trmnl-advanced-family-calendar/blob/main/LLM.md" target="_blank">LLM.md</a> instead — same schema, in the compact form an LLM can work from directly.
+  description: One JSON object describing the hours you want shown, your calendars, and (optionally) the people you want events colored/labeled by. Most calendar apps have a private ICS link tucked away in settings, e.g. Nextcloud (Calendar → hover a calendar → ⋯ → <strong>Copy private link</strong>) or Google Calendar (Settings → your calendar → <strong>Secret address in iCal format</strong>). <code>webcal://</code> links work too.<br /><br />Build this visually at <a href="https://trmnl.bettens.dev/advanced-family-calendar/" target="_blank">the Calendar Configuration Editor</a> rather than hand-writing it — paste the result here (it can also load an existing configuration back in, to keep editing it). For the full field-by-field reference, see <a href="https://github.com/ExcuseMi/trmnl-advanced-family-calendar/blob/main/CONFIG.md" target="_blank">CONFIG.md</a>; if an LLM is writing this JSON for you, point it at <a href="https://github.com/ExcuseMi/trmnl-advanced-family-calendar/blob/main/LLM.md" target="_blank">LLM.md</a> instead — same schema, in the compact form an LLM can work from directly.
   placeholder: |-
     {
       "hours": { "start": 7, "end": 21 },
@@ -57,28 +57,21 @@ custom_fields:
         {
           "id": "Holidays",
           "url": "https://calendar.google.com/calendar/ical/en.usa%23holiday%40group.v.calendar.google.com/public/basic.ics",
-          "color": "red", "icon": "flag"
+          "color": "red"
         }
       ],
       "people": [
         { "name": "Alex", "color": "pink", "badge": "K" }
-      ],
-      "categories": [
-        { "name": "Birthday", "match": "verjaardag|birthday", "icon": "cake" },
-        { "name": "Work From Home", "match": "\\bWFH\\b", "icon": ["work", "home"] },
-        { "name": "Work", "match": "work|werk", "icon": "work", "excludeCalendars": ["Alex"] }
       ]
     }
 - keyname: view_days
   field_type: select
   name: Days to Show
-  description: How many days the calendar grid covers, starting today.
+  description: How many days the calendar grid covers, starting today. Only the full-size (800x480) layout honors this — quadrant/half layouts always show just today regardless.
   options:
   - 1 day: '1'
   - 2 days: '2'
   - 3 days: '3'
-  - 5 days: '5'
-  - 1 week: '7'
   default: '3'
 - keyname: lat_lon
   field_type: lat_lon

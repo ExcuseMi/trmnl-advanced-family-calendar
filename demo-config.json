@@ -3,8 +3,7 @@
   "calendars": [
     {
       "id": "Family",
-      "url": "https://trmnl.bettens.dev/advanced-family-calendar/demo/family.ics",
-      "icon": "family_group"
+      "url": "https://trmnl.bettens.dev/advanced-family-calendar/demo/family.ics"
     },
     {
       "id": "Alex",
@@ -39,8 +38,7 @@
     {
       "id": "Holidays",
       "url": "https://calendar.google.com/calendar/ical/en.usa%23holiday%40group.v.calendar.google.com/public/basic.ics",
-      "color": "red",
-      "icon": "flag"
+      "color": "red"
     }
   ],
   "people": [
@@ -48,18 +46,5 @@
     { "name": "Jordan", "color": "purple" },
     { "name": "Mia", "color": "pink" },
     { "name": "Leo", "color": "green" }
-  ],
-  "categories": [
-    { "match": "\\bwork\\b", "name": "Work", "icon": "work" },
-    { "match": "work from home", "name": "Work From Home", "icon": "home_work" },
-    { "match": "swim", "name": "Swimming", "icon": "tabler:swimming" },
-    { "match": "gymnastics|turnen", "name": "Gymnastics", "icon": "sports_gymnastics" },
-    { "match": "\\byoga\\b", "name": "Yoga", "icon": "tabler:yoga" },
-    { "match": "pilates", "name": "Pilates", "icon": "tabler:yoga" },
-    { "match": "speech therapy", "name": "Speech Therapy", "icon": "physical_therapy" },
-    { "match": "piano", "name": "Music", "icon": "piano" },
-    { "match": "\\bart\\b", "name": "Art", "icon": "palette" },
-    { "match": "birthday", "name": "Birthday", "icon": "cake" },
-    { "match": ".*", "name": "School", "icon": "school", "calendars": ["School"] }
   ]
 }
