@@ -2,10 +2,8 @@ import logging
 import os
 
 import aiohttp
-from quart import Quart, Response, jsonify, redirect, request, send_from_directory
+from quart import Quart, Response, jsonify, request
 
-from modules.utils.db import delete_image, init_db, load_image, save_image
-from modules.utils.images import InvalidImage, new_image_id, process_to_square
 from modules.utils.ip_whitelist import init_ip_whitelist, require_tiered_access
 from modules.utils.ssrf_guard import UnsafeUrl, assert_safe_url
 
@@ -14,8 +12,6 @@ log = logging.getLogger(__name__)
 
 app = Quart(__name__)
 
-PUBLIC_BASE_URL = os.getenv('PUBLIC_BASE_URL', 'https://trmnl.bettens.dev/advanced-family-calendar').rstrip('/')
-MAX_UPLOAD_BYTES = int(os.getenv('MAX_UPLOAD_BYTES', str(10 * 1024 * 1024)))  # 10 MB
 MAX_PROXY_BYTES = int(os.getenv('MAX_PROXY_BYTES', str(15 * 1024 * 1024)))  # 15 MB
 FETCH_TIMEOUT_SECONDS = int(os.getenv('FETCH_TIMEOUT_SECONDS', '15'))
 
@@ -37,7 +33,6 @@ async def _startup():
     else:
         log.warning('REDIS_URL not set — rate limiting will be skipped')
     await init_ip_whitelist()
-    await init_db()
 
 
 def _cors(resp: Response) -> Response:
@@ -52,82 +47,11 @@ async def health():
     return jsonify({'status': 'ok'})
 
 
-# The Configuration Editor is served from here too (same origin as /ics-proxy and
-# /images), not just GitHub Pages — same-origin means the browser never needs a CORS
-# preflight against this backend at all for those calls, only against whatever third-party
-# calendar host the editor is testing (which is exactly what /ics-proxy exists to route
-# around). backend/Dockerfile copies tools/config-editor.html and plugin/src/transform.js
-# into static/ under the same relative layout they have in the repo, so the page's own
-# <script src="../plugin/src/transform.js"> resolves unmodified — those two files stay the
-# single source, this isn't a fork of them.
-
-@app.route('/')
-async def index():
-    # Relative, not absolute-path: Caddy's `handle_path /advanced-family-calendar*` strips
-    # that prefix before this app ever sees the request, so an absolute Location header here
-    # would drop it too — the browser would follow it straight to the wrong (prefix-less)
-    # URL. A relative Location resolves against the request URL the browser actually has.
-    return redirect('tools/config-editor.html')
-
-
-@app.route('/tools/config-editor.html')
-async def editor():
-    return await _no_cache(send_from_directory(app.static_folder, 'tools/config-editor.html'))
-
-
-@app.route('/plugin/src/transform.js')
-async def editor_transform_js():
-    return await _no_cache(send_from_directory(app.static_folder, 'plugin/src/transform.js'))
-
-
-async def _no_cache(resp_coro) -> Response:
-    # Both files change on every deploy (a straight COPY in backend/Dockerfile from the repo's
-    # own tools/config-editor.html and plugin/src/transform.js — see the routes above), but
-    # they're plain static-extension responses sitting behind Cloudflare, which caches those at
-    # the edge for hours regardless of how fresh the origin actually is — confirmed hitting a
-    # 12-hour-old copy here well after a redeploy, serving stale badge-order/sizing code to the
-    # editor's "Run Test" preview the whole time a session's worth of fixes were being pushed.
-    # no-store on the ORIGIN response is the correct fix for our side of it; Cloudflare's own
-    # cache still needs a manual purge (or its edge TTL turned down) after a deploy for
-    # already-cached copies to actually clear.
-    resp = await resp_coro
-    resp.headers['Cache-Control'] = 'no-store'
-    return resp
-
-
-# --------------------------------------------------------------------------- demo calendars
-#
-# A fictional family (Alex/Jordan + kids Mia/Leo, none of them a real person) spread across
-# static/demo/*.ics (backend/static/demo/, copied in verbatim by `COPY backend/ .` in
-# Dockerfile — no separate COPY line needed, unlike config-editor.html/transform.js above,
-# since those two are copied FROM elsewhere in the repo while these already live under
-# backend/). Every event is RRULE-recurring (WEEKLY or YEARLY) with no one-off dated
-# occurrences at all — a fixed one-off event just stops appearing once its date is in the
-# past, which would make the demo look increasingly empty the longer it sits deployed;
-# recurring means it's still "today, busy" whenever someone actually loads it. Deliberately
-# includes a real same-time overlap (Mia's and Leo's own Thursday "Gymnastics", both
-# 17:00-18:00) — the exact multi-lane-narrow-icon shape that broke chip_body earlier this
-# project, so this doubles as a standing regression check, not just a demo. See README's
-# "Try the demo" section for the calendars/people/categories config that ties these
-# together (personRules/exclude on demo/school.ics especially — it carries the same
-# class-code style, "Zwemles L2"/"Turnen L6" alongside other classes that should stay
-# hidden, as the placeholder example in settings.yml).
-
-DEMO_CALENDARS = {'family', 'alex', 'jordan', 'mia', 'leo', 'school'}
-
-
-@app.route('/demo/<name>.ics')
-async def demo_ics(name):
-    if name not in DEMO_CALENDARS:
-        return _cors(jsonify({'error': 'Not found'})), 404
-    resp = await send_from_directory(app.static_folder, f'demo/{name}.ics')
-    resp.headers['Content-Type'] = 'text/calendar; charset=utf-8'
-    # Static demo content, not user data — a real cache window is fine (unlike the no-store
-    # editor assets above), just short enough that an occasional edit to the demo data itself
-    # doesn't sit stale at Cloudflare's edge for too long.
-    resp.headers['Cache-Control'] = 'public, max-age=3600'
-    return _cors(resp)
-
+# The Configuration Editor (tools/config-editor.html) and the demo calendars (demo/*.ics) are
+# both plain static files in this repo now — served straight from GitHub (Pages for the
+# editor, raw.githubusercontent.com for the .ics files; see README/demo-config.json) instead
+# of through this backend. This backend exists ONLY for /ics-proxy below, which genuinely
+# needs a server (fetching a third-party calendar host server-side, where CORS doesn't apply).
 
 # ------------------------------------------------------------------ ICS proxy (CORS-free)
 #
@@ -187,73 +111,6 @@ async def _fetch_safely(url: str, max_redirects: int = 5) -> str:
                     raise aiohttp.ClientError(f'Response exceeds {MAX_PROXY_BYTES} bytes')
                 return body.decode('utf-8', errors='replace')
     raise aiohttp.ClientError('Too many redirects')
-
-
-# ------------------------------------------------------------------------------- images
-#
-# Person/category photos: TRMNL's own render pipeline fetches images.people[].image /
-# categories[].icon server-side, and several public image hosts (imgur confirmed) block
-# that kind of non-browser hotlinking outright. Self-hosting here sidesteps it entirely —
-# this backend fetching its own stored bytes is never rate-limited/blocked by anyone but
-# us. Every upload is normalized to a square JPEG capped at 512x512 (see
-# modules/utils/images.py) before it's stored, so there's no unbounded-size content sitting
-# in Postgres and every stored image is already exactly the shape shared.liquid expects
-# for a badge-circle photo.
-
-@app.route('/images', methods=['POST', 'OPTIONS'])
-@require_tiered_access(get_redis, 'images-upload')
-async def upload_image():
-    if request.method == 'OPTIONS':
-        return _cors(Response(''))
-
-    files = await request.files
-    upload = files.get('file')
-    if upload is None:
-        return _cors(jsonify({'error': 'Missing "file" in multipart form data'})), 400
-
-    raw = upload.read()
-    if len(raw) > MAX_UPLOAD_BYTES:
-        return _cors(jsonify({'error': f'File exceeds {MAX_UPLOAD_BYTES} bytes'})), 400
-
-    try:
-        data, width, height = process_to_square(raw)
-    except InvalidImage as exc:
-        return _cors(jsonify({'error': str(exc)})), 400
-
-    image_id = new_image_id()
-    await save_image(image_id, 'image/jpeg', data, width, height)
-
-    return _cors(jsonify({
-        'id': image_id,
-        'url': f'{PUBLIC_BASE_URL}/images/{image_id}',
-        'width': width,
-        'height': height,
-    }))
-
-
-@app.route('/images/<image_id>', methods=['GET'])
-async def serve_image(image_id):
-    # Deliberately NOT behind require_tiered_access — this is the URL that ends up in
-    # people[].image/categories[].icon, fetched by TRMNL's render pipeline on every
-    # refresh. Gating it the same as the upload endpoint would just recreate the exact
-    # hotlink-blocking problem this backend exists to solve.
-    row = await load_image(image_id)
-    if row is None:
-        return _cors(jsonify({'error': 'Not found'})), 404
-    resp = Response(row['data'], content_type=row['content_type'])
-    resp.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
-    return _cors(resp)
-
-
-@app.route('/images/<image_id>', methods=['DELETE', 'OPTIONS'])
-@require_tiered_access(get_redis, 'images-delete')
-async def remove_image(image_id):
-    if request.method == 'OPTIONS':
-        return _cors(Response(''))
-    deleted = await delete_image(image_id)
-    if not deleted:
-        return _cors(jsonify({'error': 'Not found'})), 404
-    return _cors(jsonify({'ok': True}))
 
 
 if __name__ == '__main__':

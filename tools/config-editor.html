@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Advanced Family Calendar — Configuration Editor</title>
+<title>Family Calendar — Configuration Editor</title>
 <!-- Real TRMNL framework CSS, so every swatch/preview here uses the SAME bg--{hue}-65 /
      text--black / rounded--small classes the plugin itself renders with — what you see here
      is what actually ships, not an approximation of it. -->
@@ -64,35 +64,12 @@
   details summary { cursor: pointer; font-size: 12px; color: #555; }
   code { background: #f0f0ee; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
   a { color: #1a5fb4; }
-  .icon-picker { position: relative; flex: 1 1 220px; min-width: 200px; }
-  .icon-picker-row { display: flex; gap: 6px; align-items: center; }
-  .icon-preview {
-    width: 26px; height: 26px; border-radius: 50%; background: #1a1a1a; flex-shrink: 0;
-    display: flex; align-items: center; justify-content: center; overflow: hidden;
-  }
-  .icon-preview img { width: 16px; height: 16px; filter: invert(1); }
-  .photo-preview {
-    width: 26px; height: 26px; border-radius: 50%; background: #1a1a1a; flex-shrink: 0;
-    overflow: hidden;
-  }
-  .photo-preview img { width: 100%; height: 100%; object-fit: cover; }
-  .icon-suggest {
-    position: absolute; top: 100%; left: 0; right: 0; z-index: 5; margin-top: 2px;
-    max-height: 220px; overflow-y: auto; background: #fff; border: 1px solid #ccc;
-    border-radius: 6px; box-shadow: 0 4px 10px rgba(0,0,0,0.12);
-  }
-  .icon-suggest-item {
-    display: flex; align-items: center; gap: 8px; padding: 5px 8px; cursor: pointer; font-size: 12.5px;
-  }
-  .icon-suggest-item:hover, .icon-suggest-item.active { background: #f0f0ee; }
-  .icon-suggest-item .icon-preview { width: 20px; height: 20px; }
-  .icon-suggest-item .icon-preview img { width: 12px; height: 12px; }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>Advanced Family Calendar</h1>
-  <p class="lede">Build the <strong>Calendar Configuration</strong> field visually, test it against real (fetched, uploaded, or pasted) ICS data, and preview colors/badges using TRMNL's actual CSS — then copy the JSON into the plugin's settings. This page runs <code>plugin/src/transform.js</code> directly, unmodified — the same code that runs on TRMNL.</p>
+  <h1>Family Calendar</h1>
+  <p class="lede">Build the <strong>Calendar Configuration</strong> field visually, test it against real (fetched, uploaded, or pasted) ICS data, and preview colors using TRMNL's actual CSS — then copy the JSON into the plugin's settings. This page runs <code>plugin/src/transform.js</code> directly, unmodified — the same code that runs on TRMNL.</p>
 
   <h2>Import existing configuration <span class="muted">(optional)</span></h2>
   <div class="card">
@@ -124,7 +101,7 @@
   <button id="addCalendar">+ Add calendar</button>
 
   <div class="card" style="margin-top:10px;">
-    <p class="muted" style="margin-top:0;">Add a public holiday calendar — a real Google-hosted ICS feed, no account needed. Adds it as a normal calendar above (color + flag icon pre-filled, both freely editable).</p>
+    <p class="muted" style="margin-top:0;">Add a public holiday calendar — a real Google-hosted ICS feed, no account needed. Adds it as a normal calendar above (color pre-filled, freely editable).</p>
     <div class="row">
       <select id="holidayCountrySelect"></select>
       <button id="addHolidayCalendar">+ Add public holidays</button>
@@ -132,18 +109,8 @@
   </div>
 
   <h2>People <span class="muted">(optional — just names + colors/badges; who a badge/color applies to is set per calendar above, under each calendar's Advanced section)</span></h2>
-  <div class="card" style="margin-bottom:14px;">
-    <p class="muted" style="margin-top:0;">A Photo replaces the badge letter with an actual picture — but that circle is small and TRMNL's e-ink panels are grayscale/dithered, so a real photo often turns muddy at that size. A flat, high-contrast cartoon/illustrated version of the same photo reads far more clearly — <a href="https://imagetocartoon.com/" target="_blank">imagetocartoon.com</a> is one free way to make one before uploading it below.</p>
-  </div>
   <div id="people"></div>
   <button id="addPerson">+ Add person</button>
-
-  <h2>Categories <span class="muted">(optional — give events a "what kind" signal: a color bar + icon badge, matched by regex across every calendar at once)</span></h2>
-  <div class="card" style="margin-bottom:14px;">
-    <p class="muted" style="margin-top:0;">Every event on screen gets a small color bar down its left edge. A category is what gives that bar (and the corner badge) meaning — e.g. match "birthday|verjaardag" across every calendar and show a cake icon. Icons are <a href="https://fonts.google.com/icons?icon.set=Material+Symbols" target="_blank">Google's Material Symbols</a>, referenced by name — search below (fetched live, nothing bundled into this page) or paste a custom image URL.</p>
-  </div>
-  <div id="categories"></div>
-  <button id="addCategory">+ Add category</button>
 
   <h2>Assign colors for a device <span class="muted">(optional)</span></h2>
   <div class="card">
@@ -190,7 +157,7 @@
       </div>
       <div>
         <label>Days to show</label>
-        <input type="number" id="tDays" value="3" min="1" max="7" class="field-narrow" style="flex:0 0 80px;">
+        <input type="number" id="tDays" value="3" min="1" max="3" class="field-narrow" style="flex:0 0 80px;">
       </div>
     </div>
     <div id="icsSources" style="margin-top:14px;"></div>
@@ -223,13 +190,10 @@
 
   // This plugin's own backend (see /backend in the repo) — self-hosted, so unlike a
   // third-party CORS proxy it's already trusted with the same private calendar URLs the
-  // plugin itself fetches at render time. Two jobs: /ics-proxy fetches a calendar
-  // server-side and hands the raw text back with CORS headers, for testing a feed here
-  // that blocks direct browser fetches; /images stores an uploaded photo (cropped to a
-  // 512x512 square) and serves it back at a stable URL TRMNL's render pipeline can
-  // reliably fetch — several public image hosts (imgur confirmed) block that kind of
-  // non-browser hotlinking outright.
-  var BACKEND_BASE_URL = "https://trmnl.bettens.dev/advanced-family-calendar";
+  // plugin itself fetches at render time. /ics-proxy fetches a calendar server-side and
+  // hands the raw text back with CORS headers, for testing a feed here that blocks direct
+  // browser fetches.
+  var BACKEND_BASE_URL = "https://trmnl.bettens.dev/family-calendar";
 
   // Captured once, at load time, before anything ever overrides window.fetch (see runTest
   // below). fetchIcsSmart uses THIS, never the bare `fetch` identifier — a bare call would
@@ -264,59 +228,6 @@
     if (!m) return "black";
     return parseInt(m[1], 10) < 45 ? "white" : "black";
   }
-
-  // ------------------------------------------------------------- category icons (Material Symbols + Tabler)
-  //
-  // Mirrors resolveIcon() in plugin/src/transform.js: an icon is referenced by plain name (e.g.
-  // "cake"), resolved to Google's own hosted static SVG URL — nothing about the icon set is
-  // bundled into this repo, this page just links to it, same as the plugin does at render time.
-  // A SECOND set, Tabler Icons (https://tabler.io/icons), is reachable via a "tabler:" prefix —
-  // added for sport/activity coverage Material Symbols is missing entirely (no "pilates",
-  // "yoga", "meditation", etc.) — kept as a distinct namespace rather than merged into the same
-  // bare-name lookup since both sets reuse short generic words ("home") and a bare name staying
-  // Material Symbols keeps every config written before this existed meaning exactly what it did.
-  var MATERIAL_ICON_BASE = "https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/";
-  var MATERIAL_ICON_SUFFIX = "/default/24px.svg";
-  function materialIconUrl(name) { return MATERIAL_ICON_BASE + name + MATERIAL_ICON_SUFFIX; }
-  // Pinned version — see the matching constant/comment in plugin/src/transform.js, kept in sync
-  // by hand; bump both together if a newer Tabler icon is wanted.
-  var TABLER_ICON_BASE = "https://cdn.jsdelivr.net/npm/@tabler/icons@3.46.0/icons/outline/";
-  var TABLER_ICON_SUFFIX = ".svg";
-  function tablerIconUrl(name) { return TABLER_ICON_BASE + name + TABLER_ICON_SUFFIX; }
-  function iconUrlFor(ref) {
-    ref = (ref || "").trim();
-    if (!ref) return null;
-    if (/^https?:\/\//i.test(ref)) return ref;
-    var tablerMatch = /^tabler:(.+)$/i.exec(ref);
-    if (tablerMatch) {
-      var tname = tablerMatch[1].toLowerCase().replace(/[^a-z0-9-]/g, "");
-      return tname ? tablerIconUrl(tname) : null;
-    }
-    var name = ref.toLowerCase().replace(/[^a-z0-9_]/g, "");
-    return name ? materialIconUrl(name) : null;
-  }
-
-  // The full Material Symbols name list, fetched once from Google's own icon-set repo (CORS-open,
-  // confirmed) purely to power this page's search/autocomplete — the plugin itself (transform.js)
-  // needs no such list, it just builds a URL from whatever name ends up in the config. Search
-  // degrades gracefully (freeform name/URL entry + live preview still work) if this fetch fails.
-  var materialIconNames = [];
-  var materialIconNamesReady = fetch("https://raw.githubusercontent.com/google/material-design-icons/master/variablefont/MaterialSymbolsOutlined%5BFILL%2CGRAD%2Copsz%2Cwght%5D.codepoints")
-    .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); })
-    .then(function (text) {
-      materialIconNames = text.split("\n").map(function (line) { return line.split(" ")[0]; }).filter(Boolean).sort();
-    })
-    .catch(function () { materialIconNames = []; });
-
-  // Tabler's own name list, fetched from the SAME pinned package version the URL builder above
-  // uses (not Google/Iconify's separately-versioned mirror of the set) — guarantees every name
-  // this page suggests actually resolves at TABLER_ICON_BASE. icons.json ships tags/categories
-  // too; only the keys (icon names) are kept, the rest is dropped right after parsing.
-  var tablerIconNames = [];
-  var tablerIconNamesReady = fetch("https://cdn.jsdelivr.net/npm/@tabler/icons@3.46.0/icons.json")
-    .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
-    .then(function (json) { tablerIconNames = Object.keys(json).sort(); })
-    .catch(function () { tablerIconNames = []; });
 
   // ---------------------------------------------------------- public holiday calendars (Google)
   //
@@ -404,22 +315,14 @@
   // ------------------------------------------------------------------- state
 
   function uid() { return Math.random().toString(36).slice(2, 9); }
-  function newCalendar() { return { _id: uid(), url: "", id: "", color: "", icon: "", excludes: [""], defaultPerson: [], personRules: [] }; }
+  function newCalendar() { return { _id: uid(), url: "", id: "", color: "", excludes: [""], defaultPerson: [], personRules: [] }; }
   function newPersonRule() { return { _id: uid(), match: "", person: [], rename: true }; }
-  function newPerson() { return { _id: uid(), name: "", color: "", badge: "", image: "" }; }
-  function newCategory() { return { _id: uid(), name: "", matches: [""], icons: [""], color: "", display: "", calendarScope: "", calendarIds: [] }; }
+  function newPerson() { return { _id: uid(), name: "", color: "", badge: "" }; }
 
   var calendars = [newCalendar()];
   var people = [];
-  var categories = [];
 
   // -------------------------------------------------------------- calendars UI
-
-  // The reference a category's calendarIds stores for one calendar — mirrors transform.js's
-  // own matching (calendars[].id, falling back to .url for a calendar with no id), and the
-  // human-readable label shown next to its checkbox in the category scope picker.
-  function calendarRefFor(c) { return c.id.trim() || c.url.trim(); }
-  function calendarLabel(c) { return c.id.trim() || c.url.trim() || "(unnamed calendar)"; }
 
   // A real dropdown of currently-declared people (add them in the People section below)
   // rather than free text — `value` is preserved as the selection if it still matches a
@@ -458,46 +361,6 @@
     return list.filter(function (n) { return typeof n === "string" && n.trim(); }).map(function (n) { return n.trim(); });
   }
 
-  // A small "Upload photo" widget: a hidden file input triggered by a button, POSTing to
-  // this plugin's own backend (see BACKEND_BASE_URL above), which center-crops to a
-  // 512x512 square and returns a stable URL — used for both a person's photo and a
-  // category's icon (an uploaded image works anywhere a Material Symbols/Tabler name or
-  // a plain URL does, see resolveIcon in transform.js). onUploaded(url) is called with
-  // the resulting URL on success; the caller decides what to do with it (set a field,
-  // refresh a preview, etc.) rather than this widget knowing about any particular field.
-  function uploadButtonFor(onUploaded) {
-    var fileInput = el("input", { type: "file", accept: "image/*", style: "display:none;" });
-    var btn = el("button", { class: "small", type: "button" }, [document.createTextNode("Upload photo…")]);
-    var status = el("span", { class: "status", style: "margin-left:6px;" });
-    btn.addEventListener("click", function () { fileInput.click(); });
-    fileInput.addEventListener("change", function () {
-      var file = fileInput.files && fileInput.files[0];
-      if (!file) return;
-      status.textContent = "Uploading…";
-      status.className = "status";
-      var form = new FormData();
-      form.append("file", file);
-      realFetch(BACKEND_BASE_URL + "/images", { method: "POST", body: form })
-        .then(function (r) {
-          return r.json().then(function (body) {
-            if (!r.ok) throw new Error(body.error || ("HTTP " + r.status));
-            return body;
-          });
-        })
-        .then(function (body) {
-          status.textContent = "Uploaded (" + body.width + "x" + body.height + ").";
-          status.className = "status ok";
-          onUploaded(body.url);
-        })
-        .catch(function (e) {
-          status.textContent = "Upload failed: " + e.message;
-          status.className = "status err";
-        })
-        .finally(function () { fileInput.value = ""; });
-    });
-    return el("span", { class: "row", style: "gap:0;align-items:center;flex-wrap:nowrap;" }, [fileInput, btn, status]);
-  }
-
   function renderCalendars() {
     var wrap = document.getElementById("calendars");
     wrap.innerHTML = "";
@@ -523,13 +386,11 @@
         el("strong", {}, [document.createTextNode("Calendar " + (idx + 1))]),
         removeBtn,
       ]);
-      var iconPicker = iconPickerFor(function () { return c.icon; }, function (v) { c.icon = v; });
 
       var body = el("div", { class: "row" }, [
         el("div", { style: "flex:1 1 320px;" }, [el("label", { text: "ICS URL" }), urlInput]),
         el("div", {}, [el("label", { text: "ID (optional)" }), idInput]),
         el("div", {}, [el("label", { text: "Color" }), el("div", { class: "row", style: "gap:6px;" }, [colorSel, swatch])]),
-        el("div", { style: "flex:1 1 200px;" }, [el("label", { text: "Default icon (optional)" }), iconPicker]),
       ]);
 
       wrap.appendChild(el("div", { class: "entry" }, [head, body, advancedBlockFor(c)]));
@@ -622,7 +483,6 @@
     cal.url = holidayIcsUrl(code);
     cal.id = "Holidays";
     cal.color = "red";
-    cal.icon = "flag";
     calendars.push(cal);
     renderCalendars(); renderJson(); renderIcsSources();
   });
@@ -644,32 +504,6 @@
       var badgeInput = el("input", { type: "text", class: "field-narrow", placeholder: "(auto: first letter)", value: p.badge, maxlength: "3" });
       badgeInput.addEventListener("input", function () { p.badge = badgeInput.value; renderJson(); });
 
-      // Photo/avatar: fills the SAME corner circle the badge letter above would otherwise
-      // occupy — shown instead of it, not alongside it (see resolveIcon/applyCalendarPerson
-      // in transform.js). Plain URL input rather than the icon picker widget: there's no
-      // name-search set to browse for a personal photo the way there is for an icon.
-      var photoPreview = el("div", { class: "photo-preview" });
-      function updatePhotoPreview() {
-        photoPreview.innerHTML = "";
-        var url = p.image.trim();
-        if (!url) return;
-        var img = el("img", { src: url, alt: "" });
-        img.addEventListener("error", function () { img.remove(); });
-        photoPreview.appendChild(img);
-      }
-      updatePhotoPreview();
-      var imageInput = el("input", {
-        type: "text", class: "field-narrow", style: "width:100%;box-sizing:border-box;",
-        placeholder: "optional: https://... photo URL, or upload one", value: p.image,
-      });
-      imageInput.addEventListener("input", function () { p.image = imageInput.value; updatePhotoPreview(); renderJson(); });
-      var photoUpload = uploadButtonFor(function (url) {
-        p.image = url;
-        imageInput.value = url;
-        updatePhotoPreview();
-        renderJson();
-      });
-
       var removeBtn = el("button", { class: "small danger" }, [document.createTextNode("Remove")]);
       removeBtn.addEventListener("click", function () {
         people = people.filter(function (x) { return x._id !== p._id; });
@@ -684,7 +518,6 @@
         el("div", {}, [el("label", { text: "Name" }), nameInput]),
         el("div", {}, [el("label", { text: "Color" }), el("div", { class: "row", style: "gap:6px;" }, [colorSel, swatch])]),
         el("div", {}, [el("label", { text: "Badge" }), badgeInput]),
-        el("div", { style: "flex:1 1 260px;" }, [el("label", { text: "Photo (replaces badge letter)" }), el("div", { class: "row", style: "gap:6px;align-items:center;flex-wrap:wrap;" }, [photoPreview, imageInput, photoUpload])]),
       ]);
       wrap.appendChild(el("div", { class: "entry" }, [head, body]));
     });
@@ -693,250 +526,6 @@
   document.getElementById("addPerson").addEventListener("click", function () {
     people.push(newPerson());
     renderPeople(); renderJson(); renderCalendars();
-  });
-
-  // -------------------------------------------------------------- categories UI
-
-  // A small searchable icon picker: a text input (accepts a Material Symbols name, a Tabler
-  // name prefixed "tabler:", or a full image URL) with a live black-circle preview, plus a
-  // dropdown of matching names (each with its own tiny preview), filtered from BOTH
-  // materialIconNames and tablerIconNames as you type — a bare query searches both sets at
-  // once (Tabler results shown/inserted with their "tabler:" prefix so it's clear which set
-  // each match came from); a query already typed as "tabler:foo" searches only Tabler, against
-  // "foo". Degrades to a plain freeform input with live preview if a name list never loaded
-  // (see materialIconNamesReady/tablerIconNamesReady). Generic over WHERE the value lives —
-  // getValue()/setValue(v) — so the same picker serves a category's icons[index] (see
-  // renderCategories) and a calendar's single icon field (see renderCalendars' advanced block)
-  // without duplicating this whole widget.
-  function iconPickerFor(getValue, setValue) {
-    var wrap = el("div", { class: "icon-picker" });
-    var preview = el("div", { class: "icon-preview" });
-    function updatePreview() {
-      preview.innerHTML = "";
-      var url = iconUrlFor(getValue());
-      if (!url) return;
-      var img = el("img", { src: url, alt: "" });
-      img.addEventListener("error", function () { img.remove(); });
-      preview.appendChild(img);
-    }
-
-    var input = el("input", {
-      type: "text", class: "field-narrow", style: "width:100%;box-sizing:border-box;",
-      placeholder: "search icon name (or \"tabler:name\"), or paste image URL", value: getValue(),
-    });
-    var suggest = el("div", { class: "icon-suggest" });
-    suggest.hidden = true;
-
-    function hideSuggest() { suggest.hidden = true; suggest.innerHTML = ""; }
-    function showSuggest() {
-      var q = input.value.trim().toLowerCase();
-      suggest.innerHTML = "";
-      if (!q || /^https?:\/\//i.test(q)) { hideSuggest(); return; }
-      var matches;
-      var tablerOnly = /^tabler:/.exec(q);
-      if (tablerOnly) {
-        var tq = q.slice(7);
-        matches = tablerIconNames.filter(function (n) { return n.indexOf(tq) !== -1; }).slice(0, 40)
-          .map(function (n) { return { label: "tabler:" + n, value: "tabler:" + n, url: tablerIconUrl(n) }; });
-      } else {
-        var mMatches = materialIconNames.filter(function (n) { return n.indexOf(q) !== -1; }).slice(0, 25)
-          .map(function (n) { return { label: n, value: n, url: materialIconUrl(n) }; });
-        var tMatches = tablerIconNames.filter(function (n) { return n.indexOf(q) !== -1; }).slice(0, 15)
-          .map(function (n) { return { label: "tabler:" + n, value: "tabler:" + n, url: tablerIconUrl(n) }; });
-        matches = mMatches.concat(tMatches);
-      }
-      if (!matches.length) { hideSuggest(); return; }
-      matches.forEach(function (m) {
-        var itemPreview = el("div", { class: "icon-preview" }, [el("img", { src: m.url, alt: "" })]);
-        var item = el("div", { class: "icon-suggest-item" }, [itemPreview, el("span", { text: m.label })]);
-        // mousedown (not click) fires before the input's blur, so the value is applied before
-        // hideSuggest()'s blur-triggered timeout would otherwise race it closed first.
-        item.addEventListener("mousedown", function (e) {
-          e.preventDefault();
-          setValue(m.value);
-          input.value = m.value;
-          updatePreview();
-          hideSuggest();
-          renderJson();
-        });
-        suggest.appendChild(item);
-      });
-      suggest.hidden = false;
-    }
-    input.addEventListener("input", function () { setValue(input.value); updatePreview(); showSuggest(); renderJson(); });
-    input.addEventListener("focus", showSuggest);
-    input.addEventListener("blur", function () { setTimeout(hideSuggest, 150); });
-    // If a name list is still loading when the user focuses in, show suggestions the moment it
-    // lands (only while still focused — otherwise this would pop the list open unexpectedly
-    // after the user has already moved on).
-    materialIconNamesReady.then(function () { if (document.activeElement === input) showSuggest(); });
-    tablerIconNamesReady.then(function () { if (document.activeElement === input) showSuggest(); });
-
-    var upload = uploadButtonFor(function (url) {
-      setValue(url);
-      input.value = url;
-      updatePreview();
-      hideSuggest();
-      renderJson();
-    });
-    upload.style.marginTop = "4px";
-
-    updatePreview();
-    var row = el("div", { class: "icon-picker-row" }, [preview, input]);
-    wrap.appendChild(row);
-    wrap.appendChild(suggest);
-    wrap.appendChild(upload);
-    return wrap;
-  }
-
-  function renderCategories() {
-    var wrap = document.getElementById("categories");
-    wrap.innerHTML = "";
-    categories.forEach(function (cat, idx) {
-      var nameInput = el("input", { type: "text", class: "field-narrow", placeholder: "Birthday", value: cat.name });
-      nameInput.addEventListener("input", function () { cat.name = nameInput.value; renderJson(); });
-
-      var colorSel = hueSelect("cat-color-" + cat._id, cat.color, true);
-      colorSel.addEventListener("change", function () { cat.color = colorSel.value; renderJson(); swatch.replaceWith(swatchFor(cat.color)); swatch = wrap.querySelector("#catswatch-" + cat._id); });
-      var swatch = swatchFor(cat.color);
-      swatch.id = "catswatch-" + cat._id;
-
-      var removeBtn = el("button", { class: "small danger" }, [document.createTextNode("Remove")]);
-      removeBtn.addEventListener("click", function () {
-        categories = categories.filter(function (x) { return x._id !== cat._id; });
-        renderCategories(); renderJson();
-      });
-
-      var head = el("div", { class: "entry-head" }, [
-        el("strong", {}, [document.createTextNode("Category " + (idx + 1))]),
-        removeBtn,
-      ]);
-
-      var matchesWrap = el("div", {});
-      function renderMatches() {
-        matchesWrap.innerHTML = "";
-        cat.matches.forEach(function (val, i) {
-          var input = el("input", { type: "text", class: "field-regex", placeholder: "match regex, e.g. birthday|verjaardag", value: val });
-          input.addEventListener("input", function () { cat.matches[i] = input.value; renderJson(); });
-          var rm = el("button", { class: "small danger" }, [document.createTextNode("×")]);
-          rm.addEventListener("click", function () {
-            cat.matches.splice(i, 1);
-            if (!cat.matches.length) cat.matches.push("");
-            renderMatches(); renderJson();
-          });
-          matchesWrap.appendChild(el("div", { class: "row", style: "margin-top:4px;" }, [input, rm]));
-        });
-      }
-      renderMatches();
-      var addMatch = el("button", { class: "small" }, [document.createTextNode("+ Add match pattern")]);
-      addMatch.addEventListener("click", function () { cat.matches.push(""); renderMatches(); });
-
-      // Icons: one picker always shown; a second appears once added — up to two, rendered as
-      // two small overlapping badge circles (e.g. work + home for "Work From Home"). Mirrors
-      // MAX_CATEGORY_ICONS in transform.js.
-      var iconWrap = el("div", { style: "flex:1 1 260px;" });
-      function renderIcons() {
-        iconWrap.innerHTML = "";
-        iconWrap.appendChild(el("label", { text: cat.icons.length > 1 ? "Icons" : "Icon" }));
-        var row = el("div", { class: "row", style: "gap:6px;flex-wrap:nowrap;align-items:flex-start;" });
-        cat.icons.forEach(function (val, i) {
-          var picker = iconPickerFor(function () { return cat.icons[i]; }, function (v) { cat.icons[i] = v; });
-          if (i === 0 && cat.icons.length < 2) {
-            var addIconBtn = el("button", { class: "small" }, [document.createTextNode("+")]);
-            addIconBtn.title = "Add a second icon (e.g. work + home)";
-            addIconBtn.addEventListener("click", function () { cat.icons.push(""); renderIcons(); });
-            row.appendChild(el("div", { style: "flex:1 1 auto;" }, [picker]));
-            row.appendChild(addIconBtn);
-          } else if (i === 1) {
-            var rmIconBtn = el("button", { class: "small danger" }, [document.createTextNode("×")]);
-            rmIconBtn.addEventListener("click", function () { cat.icons.splice(1, 1); renderIcons(); renderJson(); });
-            row.appendChild(el("div", { style: "flex:1 1 auto;" }, [picker]));
-            row.appendChild(rmIconBtn);
-          } else {
-            row.appendChild(el("div", { style: "flex:1 1 auto;" }, [picker]));
-          }
-        });
-        iconWrap.appendChild(row);
-      }
-      renderIcons();
-
-      // Display: "text" (default) keeps the normal title + badge-rail chip. "image" drops the
-      // title entirely and lets whatever ended up in the badge rail (this category's icon, or
-      // a person's badge/photo if the icon left a slot free) fill the whole chip instead — for
-      // the kind of recurring event an icon alone already says everything about. Silently
-      // falls back to a normal chip server-side if nothing real ended up in a slot (see run()
-      // in transform.js), so picking this with no icon configured isn't a trap.
-      var displaySel = el("select", {}, [
-        el("option", { value: "" }, [document.createTextNode("Text + badge (default)")]),
-        el("option", { value: "image" }, [document.createTextNode("Image/badge only, no text")]),
-      ]);
-      displaySel.value = cat.display;
-      displaySel.addEventListener("change", function () { cat.display = displaySel.value; renderJson(); });
-
-      var body = el("div", { class: "row" }, [
-        el("div", {}, [el("label", { text: "Name (for your reference)" }), nameInput]),
-        el("div", {}, [el("label", { text: "Color" }), el("div", { class: "row", style: "gap:6px;" }, [colorSel, swatch])]),
-        iconWrap,
-        el("div", {}, [el("label", { text: "Display" }), displaySel]),
-      ]);
-
-      var matchBlock = el("div", { style: "margin-top:10px;" }, [
-        el("label", { text: "Match (regex, one or more — checked against every calendar's events, in order; later matches win)" }),
-        matchesWrap, addMatch,
-      ]);
-
-      // Calendar scope: by default a category checks every calendar's events (calendarScope
-      // ""). "Only these" / "All except these" narrow that to calendars[].id (falling back to
-      // .url for a calendar with no id — see calendarRefFor) — e.g. a global "Work" category
-      // that should stay off someone's own personal calendar, where their own defaultPerson
-      // badge should show through instead. Mirrors calendars/excludeCalendars in transform.js.
-      var scopeWrap = el("div", { style: "margin-top:10px;" });
-      function renderScope() {
-        scopeWrap.innerHTML = "";
-        var modeSel = el("select", { class: "field-narrow" }, [
-          el("option", { value: "" }, [document.createTextNode("All calendars")]),
-          el("option", { value: "include" }, [document.createTextNode("Only these calendars")]),
-          el("option", { value: "exclude" }, [document.createTextNode("All except these calendars")]),
-        ]);
-        modeSel.value = cat.calendarScope;
-        modeSel.addEventListener("change", function () {
-          cat.calendarScope = modeSel.value;
-          renderScope(); renderJson();
-        });
-        scopeWrap.appendChild(el("div", {}, [el("label", { text: "Applies to" }), modeSel]));
-
-        if (cat.calendarScope) {
-          var list = el("div", { class: "row", style: "gap:10px;margin-top:6px;" });
-          var withUrls = calendars.filter(function (c) { return c.url.trim(); });
-          if (!withUrls.length) {
-            list.appendChild(el("span", { class: "muted", text: "Add a calendar above first." }));
-          }
-          withUrls.forEach(function (c) {
-            var ref = calendarRefFor(c);
-            var checked = cat.calendarIds.indexOf(ref) !== -1;
-            var cb = el("input", { type: "checkbox" });
-            cb.checked = checked;
-            cb.addEventListener("change", function () {
-              var i = cat.calendarIds.indexOf(ref);
-              if (cb.checked && i === -1) cat.calendarIds.push(ref);
-              else if (!cb.checked && i !== -1) cat.calendarIds.splice(i, 1);
-              renderJson();
-            });
-            var lbl = el("label", { style: "display:flex;align-items:center;gap:4px;margin:0;font-size:12px;color:#333;white-space:nowrap;" }, [cb, document.createTextNode(calendarLabel(c))]);
-            list.appendChild(lbl);
-          });
-          scopeWrap.appendChild(list);
-        }
-      }
-      renderScope();
-
-      wrap.appendChild(el("div", { class: "entry" }, [head, body, matchBlock, scopeWrap]));
-    });
-  }
-
-  document.getElementById("addCategory").addEventListener("click", function () {
-    categories.push(newCategory());
-    renderCategories(); renderJson();
   });
 
   // ------------------------------------------------------- device color auto-assignment
@@ -979,7 +568,6 @@
       var entry = { url: c.url.trim() };
       if (c.id.trim()) entry.id = c.id.trim();
       if (c.color) entry.color = c.color;
-      if (c.icon && c.icon.trim()) entry.icon = c.icon.trim();
 
       var excludes = c.excludes.map(function (x) { return x.trim(); }).filter(Boolean);
       if (excludes.length === 1) entry.exclude = excludes[0];
@@ -1003,24 +591,7 @@
       var entry = { name: p.name.trim() };
       if (p.color) entry.color = p.color;
       if (p.badge.trim()) entry.badge = p.badge.trim();
-      if (p.image.trim()) entry.image = p.image.trim();
       cfg.people.push(entry);
-    });
-    cfg.categories = [];
-    categories.forEach(function (cat) {
-      var matches = cat.matches.map(function (m) { return m.trim(); }).filter(Boolean);
-      if (!matches.length) return;
-      var entry = { match: matches.length === 1 ? matches[0] : matches };
-      if (cat.name.trim()) entry.name = cat.name.trim();
-      var icons = cat.icons.map(function (i) { return i.trim(); }).filter(Boolean);
-      if (icons.length === 1) entry.icon = icons[0];
-      else if (icons.length > 1) entry.icon = icons;
-      if (cat.color) entry.color = cat.color;
-      if (cat.display === "image") entry.display = "image";
-      var calIds = cat.calendarIds.filter(Boolean);
-      if (cat.calendarScope === "include" && calIds.length) entry.calendars = calIds;
-      else if (cat.calendarScope === "exclude" && calIds.length) entry.excludeCalendars = calIds;
-      cfg.categories.push(entry);
     });
     return cfg;
   }
@@ -1063,11 +634,6 @@
           url: c.url.trim(),
           id: typeof c.id === "string" ? c.id.trim() : "",
           color: typeof c.color === "string" && VALID_COLORS.indexOf(c.color.toLowerCase()) !== -1 ? c.color.toLowerCase() : "",
-          // This editor's UI only offers one default icon per calendar (categories get two —
-          // see renderCategories); an imported array is collapsed to its first entry so
-          // hand-written/API-sourced configs with two still round-trip to something visible
-          // instead of silently vanishing.
-          icon: typeof c.icon === "string" ? c.icon.trim() : Array.isArray(c.icon) && typeof c.icon[0] === "string" ? c.icon[0].trim() : "",
           excludes: excludes.length ? excludes : [""],
           defaultPerson: normalizeNames(c.defaultPerson),
           personRules: personRules,
@@ -1081,36 +647,11 @@
           name: p.name.trim(),
           color: typeof p.color === "string" && VALID_COLORS.indexOf(p.color.toLowerCase()) !== -1 ? p.color.toLowerCase() : "",
           badge: typeof p.badge === "string" ? p.badge.trim() : "",
-          image: typeof p.image === "string" ? p.image.trim() : "",
-        };
-      });
-
-    var newCategories = (Array.isArray(data.categories) ? data.categories : [])
-      .filter(function (cat) { return cat && typeof cat === "object" && (typeof cat.match === "string" || Array.isArray(cat.match)); })
-      .map(function (cat) {
-        var matches = Array.isArray(cat.match)
-          ? cat.match.filter(function (m) { return typeof m === "string"; })
-          : typeof cat.match === "string" && cat.match.trim() ? [cat.match] : [];
-        var icons = Array.isArray(cat.icon)
-          ? cat.icon.filter(function (i) { return typeof i === "string" && i.trim(); }).slice(0, 2)
-          : typeof cat.icon === "string" && cat.icon.trim() ? [cat.icon.trim()] : [];
-        var includeIds = Array.isArray(cat.calendars) ? cat.calendars.filter(function (i) { return typeof i === "string" && i.trim(); }) : [];
-        var excludeIds = Array.isArray(cat.excludeCalendars) ? cat.excludeCalendars.filter(function (i) { return typeof i === "string" && i.trim(); }) : [];
-        return {
-          _id: uid(),
-          name: typeof cat.name === "string" ? cat.name.trim() : "",
-          matches: matches.length ? matches : [""],
-          icons: icons.length ? icons : [""],
-          color: typeof cat.color === "string" && VALID_COLORS.indexOf(cat.color.toLowerCase()) !== -1 ? cat.color.toLowerCase() : "",
-          display: cat.display === "image" ? "image" : "",
-          calendarScope: includeIds.length ? "include" : excludeIds.length ? "exclude" : "",
-          calendarIds: includeIds.length ? includeIds : excludeIds,
         };
       });
 
     calendars = newCalendars.length ? newCalendars : [newCalendar()];
     people = newPeople;
-    categories = newCategories;
     if (data.hours && typeof data.hours === "object") {
       var hs = Math.trunc(Number(data.hours.start));
       var he = Math.trunc(Number(data.hours.end));
@@ -1122,8 +663,8 @@
       document.getElementById("hoursStart").value = 7;
       document.getElementById("hoursEnd").value = 21;
     }
-    renderCalendars(); renderPeople(); renderCategories(); renderJson(); renderIcsSources();
-    status.textContent = "Loaded " + newCalendars.length + " calendar(s), " + newPeople.length + " person/people, and " + newCategories.length + " categor" + (newCategories.length === 1 ? "y" : "ies") + ".";
+    renderCalendars(); renderPeople(); renderJson(); renderIcsSources();
+    status.textContent = "Loaded " + newCalendars.length + " calendar(s) and " + newPeople.length + " person/people.";
     status.className = "status ok";
   });
 
@@ -1322,14 +863,25 @@
       return;
     }
 
-    (result.days || []).forEach(function (day) {
+    // allday_bars is a flat, top-level list now (transform.js's layoutNative — a multi-day
+    // event is one entry with its own start_col/span, not repeated per day it touches — see
+    // the multi-day banner work in shared.liquid). This preview has no spanning-grid layout of
+    // its own to match that with, so it just re-associates each bar back to every day column
+    // it touches (start_col..start_col+span-1) and shows the same chip in each — a simpler
+    // stand-in than the real plugin's single continuous banner, not a pixel match for it.
+    var alldayBars = result.allday_bars || [];
+
+    (result.days || []).forEach(function (day, dayIdx) {
       var dayEl = el("div", { class: "preview-day" });
       dayEl.appendChild(el("div", { class: "preview-daylabel" + (day.is_today ? "" : "") , text: day.label + (day.temp ? "  " + day.temp.high + "°/" + day.temp.low + "°" : "") }));
 
-      if (day.allday && day.allday.length) {
+      var dayAllday = alldayBars.filter(function (bar) {
+        return dayIdx >= bar.start_col && dayIdx < bar.start_col + bar.span;
+      });
+      if (dayAllday.length) {
         var adWrap = el("div", { class: "preview-allday" });
-        day.allday.forEach(function (a) {
-          adWrap.appendChild(chipFor(a.title, a.hue, a.fg, a.badges, a.display, false, null));
+        dayAllday.forEach(function (a) {
+          adWrap.appendChild(chipFor(a.title, a.hue, a.fg, false));
         });
         dayEl.appendChild(adWrap);
       }
@@ -1338,7 +890,7 @@
       // Each entry in day.events is already one independently-positioned event/lane (see
       // transform.js's layoutNative) — no more nested .lanes sub-array to flatten.
       (day.events || []).forEach(function (ev) {
-        evWrap.appendChild(chipFor(ev.title, ev.hue, ev.fg, ev.badges, ev.display, true, ev.bar));
+        evWrap.appendChild(chipFor(ev.title, ev.hue, ev.fg, true));
       });
       if (!day.events || !day.events.length) evWrap.appendChild(el("p", { class: "muted", text: "No timed events." }));
       dayEl.appendChild(evWrap);
@@ -1347,72 +899,23 @@
     });
   }
 
-  function chipFor(title, hue, fg, badges, display, isEvent, bar) {
-    // hue/fg/bar arrive already fully resolved from run()'s own output (see colorClass/
-    // foregroundFor/accentColor in transform.js) — hue/bar are complete bg-- suffixes, fg the
-    // matching foreground, so this just applies them as-is rather than recomputing anything.
-    // badges (see run()'s badge assembly in transform.js) is an array of up to 2
-    // {kind: "icon"|"photo"|"letter", src|text} entries, already fully resolved server-side —
-    // this preview just renders whatever's in it rather than re-deriving category/person
-    // precedence itself, so it stays honest about what the real Liquid template receives.
-    badges = badges || [];
+  function chipFor(title, hue, fg, isEvent) {
+    // hue/fg arrive already fully resolved from run()'s own output (see colorClass/
+    // foregroundFor in transform.js) — complete bg--/text-- suffixes, applied as-is rather
+    // than recomputing anything. No badge rail and no left accent bar here any more — the
+    // real chip_body (shared.liquid) is title-only now, category icons/photos and the
+    // per-event accent bar both removed from every chip.
     var chip = el("div", { class: isEvent ? "preview-event" : "preview-chip" });
     chip.classList.add("bg--" + hue);
     chip.classList.add("text--" + fg);
-    if (display === "image" && badges.length) {
-      // "image" display: same as the real template — badges fill the whole chip, no title.
-      badges.forEach(function (b) {
-        chip.appendChild(badgeSpanFor(b, 32));
-      });
-      return chip;
-    }
-    if (bar) {
-      // Same "meaning" accent bar the real plugin draws down every event's left edge — a
-      // darker/more-saturated step of the fill by default, or a matched Category's own color.
-      chip.appendChild(el("span", { class: "bg--" + bar, style: "width:4px;align-self:stretch;border-radius:2px;flex-shrink:0;margin-right:2px;" }));
-    }
-    if (badges.length) {
-      // Own wrapper, not badges appended straight into chip: preview-chip/-event's own CSS
-      // gap (6px, for the bar/title spacing) would otherwise land BETWEEN every badge too,
-      // fighting the 1px they're meant to sit at — real chip_body in shared.liquid keeps its
-      // badges in their own rail div for the same reason.
-      var rail = el("div", { style: "display:flex;align-items:center;gap:1px;flex-shrink:0;" });
-      badges.forEach(function (b) {
-        var span = badgeSpanFor(b, 24);
-        span.style.flexShrink = "0";
-        rail.appendChild(span);
-      });
-      chip.appendChild(rail);
-      chip.appendChild(el("span", { style: "width:12px;flex-shrink:0;" }));
-    }
     chip.appendChild(el("span", { text: title }));
     return chip;
-  }
-
-  // One badge-rail circle (icon/photo/letter), sized `d`px — mirrors the real template's badge
-  // rendering (see shared.liquid's badge_content) closely enough for a preview: icon =
-  // inverted line art, letter = the plain text. Photos are deliberately NOT rendered here
-  // either, same as badge_content right now — falls back to the person's own initial instead
-  // (see shared.liquid for why: a real photo dithers to muddy noise at badge size on TRMNL's
-  // actual e-ink output, confirmed against a real device, not just a browser preview like this
-  // one — a browser preview showing it fine is exactly what made that gap invisible for a
-  // while).
-  function badgeSpanFor(b, d) {
-    var content;
-    if (b.kind === "icon") content = [el("img", { src: b.src, style: "width:65%;height:65%;filter:invert(1);", alt: "" })];
-    else if (b.kind === "photo") content = [document.createTextNode((b.person || "").slice(0, 1).toUpperCase())];
-    else content = [document.createTextNode(b.text || "")];
-    return el("span", {
-      class: "text--white bg--black rounded--small",
-      style: "display:flex;align-items:center;justify-content:center;width:" + d + "px;height:" + d + "px;font-size:" + Math.round(d * 0.55) + "px;overflow:hidden;border:1.5px solid currentColor;box-sizing:border-box;",
-    }, content);
   }
 
   // ------------------------------------------------------------------- init
 
   renderCalendars();
   renderPeople();
-  renderCategories();
   renderJson();
   renderIcsSources();
 })();

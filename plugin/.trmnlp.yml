@@ -12,7 +12,7 @@ variables:
       locale: nl
       time_zone_iana: Europe/Brussels
     plugin_settings:
-      instance_name: Advanced Family Calendar
+      instance_name: Family Calendar
       strategy: polling
       dark_mode: 'no'
       no_screen_padding: 'yes'
@@ -20,6 +20,7 @@ variables:
         calendars: '{"calendars":[{"url":"https://cloud.example.com/x.ics"}]}'
         time_zone: Europe/Brussels
         view_days: '3'
+        hours: '7-21'
   header_pct: 11
   allday_pct: 24
   allday_row_pct: 12
@@ -52,23 +53,19 @@ variables:
   grid_pct: 68
   footer_pct: 9
   people:
-  - kind: letter
-    text: M
+  - text: M
     person: Mama
     hue: pink-65
     fg: black
-  - kind: letter
-    text: P
+  - text: P
     person: Papa
     hue: blue-65
     fg: black
-  - kind: photo
-    src: https://i.pravatar.cc/150?img=5
+  - text: A
     person: Alex
     hue: orange-65
     fg: black
-  - kind: letter
-    text: R
+  - text: R
     person: Robin
     hue: green-65
     fg: black
@@ -134,7 +131,6 @@ variables:
     pct: 4
     shade: 0
     bold: true
-    minute: "15"
     period: "PM"
   - hour: 15
     pct: 4
@@ -292,12 +288,17 @@ variables:
     - top_pct: 14.0
       height_pct: 10.0
       lane_index: 0
-      nlanes: 1
+      nlanes: 2
       title: Grocery Shopping
       hue: orange-65
       fg: black
-      badges: []
-      display: text
+    - top_pct: 14.0
+      height_pct: 10.0
+      lane_index: 1
+      nlanes: 2
+      title: Dentist
+      hue: green-65
+      fg: black
     - top_pct: 38.0
       height_pct: 9.0
       lane_index: 0
@@ -305,8 +306,6 @@ variables:
       title: Thuiswerken
       hue: blue-65
       fg: black
-      badges: []
-      display: text
     - top_pct: 55.2941
       height_pct: 11.7647
       lane_index: 0
@@ -314,8 +313,6 @@ variables:
       title: Alex's verjaardagsfeest
       hue: pink-65
       fg: black
-      badges: []
-      display: text
     now_marker:
       top_pct: 89.9439
       night: false
@@ -441,12 +438,27 @@ variables:
       title: Vroege zwemles
       hue: green-65
       fg: black
-      badges:
-      - kind: icon
-        src: https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/pool/default/24px.svg
-      - kind: photo
-        src: https://i.pravatar.cc/150?img=12
-      display: image
+    - top_pct: 55
+      height_pct: 12
+      lane_index: 0
+      nlanes: 1
+      title: Zwemmen
+      hue: gray-65
+      fg: black
+    - top_pct: 70
+      height_pct: 10
+      lane_index: 0
+      nlanes: 2
+      title: Zwemmen
+      hue: gray-65
+      fg: black
+    - top_pct: 70
+      height_pct: 10
+      lane_index: 1
+      nlanes: 2
+      title: Tandarts
+      hue: pink-65
+      fg: black
     now_marker: null
   - label: Ma 6 Juli
     label_short: Ma 6 Jul
@@ -570,8 +582,6 @@ variables:
       title: Laat etentje
       hue: gray-25
       fg: white
-      badges: []
-      display: text
     now_marker: null
   - label: Di 7 Juli — Chip Test Matrix
     label_short: Di 7 Jul
@@ -680,15 +690,14 @@ variables:
       night: true
       weather: null
     events:
-    # Chip-rendering dimension matrix — text length x icon count x lane width x box height.
-    # Exercises chip_body/fit()'s one-line-vs-wrap logic deliberately, not just whatever
-    # combination a real calendar happens to produce. Two "narrow" bands (3 lanes sharing a
-    # time slot) cover width; each event's own height_pct covers short vs tall; title covers
-    # short vs long text; badges covers 0/1/2 icons.
+    # Chip-rendering dimension matrix — text length x lane width x box height. Exercises
+    # chip_body/fit()'s one-line-vs-wrap logic deliberately, not just whatever combination a
+    # real calendar happens to produce. Two "narrow" bands (3 lanes sharing a time slot) cover
+    # width; each event's own height_pct covers short vs tall; title covers short vs long text.
     #
     # Band A: narrow (3 lanes) x TALL — lane 0 is the exact shape that broke chip_body
-    # earlier (short text, 1 icon, narrow, tall: an 8-hour "Work" split into 2 lanes wrapped
-    # into "W"/"o"/"r"/"k" at a huge size) — kept here as a standing regression check.
+    # earlier (short text, narrow, tall: an 8-hour "Work" split into 2 lanes wrapped into
+    # "W"/"o"/"r"/"k" at a huge size) — kept here as a standing regression check.
     - top_pct: 2
       height_pct: 20
       lane_index: 0
@@ -696,8 +705,6 @@ variables:
       title: Gym
       hue: blue-65
       fg: black
-      badges: []
-      display: text
     - top_pct: 2
       height_pct: 20
       lane_index: 1
@@ -705,8 +712,6 @@ variables:
       title: Quarterly Budget Review Meeting
       hue: green-65
       fg: black
-      badges: []
-      display: text
     - top_pct: 2
       height_pct: 20
       lane_index: 2
@@ -714,8 +719,6 @@ variables:
       title: Gym
       hue: purple-65
       fg: black
-      badges: []
-      display: text
     # Band B: narrow (3 lanes) x SHORT.
     - top_pct: 23
       height_pct: 4
@@ -724,8 +727,6 @@ variables:
       title: Gym
       hue: blue-65
       fg: black
-      badges: []
-      display: text
     - top_pct: 23
       height_pct: 4
       lane_index: 1
@@ -733,8 +734,6 @@ variables:
       title: Quarterly Budget Review Meeting
       hue: green-65
       fg: black
-      badges: []
-      display: text
     - top_pct: 23
       height_pct: 4
       lane_index: 2
@@ -742,8 +741,6 @@ variables:
       title: Quarterly Budget Review Meeting
       hue: purple-65
       fg: black
-      badges: []
-      display: text
     # Wide (1 lane, full width) x every text/icon/height combination.
     - top_pct: 28
       height_pct: 3
@@ -752,8 +749,6 @@ variables:
       title: Gym
       hue: orange-65
       fg: black
-      badges: []
-      display: text
     - top_pct: 32
       height_pct: 12
       lane_index: 0
@@ -761,8 +756,6 @@ variables:
       title: Gym
       hue: cyan-65
       fg: black
-      badges: []
-      display: text
     - top_pct: 45
       height_pct: 3
       lane_index: 0
@@ -770,8 +763,6 @@ variables:
       title: Quarterly Budget Review Meeting
       hue: yellow-65
       fg: black
-      badges: []
-      display: text
     - top_pct: 49
       height_pct: 12
       lane_index: 0
@@ -779,8 +770,6 @@ variables:
       title: Quarterly Budget Review Meeting
       hue: lime-65
       fg: black
-      badges: []
-      display: text
     - top_pct: 62
       height_pct: 3
       lane_index: 0
@@ -788,8 +777,6 @@ variables:
       title: Gym
       hue: orange-65
       fg: black
-      badges: []
-      display: text
     - top_pct: 66
       height_pct: 12
       lane_index: 0
@@ -797,8 +784,6 @@ variables:
       title: Gym
       hue: cyan-65
       fg: black
-      badges: []
-      display: text
     - top_pct: 79
       height_pct: 3
       lane_index: 0
@@ -806,8 +791,6 @@ variables:
       title: Quarterly Budget Review Meeting
       hue: yellow-65
       fg: black
-      badges: []
-      display: text
     - top_pct: 83
       height_pct: 12
       lane_index: 0
@@ -815,8 +798,6 @@ variables:
       title: Quarterly Budget Review Meeting
       hue: lime-65
       fg: black
-      badges: []
-      display: text
     # Concurrent-lane regression check: "Work" holds a continuous single card for its whole
     # 08:30-17:00 span in the left lane; short overlapping events sit in the right lane during
     # their own specific slots only. One continuous bounding card per event, never split.
@@ -827,8 +808,6 @@ variables:
       title: Work
       hue: blue-65
       fg: black
-      badges: []
-      display: text
     - top_pct: 33
       height_pct: 7
       lane_index: 1
@@ -836,8 +815,6 @@ variables:
       title: Assembly
       hue: yellow-65
       fg: black
-      badges: []
-      display: text
     - top_pct: 44
       height_pct: 10
       lane_index: 1
@@ -845,8 +822,6 @@ variables:
       title: Sports Day Mia
       hue: orange-65
       fg: black
-      badges: []
-      display: text
     now_marker: null
   generated_at: 1783192907
   tz: Europe/Brussels

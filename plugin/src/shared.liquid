@@ -169,11 +169,20 @@ shown_days_n drops below 3 so the total stays pinned at 13 (the 3-day baseline).
 
 <div class="layout layout--col gap--none" id="cal-root">
   {% if error and has_events == false %}
-    <div class="item">
-      <div class="content">
-        <span class="title title--small">{{ unavailable_label }}</span>
-        <span class="description" data-clamp="2">{{ error }}</span>
-      </div>
+    <!-- Only ever shown when EVERY calendar failed to fetch (has_events false) — not per-feed
+         partial-failure noise, which just quietly renders whatever did come back instead (see
+         run() in transform.js). Deliberately its own full-screen state, not the bare
+         item/content/description list-row markup this used to reuse: that combo is meant for a
+         compact list ENTRY (line-height:0, flex-end-justified — confirmed against the
+         framework's own CSS), not a lone full-screen message, and rendered cramped/unstyled
+         here. A calendar-with-an-x icon reads at a glance even before the text does; the raw
+         error text is real diagnostic detail (e.g. "HTTP 404"), so it stays legible but
+         visually secondary (smaller, gray) under the plain-language headline, clamped so a
+         long one can't run off this small a screen. -->
+    <div class="flex flex--col flex--center-x flex--center-y w--full h--full" style="box-sizing:border-box;padding:24px;gap:12px;text-align:center;">
+      <img src="https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/event_busy/default/48px.svg" alt="" style="width:15%;max-width:56px;height:auto;">
+      <span class="title title--large">{{ unavailable_label }}</span>
+      <span class="description text--gray-50" data-clamp="3" style="max-width:85%;">{{ error }}</span>
     </div>
   {% else %}
     <!-- Native framework grid, not an image: percentages (h--[Ncqh]) are computed server-side

@@ -1,6 +1,6 @@
-# TRMNL: Advanced Family Calendar
+# TRMNL: Family Calendar
 
-A [TRMNL](https://usetrmnl.com) private plugin that shows 1 day to a week of any ICS calendar
+A [TRMNL](https://usetrmnl.com) private plugin that shows 1 to 3 days of any ICS calendar
 feed as a time-grid, with sunrise/sunset and daily weather on the timeline. The grid auto-scales
 so the hours that matter (daylight and your meetings) get more room and quiet hours shrink out
 of the way, with no fixed "business hours" window to configure.
@@ -12,14 +12,16 @@ expands recurring events for the window, and returns a pre-computed native layou
 (percent-of-screen heights) to the Liquid template. The same file, unmodified, also runs in a
 plain browser tab — see [Configuration Editor](#configuration-editor) below.
 
-A small self-hosted [`backend/`](#backend) serves that editor itself, proxies CORS-blocked ICS
-fetches for it, and hosts person/category photos reliably — see [Backend](#backend) below; it's
-optional infrastructure for building your config, not something the plugin depends on at render
-time.
+The [Configuration Editor](#configuration-editor) itself is a plain static page hosted on
+[GitHub Pages](https://excusemi.github.io/trmnl-family-calendar/tools/config-editor.html) — no
+backend involved just to load it. A small self-hosted [`backend/`](#backend) exists only to
+proxy CORS-blocked ICS fetches the editor makes while you're testing a feed — see
+[Backend](#backend) below; it's optional infrastructure for building your config, not something
+the plugin depends on at render time.
 
 ## What it shows
 
-- 1 to 7 day columns (your choice), drawn as a real hour-grid (not an image), with daylight and
+- 1 to 3 day columns (your choice), drawn as a real hour-grid (not an image), with daylight and
   meeting hours automatically given more vertical space than the quiet hours around them.
 - All-day events as chips, timed events as blocks sized by duration, overlapping events split
   into side-by-side lanes.
@@ -31,25 +33,12 @@ time.
 - **People**: tag specific events (by regex, across every calendar) with a person's own color —
   e.g. give a kid their own color, independent of which calendar their events land on — optionally
   renaming a class code to their actual name at the same time. Every distinct person with anything
-  anywhere in the visible range also gets one small badge in the header's own corner — a shared
-  "who has something going on" strip, not repeated on every one of their events — showing their
-  initial, or a photo/avatar URL in place of it. A shared event can tag more than one person at
-  once (e.g. a family trip).
-- **Categories**: match an event (by regex, across every calendar, independent of People) to give
-  it its own color and/or an icon (reused from [Google's Material
-  Symbols](https://fonts.google.com/icons) or [Tabler Icons](https://tabler.io/icons) — the latter
-  for sport/activity coverage Material Symbols lacks, like yoga or pilates — by plain name,
-  searchable live in the [Configuration Editor](#configuration-editor); a custom image URL works
-  too) shown bare — no circle, no background — tinted to the chip's own text color, right in
-  front of the title. Two icons can be set at once (e.g. `["work", "home"]` for "Work From
-  Home") and sit side by side. A Category can also be set to show as just that icon — filling the
-  whole chip, no title text — for the kind of recurring event an icon alone already says
-  everything about.
+  anywhere in the visible range also gets one small badge in the header's own corner (full view
+  only) — a shared "who has something going on" strip, not repeated on every one of their events —
+  showing their initial. A shared event can tag more than one person at once (e.g. a family trip).
 - **Public holidays**: the Configuration Editor has a one-click "Add public holidays" picker (50
-  countries) that adds a real Google-hosted holiday ICS feed as a normal calendar, with color and
-  a flag icon pre-filled — nothing holiday-specific in the plugin itself, it's just a calendar
-  with a default icon (`calendars[].icon`, same mechanism as `categories[].icon`) that a matching
-  Category still overrides.
+  countries) that adds a real Google-hosted holiday ICS feed as a normal calendar, with a color
+  pre-filled — nothing holiday-specific in the plugin itself, it's just a calendar entry.
 - Recurring events (`DAILY` / `WEEKLY` incl. `BYDAY` / `MONTHLY` / `YEARLY`, with `INTERVAL`,
   `COUNT`, `UNTIL`, `EXDATE`) expanded into the window, IANA-timezone aware.
 - Language (day/month names, abbreviated on narrower layouts) auto-detected from your TRMNL
@@ -72,7 +61,10 @@ time.
    - **Location**: search a place or enter coordinates, for sunrise/sunset and daily weather.
      Leave blank to hide sun times and weather, and emphasize hours by meetings alone.
    - **Temperature Unit**: Celsius or Fahrenheit (requires Location above).
-   - **Days to Show**: 1, 2, 3, 5 days, or a full week.
+   - **Days to Show**: 1, 2, or 3 days. Only the full 800x480 ("OG") layout actually honors
+     this — the quadrant/half-horizontal/half-vertical layouts are narrow or short enough that
+     more than one day column stops being legible, so those three always show just today,
+     regardless of what's set here.
 
 ## Try it with the demo calendar
 
@@ -81,8 +73,9 @@ multi-day banners, recurring classes, a couple of kids each with their own color
 up your real one? Paste [`demo-config.json`](demo-config.json) straight into the plugin's
 Calendar Configuration field as-is — it's a complete, working config, not a fragment to edit
 first. It points at a small fictional family (parents Alex/Jordan, kids Mia/Leo — nobody real)
-spread across a few ICS feeds this project's own [backend](#backend) hosts at
-`/demo/*.ics`, every event `RRULE`-recurring (weekly or yearly) so it stays "today, busy"
+spread across a few ICS feeds this repo hosts directly at
+[`demo/*.ics`](demo/) (via raw.githubusercontent.com — plain static files, no backend
+involved), every event `RRULE`-recurring (weekly or yearly) so it stays "today, busy"
 regardless of when you actually load it, plus the same public-Google-holiday calendar the
 Configuration Editor's own "Add public holidays" picker would add. It's also how this project's
 own layout work gets tested end to end — Mia's and Leo's Thursday "Gymnastics" deliberately land
@@ -93,23 +86,17 @@ and non-matching classes side by side.
 
 ## Configuration Editor
 
-**[trmnl.bettens.dev/advanced-family-calendar](https://trmnl.bettens.dev/advanced-family-calendar/)**
-— `tools/config-editor.html`, served by [the backend](#backend) itself (same origin as
-`/ics-proxy` and `/images`, so calls to those never need CORS at all — only the third-party
-calendar host being tested does, which is exactly what `/ics-proxy` routes around; also mirrored,
-unmodified, on [GitHub Pages](https://excusemi.github.io/trmnl-advanced-family-calendar/tools/config-editor.html))
-for building the Calendar
-Configuration field visually instead of hand-writing JSON: add calendars, people, and categories
-through a form (categories' icons are searchable live against both
-[Google's Material Symbols](https://fonts.google.com/icons) and [Tabler Icons](https://tabler.io/icons),
-no spelling guesses needed, or upload your own photo — see [Backend](#backend)), add a
-public holiday calendar for your country in one click, test against real ICS data (direct fetch
-when the host allows CORS, automatically falling back to this plugin's own backend — which fetches
-server-side, where CORS doesn't apply, same as TRMNL's own render pipeline already does — and
-only then to pasting the `.ics` text by hand; a private calendar URL is never routed through any
-*third-party* proxy), and
-preview the actual colors/badges/icons using TRMNL's real CSS classes. Copy the generated JSON
-into the plugin's Calendar Configuration field when
+**[excusemi.github.io/trmnl-family-calendar/tools/config-editor.html](https://excusemi.github.io/trmnl-family-calendar/tools/config-editor.html)**
+— `tools/config-editor.html`, a plain static page served straight from GitHub Pages (its
+`<script src="../plugin/src/transform.js">` resolves against the same repo Pages is already
+serving — nothing to build or copy) for building the Calendar Configuration field visually
+instead of hand-writing JSON: add calendars and people through a
+form, add a public holiday calendar for your country in one click, test against real ICS data
+(direct fetch when the host allows CORS, automatically falling back to [the backend](#backend)'s
+`/ics-proxy` — which fetches server-side, where CORS doesn't apply, same as TRMNL's own render
+pipeline already does — and only then to pasting the `.ics` text by hand; a private calendar URL
+is never routed through any *third-party* proxy), and preview the actual colors using TRMNL's
+real CSS classes. Copy the generated JSON into the plugin's Calendar Configuration field when
 you're happy with it.
 
 For the full field-by-field reference see [CONFIG.md](CONFIG.md); having an LLM write the JSON
@@ -130,10 +117,6 @@ The JSON shape it produces:
   ],
   "people": [
     { "name": "Alex", "color": "pink", "badge": "A" }
-  ],
-  "categories": [
-    { "name": "Birthday", "match": "birthday|verjaardag", "icon": "cake" },
-    { "name": "Work From Home", "match": "\\bWFH\\b", "icon": ["work", "home"] }
   ]
 }
 ```
@@ -143,13 +126,11 @@ The JSON shape it produces:
   calendar settings. `webcal://` links are handled automatically.
 - `calendars[].color` — optional, one of `red` `orange` `yellow` `lime` `green` `cyan` `blue`
   `violet` `purple` `pink`, an explicit `gray-10`..`gray-75` shade, or literal `black`/`white`.
-  Pins that calendar's color instead of auto-assigning by position.
-- `calendars[].icon` — optional, same shape as `categories[].icon` below. A default icon for
-  every event on that calendar; a matching Category's own icon still wins over this. What the
-  Configuration Editor's "Add public holidays" picker sets, for instance — the plugin has no
-  built-in notion of holidays, that button just fills in a normal calendar entry.
+  Pins that calendar's color instead of auto-assigning by position. What the Configuration
+  Editor's "Add public holidays" picker sets, for instance — the plugin has no built-in notion
+  of holidays, that button just fills in a normal calendar entry.
 - `calendars[].exclude` — optional regex, or array of them (case-insensitive). Matching events
-  from *that* calendar are hidden entirely, before `people`/`categories` ever see them.
+  from *that* calendar are hidden entirely, before `people` ever sees them.
 - `calendars[].personRules` — optional array of `{ match, person, rename }`, checked in order
   against every surviving event on *that* calendar. `person` names who it belongs to — one name,
   or an array of them for a shared event (e.g. `["Alex", "Jordan"]` for a family trip); doesn't
@@ -159,64 +140,33 @@ The JSON shape it produces:
 - `calendars[].defaultPerson` — optional, applied when no `personRules` matched. Same shape as
   `personRules[].person` above (one name or an array).
 - `people[].name` — required, the lookup key `personRules[].person`/`defaultPerson` reference.
-  `people[].color` — optional; overrides that event's chip color. `people[].image` — optional, a
-  direct photo/avatar URL shown in the header's own small per-person badge instead of their
-  initial (that badge is shared/header-only — see People above — never repeated per event).
-- `categories[].match` — required, a regex or array of them (case-insensitive). Unlike
-  `people`/`personRules`, a category isn't scoped to one calendar — it's tested against every
-  surviving event's title, from any calendar, in array order (later matches win for color/icon).
-- `categories[].color` — optional, overrides the event's calendar/person color (a category wins
-  over both — it's the most specific signal).
-- `categories[].icon` — optional, a [Material Symbols](https://fonts.google.com/icons) name
-  (e.g. `"cake"`), a [Tabler Icons](https://tabler.io/icons) name prefixed `tabler:` (e.g.
-  `"tabler:yoga"` — a second set for the sport/activity coverage Material Symbols lacks), or a
-  custom image URL, or an array of up to two of any of those (shown bare, side by side, tinted to
-  the chip's own text color — e.g. `["work", "home"]` for "Work From Home").
-- `categories[].display` — optional, `"image"` drops the title text entirely and lets the icon(s)
-  fill the whole chip instead — for the kind of recurring event an icon alone already says
-  everything about. Falls back to the normal text chip if no icon actually matched.
-- `categories[].calendars` / `categories[].excludeCalendars` — optional, both by
-  `calendars[].id` (or `.url` for a calendar with no id). `calendars` is a whitelist (only those
-  calendars); `excludeCalendars` is a blacklist (every calendar except those). Omit both for the
-  default — every calendar. Handy for a category that should apply broadly but not to one
-  calendar that's already "someone's own" — e.g. a global "Work" category kept off your own
-  personal calendar so your own name/badge shows through there instead.
+  `people[].color` — optional; overrides that event's chip color. `people[].badge` — optional, a
+  short label (defaults to the name's first letter) shown in the header's own small per-person
+  badge (full view only — see People above — never repeated per event).
 
 ## Backend
 
-`backend/` is a small self-hosted Quart service (Postgres + Redis) that exists for the
-[Configuration Editor](#configuration-editor) — the plugin itself never talks to it at render
-time:
+`backend/` is a small self-hosted Quart service (Redis) with exactly one real job — the
+[Configuration Editor](#configuration-editor) itself and the demo calendars are both plain
+static files served directly from GitHub (Pages and raw.githubusercontent.com respectively, see
+above), not through this backend, and the plugin itself never talks to it at render time either:
 
-- **`GET /`** and **`GET /tools/config-editor.html`** — serve the editor itself (Docker build
-  copies `tools/config-editor.html` and `plugin/src/transform.js` in, at the same relative paths
-  they have in the repo, so the page's own `<script src="../plugin/src/transform.js">` resolves
-  unchanged). Same-origin means its calls to the two endpoints below never trigger a CORS
-  preflight against this backend at all.
 - **`GET /ics-proxy?url=...`** — fetches a calendar feed server-side and returns the raw text
   with permissive CORS headers, so the editor can test a real feed that blocks direct browser
   fetches (most calendar hosts do) without you having to paste the `.ics` content by hand. SSRF-
   guarded (only public http(s) hosts, redirects re-validated) since it's an internet-facing
   "fetch this URL for me" endpoint.
-- **`POST /images`** / **`GET /images/<id>`** — upload a photo for a person or category icon;
-  it's center-cropped to a square and downscaled to at most 512×512, stored in Postgres, and
-  served back at a stable URL. This exists because several public image hosts (imgur confirmed)
-  block the kind of non-browser, server-side hotlinking TRMNL's own render pipeline does when it
-  fetches `people[].image`/`categories[].icon` — self-hosting sidesteps that outright.
 
-Both the upload endpoint and the ICS proxy sit behind the same tiered access control TRMNL
-backends in this account use (`ACCESS_MODE=rate_limited` by default — TRMNL's own IPs
-unrestricted, everyone else, including your own browser using the editor, rate limited rather
-than blocked outright). `GET /images/<id>` itself is deliberately unrestricted — that's the URL
-TRMNL's render pipeline fetches on every refresh, so gating it the same way would just recreate
-the hotlink-blocking problem this exists to solve.
+The ICS proxy sits behind the same tiered access control TRMNL backends in this account use
+(`ACCESS_MODE=rate_limited` by default — TRMNL's own IPs unrestricted, everyone else, including
+your own browser using the editor, rate limited rather than blocked outright).
 
 ```bash
-cp .env.example .env   # fill in real Postgres/Redis passwords
+cp .env.example .env   # fill in a real Redis password
 docker compose up -d --build
 ```
 
-See `.env.example` for every setting (rate-limit window, upload size caps, etc.).
+See `.env.example` for every setting (rate-limit window, etc.).
 
 ## Local layout development
 
@@ -242,8 +192,9 @@ exercise `run()`/`transform.js` itself against real data, use the
 | `plugin/src/shared.liquid` | The `main` template for all four view sizes (`full`/`half_*`/`quadrant`) |
 | `plugin/src/settings.yml` | Custom fields (Calendar Configuration, time zone, time format, location, days to show) |
 | `plugin/.trmnlp.yml` | Local mock data for `trmnlp serve` |
-| `tools/config-editor.html` | Standalone config builder + real-data tester — see above; served by both `backend/` and GitHub Pages |
-| `backend/` | Serves the Configuration Editor + CORS-free ICS test proxy + photo upload/hosting — see [Backend](#backend) |
+| `tools/config-editor.html` | Standalone config builder + real-data tester — see above; served as a static page by GitHub Pages |
+| `demo/*.ics` | Demo calendars — see "Try it with the demo calendar" above; served as static files via raw.githubusercontent.com |
+| `backend/` | CORS-free ICS test proxy only — see [Backend](#backend) |
 
 ## Notes & limits
 
