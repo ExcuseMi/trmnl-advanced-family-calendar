@@ -81,21 +81,6 @@
     </div>
   </div>
 
-  <h2>Hours to show <span class="muted">(optional)</span></h2>
-  <div class="card">
-    <p class="muted" style="margin-top:0;">The default hour range the grid shows — always widened automatically to also cover sunrise, every actual event, and sunset, whichever push earlier/later, so nothing real ever gets hidden. Hours left outside the final range are hidden entirely rather than shown compressed.</p>
-    <div class="row">
-      <div>
-        <label>Start hour</label>
-        <input type="number" id="hoursStart" min="0" max="23" value="7" class="field-narrow" style="flex:0 0 80px;">
-      </div>
-      <div>
-        <label>End hour</label>
-        <input type="number" id="hoursEnd" min="1" max="24" value="21" class="field-narrow" style="flex:0 0 80px;">
-      </div>
-    </div>
-  </div>
-
   <h2>Calendars</h2>
   <div id="calendars"></div>
   <button id="addCalendar">+ Add calendar</button>
@@ -111,20 +96,6 @@
   <h2>People <span class="muted">(optional — just names + colors/badges; who a badge/color applies to is set per calendar above, under each calendar's Advanced section)</span></h2>
   <div id="people"></div>
   <button id="addPerson">+ Add person</button>
-
-  <h2>Assign colors for a device <span class="muted">(optional)</span></h2>
-  <div class="card">
-    <p class="muted" style="margin-top:0;">The plugin itself has no notion of "device" — it only ever uses whatever <code>color</code> values end up in the JSON below. This just fills in a sensible one for every calendar/person that doesn't have one pinned yet, picked for the panel you choose: TRMNL OG and TRMNL X are both grayscale-only, and even TRMNL Display Color is a 4-ink Black/White/Red/Yellow panel rather than full color, so most of the 10 named colors would otherwise collapse onto the same result there anyway. Colors already set are left alone; re-run any time after adding more calendars/people.</p>
-    <div class="row">
-      <select id="deviceSelect">
-        <option value="og">TRMNL OG</option>
-        <option value="x">TRMNL X</option>
-        <option value="color">TRMNL Display Color</option>
-      </select>
-      <button id="assignColors">Auto-assign colors</button>
-      <span id="assignStatus" class="status"></span>
-    </div>
-  </div>
 
   <h2>Generated Configuration</h2>
   <div class="card">
@@ -209,17 +180,6 @@
   var BLACK_WHITE = ["black", "white"];
   var VALID_COLORS = HUES.concat(GRAY_SHADES.map(function (n) { return "gray-" + n; })).concat(BLACK_WHITE);
 
-  // Device-aware color pools — this tool's own concern, not the plugin's (see run() in
-  // transform.js, which just uses whatever `color` ends up in the JSON). OG/X are both
-  // grayscale-only panels, so a spread of gray shades gives predictable, evenly-spaced
-  // results. TRMNL Display Color is BWRY (Black/White/Red/Yellow) — red and yellow are the
-  // only two inks beyond black/white it actually has, so cycling all 10 hues there would just
-  // mean several silently converge to the same physical ink; extends with grays past 2 for
-  // further, honest distinction.
-  var GRAYSCALE_CYCLE = ["gray-10", "gray-25", "gray-40", "gray-55", "gray-70"];
-  var COLOR_DEVICE_CYCLE = ["red", "yellow", "gray-20", "gray-55"];
-  function cyclePoolFor(device) { return device === "color" ? COLOR_DEVICE_CYCLE : GRAYSCALE_CYCLE; }
-
   function colorClass(color) { return HUES.indexOf(color) !== -1 ? color + "-65" : color; }
   function foregroundFor(color) {
     if (color === "black") return "white";
@@ -273,12 +233,31 @@
     return e;
   }
 
+  // Real background/foreground for a color VALUE, read off the framework's own CSS (a
+  // hidden probe element wearing the exact bg--{hue}-65/text--{fg} classes every chip
+  // actually renders with) rather than a hand-maintained hex table — stays correct if the
+  // framework's own palette ever changes. Cached since every option in every select reuses
+  // the same small color set.
+  var _colorStyleCache = {};
+  function colorOptionStyle(colorValue) {
+    if (!colorValue) return "";
+    if (!(colorValue in _colorStyleCache)) {
+      var probe = el("span", { class: "bg--" + colorClass(colorValue) + " text--" + foregroundFor(colorValue) });
+      probe.style.cssText = "position:absolute;visibility:hidden;";
+      document.body.appendChild(probe);
+      var cs = getComputedStyle(probe);
+      _colorStyleCache[colorValue] = "background-color:" + cs.backgroundColor + ";color:" + cs.color + ";";
+      document.body.removeChild(probe);
+    }
+    return _colorStyleCache[colorValue];
+  }
+
   function hueSelect(id, value, includeAuto) {
     var sel = el("select", { id: id });
     sel.appendChild(el("option", { value: "" }, [document.createTextNode(includeAuto ? "(auto)" : "(none)")]));
     var hueGroup = el("optgroup", { label: "Colors" });
     HUES.forEach(function (h) {
-      var opt = el("option", { value: h }, [document.createTextNode(h)]);
+      var opt = el("option", { value: h, style: colorOptionStyle(h) }, [document.createTextNode(h)]);
       if (h === value) opt.setAttribute("selected", "selected");
       hueGroup.appendChild(opt);
     });
@@ -289,7 +268,7 @@
     var grayGroup = el("optgroup", { label: "Grays (10=darkest .. 75=lightest)" });
     GRAY_SHADES.forEach(function (n) {
       var v = "gray-" + n;
-      var opt = el("option", { value: v }, [document.createTextNode(v)]);
+      var opt = el("option", { value: v, style: colorOptionStyle(v) }, [document.createTextNode(v)]);
       if (v === value) opt.setAttribute("selected", "selected");
       grayGroup.appendChild(opt);
     });
@@ -298,7 +277,7 @@
     // #111111 and gray-75 a light gray, neither is literal 0/255.
     var bwGroup = el("optgroup", { label: "Black & White" });
     BLACK_WHITE.forEach(function (v) {
-      var opt = el("option", { value: v }, [document.createTextNode(v)]);
+      var opt = el("option", { value: v, style: colorOptionStyle(v) }, [document.createTextNode(v)]);
       if (v === value) opt.setAttribute("selected", "selected");
       bwGroup.appendChild(opt);
     });
@@ -528,39 +507,10 @@
     renderPeople(); renderJson(); renderCalendars();
   });
 
-  // ------------------------------------------------------- device color auto-assignment
-
-  document.getElementById("assignColors").addEventListener("click", function () {
-    var pool = cyclePoolFor(document.getElementById("deviceSelect").value);
-    var idx = 0;
-    var assigned = 0;
-    calendars.forEach(function (c) {
-      if (c.color) return;
-      c.color = pool[idx % pool.length];
-      idx++;
-      assigned++;
-    });
-    people.forEach(function (p) {
-      if (p.color) return;
-      p.color = pool[idx % pool.length];
-      idx++;
-      assigned++;
-    });
-    renderCalendars(); renderPeople(); renderJson();
-    var status = document.getElementById("assignStatus");
-    status.textContent = assigned ? "Filled in " + assigned + " color(s) — review below, still freely editable." : "Nothing to do — every calendar/person already has a color.";
-    status.className = "status ok";
-  });
-
   // ------------------------------------------------------------------ JSON out
 
   function buildConfig() {
     var cfg = {};
-    var hStart = parseInt(document.getElementById("hoursStart").value, 10);
-    var hEnd = parseInt(document.getElementById("hoursEnd").value, 10);
-    if (Number.isFinite(hStart) && Number.isFinite(hEnd) && hStart >= 0 && hStart < hEnd && hEnd <= 24 && (hStart !== 7 || hEnd !== 21)) {
-      cfg.hours = { start: hStart, end: hEnd };
-    }
     cfg.calendars = [];
     cfg.people = [];
     calendars.forEach(function (c) {
@@ -652,17 +602,6 @@
 
     calendars = newCalendars.length ? newCalendars : [newCalendar()];
     people = newPeople;
-    if (data.hours && typeof data.hours === "object") {
-      var hs = Math.trunc(Number(data.hours.start));
-      var he = Math.trunc(Number(data.hours.end));
-      if (Number.isFinite(hs) && Number.isFinite(he) && hs >= 0 && hs < he && he <= 24) {
-        document.getElementById("hoursStart").value = hs;
-        document.getElementById("hoursEnd").value = he;
-      }
-    } else {
-      document.getElementById("hoursStart").value = 7;
-      document.getElementById("hoursEnd").value = 21;
-    }
     renderCalendars(); renderPeople(); renderJson(); renderIcsSources();
     status.textContent = "Loaded " + newCalendars.length + " calendar(s) and " + newPeople.length + " person/people.";
     status.className = "status ok";
@@ -671,9 +610,6 @@
   function renderJson() {
     document.getElementById("jsonOut").value = JSON.stringify(buildConfig(), null, 2);
   }
-
-  document.getElementById("hoursStart").addEventListener("input", renderJson);
-  document.getElementById("hoursEnd").addEventListener("input", renderJson);
 
   document.getElementById("copyJson").addEventListener("click", function () {
     var ta = document.getElementById("jsonOut");
