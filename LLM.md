@@ -93,10 +93,4 @@ than one kid):
 ]
 ```
 
-Hand the result to the person to paste into the plugin's **Calendar Configuration** field, or
-build it interactively at
-[the Configuration Editor](https://excusemi.github.io/trmnl-family-calendar/tools/config-editor.html)
-instead — it validates JSON and previews real colors directly; testing against a real ICS
-feed there works via direct fetch when the calendar host allows it (CORS), falling back to its
-backend's `/ics-proxy` (which fetches server-side, where CORS doesn't apply), and only then to
-pasting the raw `.ics` text by hand.
+Hand the result to the person to paste into the plugin's **Calendar Configuration** field.
