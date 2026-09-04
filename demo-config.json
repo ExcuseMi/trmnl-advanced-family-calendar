@@ -1,5 +1,6 @@
 {
   "locale": "en",
+  "timeZone": "America/New_York",
   "calendars": [
     {
       "id": "Family",

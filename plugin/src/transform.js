@@ -86,13 +86,15 @@ async function run(input) {
   const calendars = cfg.calendars;
   const people = cfg.people;
   const calendarColors = calendars.map((c) => c.color);
-  // Top-level "locale" config override (see parseConfig) wins over the auto-detected TRMNL
-  // account locale — same "explicit config beats auto-detection" precedence as time_zone
-  // below (cfg's own tzname vs. userTz(input)); useful for forcing a consistent language
-  // regardless of who's actually viewing (e.g. the demo config pins "en" so it reads the same
-  // for everyone trying it, not whatever locale the TRMNL account happens to be set to).
+  // Top-level "locale"/"timeZone" config overrides (see parseConfig) each win over their own
+  // auto-detected TRMNL account equivalent — explicit config beats auto-detection, same
+  // precedence for both. Useful for forcing a consistent language/zone regardless of who's
+  // actually viewing (e.g. the demo config pins "en"/"Europe/Brussels" so it reads the same
+  // for everyone trying it, not whatever the TRMNL account happens to be set to). timeZone
+  // also wins over the plugin's own "Time Zone" setting field — it's the more specific
+  // signal, same as a category's color winning over a calendar's elsewhere in this file.
   const locale = cfg.locale || localeOf(input);
-  const tzname = cf(input, "time_zone").trim() || userTz(input) || "UTC";
+  const tzname = cfg.timeZone || cf(input, "time_zone").trim() || userTz(input) || "UTC";
   const is12h = cf(input, "time_format").trim().toLowerCase() === "12h";
   const location = cf(input, "lat_lon");
   const fahrenheit = cf(input, "temperature_unit").trim().toLowerCase() === "fahrenheit";
@@ -443,7 +445,7 @@ function emptyResult(tzname, tz, locale, daysN, is12h, msg) {
 // strict validation.
 
 function parseConfig(raw) {
-  const empty = { calendars: [], people: {}, locale: null };
+  const empty = { calendars: [], people: {}, locale: null, timeZone: null };
   if (typeof raw !== "string" || !raw.trim()) return empty;
   let data;
   try {
@@ -459,6 +461,12 @@ function parseConfig(raw) {
   // Intl.DateTimeFormat handles essentially any real locale tag natively, so there's nothing
   // useful to validate beyond "is this actually a non-empty string".
   const locale = typeof data.locale === "string" && data.locale.trim() ? data.locale.trim() : null;
+
+  // Optional top-level "timeZone" (an IANA name, e.g. "Europe/Brussels") — overrides both the
+  // plugin's own Time Zone setting and the TRMNL account's own auto-detected zone (see
+  // resolveTz/run()). Not validated here — an unrecognized name is caught later by
+  // safeZone/resolveTz's own fallback, same as any other source of a zone name.
+  const timeZone = typeof data.timeZone === "string" && data.timeZone.trim() ? data.timeZone.trim() : null;
 
   // Keyed by lowercased name so personRules/defaultPerson lookups are case-insensitive, same
   // as the regex matching around them.
@@ -503,7 +511,7 @@ function parseConfig(raw) {
     calendars.push({ id, url: item.url.trim(), color, exclude, defaultPerson, personRules });
   }
 
-  return { calendars, people, locale };
+  return { calendars, people, locale, timeZone };
 }
 
 // Accepts one name (string) or several (array of strings) for defaultPerson/personRules[].
