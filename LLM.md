@@ -81,14 +81,14 @@ circles, e.g. `["work", "home"]`).
 - **Color**: calendar's own pinned color (else auto-assigned by position) → person's color (if
   `personRules`/`defaultPerson` attached one) → matched category's color. Later/more-specific
   wins; a category's color is checked last and wins if set.
-- **Badge rail** (the left-edge strip every event shows) has exactly 2 slots: a matched
-  category's `icon`(s) fill the front slot(s) first (one icon = 1 slot, `["a","b"]` = both,
-  falling back to the calendar's own default `icon` if no category matched), then each
-  attached, DECLARED person fills whatever slot(s) are left, one per person, in the order
+- **Badge rail** (the left-edge strip every event shows) has exactly 2 slots: each attached,
+  DECLARED person fills the front slot(s) first, one per person, in the order
   `personRules`/`defaultPerson` listed them — their `image` photo if set, else their `badge`
-  letter. Nothing in any slot = a plain color accent, no circle. This is why a category icon
-  and a person's own badge routinely show together (icon = what kind, badge = whose) as long
-  as the category only used one of its two icon slots.
+  letter — then a matched category's `icon`(s) fill whatever slot(s) are left (one icon = 1
+  slot, `["a","b"]` = both, falling back to the calendar's own default `icon` if no category
+  matched). Nothing in any slot = a plain color accent, no circle. This is why a person's own
+  badge and a category icon routinely show together (badge = whose, icon = what kind) as long
+  as only one person was declared on that event.
 - **`display: "image"`** on a category takes whatever ended up in the rail and blows it up to
   fill the whole chip, dropping the title — only takes effect if something real is actually in
   a slot (an icon matched, or a person got attached); otherwise it's a normal text chip.

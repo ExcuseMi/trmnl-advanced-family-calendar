@@ -32,7 +32,7 @@ elsewhere below) were written the obvious way, with the delimiters spelled out.
   badges, image_d. {%- endcomment -%}
   <div class="flex flex--row flex--center-x flex--center-y w--full h--full" style="gap:4px;">
     {%- for b in badges -%}
-      <span class="rounded--full flex flex--center-x flex--center-y text--white bg--black" style="width:{{ image_d }}px;height:{{ image_d }}px;flex-shrink:0;overflow:hidden;border:2px solid currentColor;box-sizing:border-box;">
+      <span class="rounded--small flex flex--center-x flex--center-y text--white bg--black" style="width:{{ image_d }}px;height:{{ image_d }}px;flex-shrink:0;overflow:hidden;border:2px solid currentColor;box-sizing:border-box;">
         {%- render "badge_content", b: b -%}
       </span>
     {%- endfor -%}
@@ -65,7 +65,7 @@ elsewhere below) were written the obvious way, with the delimiters spelled out.
     {%- assign chip_rail_w = badge_d | times: badges.size | plus: 1 | plus: 8 -%}
     <div class="bg--{{ bar }} flex flex--row flex--center-x flex--center-y" style="position:absolute;top:0;bottom:0;left:0;width:{{ chip_rail_w }}px;overflow:hidden;border-radius:{{ radius }};">
       {%- for b in badges -%}
-        <span class="rounded--full flex flex--center-x flex--center-y text--white bg--black" style="width:{{ badge_d }}px;height:{{ badge_d }}px;flex-shrink:0;{% unless forloop.first %}margin-left:1px;{% endunless %}overflow:hidden;border:1.5px solid currentColor;box-sizing:border-box;">
+        <span class="rounded--small flex flex--center-x flex--center-y text--white bg--black" style="width:{{ badge_d }}px;height:{{ badge_d }}px;flex-shrink:0;{% unless forloop.first %}margin-left:1px;{% endunless %}overflow:hidden;border:1.5px solid currentColor;box-sizing:border-box;">
           {%- render "badge_content", b: b -%}
         </span>
       {%- endfor -%}
@@ -323,7 +323,7 @@ where the axis was already a sane fraction and unchanged. {%- endcomment -%}
                    event chip's own solo/paired badge. -->
               <div class="flex flex--row flex--center-y" style="gap:1px;flex-shrink:0;">
                 {%- for b in day.people -%}
-                  <span class="rounded--full flex flex--center-x flex--center-y text--white bg--black" style="width:{{ head_badge_d }}px;height:{{ head_badge_d }}px;flex-shrink:0;overflow:hidden;border:1.5px solid currentColor;box-sizing:border-box;">
+                  <span class="rounded--small flex flex--center-x flex--center-y text--white bg--black" style="width:{{ head_badge_d }}px;height:{{ head_badge_d }}px;flex-shrink:0;overflow:hidden;border:1.5px solid currentColor;box-sizing:border-box;">
                     {%- render "badge_content", b: b -%}
                   </span>
                 {%- endfor -%}

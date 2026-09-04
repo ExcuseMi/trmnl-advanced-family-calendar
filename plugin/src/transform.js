@@ -244,19 +244,19 @@ async function run(input) {
     const catIcon = c.icon || calendars[e.calIdx].icon || null;
 
     // The badge rail (see shared.liquid) has exactly 2 slots, same budget as before this
-    // supported more than one person or a real image mode. A category icon takes the front
-    // slot(s) first (the more specific "what kind" signal) — one icon leaves a slot free, two
-    // fill the rail outright — and person badges/photos ("whose") fill whatever's left, one
-    // per matched+declared person, in personRules/defaultPerson order, silently dropping any
-    // that don't fit rather than growing the rail unpredictably.
+    // supported more than one person or a real image mode. Person badges/photos ("whose") take
+    // the front slot(s) first — the more immediately recognizable signal (a face beats an
+    // abstract icon) — and a category icon ("what kind") fills whatever's left, one icon if a
+    // person already took a slot, both if none did, silently dropping any icon that doesn't
+    // fit rather than growing the rail unpredictably.
     const badges = [];
-    if (catIcon) {
-      badges.push({ kind: "icon", src: catIcon.first });
-      if (catIcon.second) badges.push({ kind: "icon", src: catIcon.second });
-    }
     for (const pb of r.badges) {
       if (badges.length >= 2) break;
       badges.push(pb);
+    }
+    if (catIcon) {
+      if (badges.length < 2) badges.push({ kind: "icon", src: catIcon.first });
+      if (badges.length < 2 && catIcon.second) badges.push({ kind: "icon", src: catIcon.second });
     }
     e.badges = badges;
     // "image" display mode only actually takes effect once there's a real badge to show as

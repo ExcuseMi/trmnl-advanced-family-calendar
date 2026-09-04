@@ -289,13 +289,12 @@ starting from the least to the most specific:
 For the **badge rail** (the left-edge strip every event shows), think of it as **2 slots** rather
 than a replace-the-previous-step ladder:
 
-1. If a category matched and has an `icon`, its icon(s) fill the front slot(s) first — one icon
-   takes 1 slot, `["a", "b"]` takes both.
-2. Otherwise, the calendar's own default `icon` (if it has one) fills the front slot instead.
-3. Whatever slot(s) are still free get filled by attached, *declared* people, one each, in the
-   order `personRules`/`defaultPerson` listed them — a photo if that person has `image` set,
+1. Attached, *declared* people fill the front slot(s) first, one each, in the order
+   `personRules`/`defaultPerson` listed them — a photo if that person has `image` set,
    otherwise their badge letter.
-4. With nothing in any slot, the rail is just a plain color accent (no badge circle at all).
+2. Whatever slot(s) are still free get filled by a matched category's `icon`(s) — one icon
+   takes 1 slot, `["a", "b"]` takes both — or, failing that, the calendar's own default `icon`.
+3. With nothing in any slot, the rail is just a plain color accent (no badge circle at all).
 
 So a category icon and a person's own badge routinely show **together** — icon = what kind of
 event, badge/photo = whose — as long as the category only used one of its two icon slots. A
