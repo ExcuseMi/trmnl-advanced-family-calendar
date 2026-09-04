@@ -359,24 +359,31 @@ async function run(input) {
   let endH = Math.ceil(Math.max(...endCandidates));
   endH = Math.max(endH, startH + 1);
 
-  // Two full layoutNative() passes, not one: quadrant/half_horizontal always use the small
-  // header (see HEADER_PCT_SMALL — they never show today's badge row regardless of data), but
-  // full/half_vertical only need the taller one on a render where today actually HAS a badge
-  // to show — reusing one shared height for every render meant a busy day's own header size
-  // got reserved on every OTHER (badge-less) day too, and even on today itself once the row
-  // height needed for the WORST case left slack on a lighter one. Skipping the second pass
-  // entirely when nobody has anything today, rather than computing it and throwing it away.
-  const todayRaw = rawDays.find((d) => d.isToday);
-  const todayHasBadges = !!(todayRaw && [...todayRaw.allday, ...todayRaw.timed].some((item) => (item.personBadges || []).some((b) => b.person)));
-  const gridSmall = layoutNative(rawDays, startH, endH, nowH, sky.sunMarks, sky.hourlyWeather, calendarColors, HEADER_PCT_SMALL);
-  const gridLarge = todayHasBadges ? layoutNative(rawDays, startH, endH, nowH, sky.sunMarks, sky.hourlyWeather, calendarColors, HEADER_PCT_LARGE) : gridSmall;
+  const grid = layoutNative(rawDays, startH, endH, nowH, sky.sunMarks, sky.hourlyWeather, calendarColors, HEADER_PCT);
 
-  return Object.assign({}, gridSmall, {
-    // _lg fields: what full/half_vertical actually render with (see those two view files) —
-    // the small ones above stay the default/primary shape quadrant/half_horizontal use as-is.
-    header_pct_lg: gridLarge.header_pct, allday_pct_lg: gridLarge.allday_pct,
-    grid_pct_lg: gridLarge.grid_pct, footer_pct_lg: gridLarge.footer_pct,
-    hour_rows_lg: gridLarge.hour_rows, days_lg: gridLarge.days,
+  // Who has ANYTHING in the whole visible range (every day, not just today) — the header's
+  // own top-left gutter cell (see shared.liquid) was otherwise unused space, and showing
+  // "who's on today" only, once, under just one day's label, forced the header taller on
+  // every render that had it and misaligned that one day's own label against every other day's
+  // (see git history — both real, since-reverted problems). One small badge grid in a cell
+  // that already existed sidesteps both: scans every day's own allday+timed personBadges
+  // (set in applyCalendarPerson) and keeps the first badge seen per declared person — a
+  // category icon never ends up here (it has no person attached), and someone appearing on
+  // 5 different events across the week still only shows once.
+  const viewPeopleSeen = new Set();
+  const viewPeople = [];
+  for (const d of rawDays) {
+    for (const b of [...d.allday.flatMap((a) => a.personBadges || []), ...d.timed.flatMap((t) => t.personBadges || [])]) {
+      if (!b.person || viewPeopleSeen.has(b.person)) continue;
+      viewPeopleSeen.add(b.person);
+      viewPeople.push(b.kind === "photo"
+        ? { kind: "photo", src: b.src, person: b.person, hue: b.hue, fg: b.fg }
+        : { kind: "letter", text: b.text, person: b.person, hue: b.hue, fg: b.fg });
+    }
+  }
+
+  return Object.assign({}, grid, {
+    people: viewPeople,
     generated_at: Math.floor(nowEpoch / 1000),
     tz: tzname,
     error: err,
@@ -425,14 +432,9 @@ function emptyResult(tzname, tz, locale, daysN, msg) {
       allday: [],
     });
   }
-  // No real days/events in this branch at all, so today never has a badge to show either —
-  // _lg mirrors the primary (small) fields rather than running a second, identical pass (see
-  // run()'s own header_pct_lg/etc. for why a real render needs the two to differ).
-  const grid = layoutNative(days, 8, 22, null, null, null, null, HEADER_PCT_SMALL);
+  const grid = layoutNative(days, 8, 22, null, null, null, null, HEADER_PCT);
   return Object.assign({}, grid, {
-    header_pct_lg: grid.header_pct, allday_pct_lg: grid.allday_pct,
-    grid_pct_lg: grid.grid_pct, footer_pct_lg: grid.footer_pct,
-    hour_rows_lg: grid.hour_rows, days_lg: grid.days,
+    people: [], // no real days/events in this branch, so nobody to show in the gutter either
     generated_at: Math.floor(nowEpoch / 1000),
     tz: tzname,
     error: msg,
@@ -1428,18 +1430,13 @@ async function fetchSky(location, daysN, fahrenheit) {
 // the same numbers render correctly on any device, including the larger TRMNL X. Liquid does
 // no layout math itself; it just loops over this pre-baked structure.
 
-const HEADER_PCT_SMALL = 7; // day label, one line, no badges — what quadrant/half_horizontal
-                            // always use (they never show today's badge row at all, their
-                            // ~240px screens don't have the room) and what full/half_vertical
-                            // fall back to on any day nobody has anything on today, so an empty
-                            // "who's busy" row doesn't leave dead black space reserved for
-                            // nothing. See run() for how this and HEADER_PCT_LARGE each drive
-                            // their own full layoutNative() pass.
-const HEADER_PCT_LARGE = 12; // full/half_vertical, only on a render where today actually has
-                             // at least one person's badge to show underneath the label —
-                             // reusing this for every render regardless (the previous design)
-                             // meant real content on a busy day forced this same reserved
-                             // height on every OTHER day too, most of it empty.
+const HEADER_PCT = 13; // day label (one line) plus the header's own top-left gutter cell,
+                      // which hosts a small badge grid of everyone with anything in the whole
+                      // visible range (see shared.liquid and run()'s own viewPeople) — same
+                      // reserved height on every day/view now rather than only today's column
+                      // needing extra room for a badge row of its own, which is what used to
+                      // force this value up and down depending on view tier and whether today
+                      // specifically had anyone on it.
 const FOOTER_PCT = 7; // weather icon + daily high/low, its own zone at the bottom of the
                       // screen (see shared.liquid) rather than a second header line — kept
                       // out of gridBase (the hourly grid's own top-offset math) since it sits
@@ -1570,9 +1567,24 @@ function layoutNative(days, importantStart, importantEnd, nowH, sunMarks, hourly
     }
   }
   const nextHour = nextEventH0 !== null ? Math.trunc(nextEventH0) : null;
+  // Minute of that same next event, zero-padded ("05", "15", "00") so shared.liquid can just
+  // concatenate it after the hour — only meaningful on the one bold row, so it's only ever
+  // attached there rather than computed as its own thing every other row would need to carry
+  // as null. Rounds from the total minute count, not the hour's own fractional remainder, so a
+  // start time that rounds up to :60 correctly carries into the next hour (:59:xx -> next
+  // hour's :00) instead of ever displaying an invalid "9:60".
+  let nextMinute = null;
+  if (nextEventH0 !== null) {
+    const totalMin = Math.round(nextEventH0 * 60);
+    nextMinute = String(totalMin % 60).padStart(2, "0");
+  }
   const hourRows = [];
   for (let h = 0; h < 24; h++) {
-    hourRows.push({ hour: h, pct: hourPct[h], shade: h % 2, bold: h === nextHour, important: importantStart <= h && h < importantEnd });
+    hourRows.push({
+      hour: h, pct: hourPct[h], shade: h % 2, bold: h === nextHour,
+      minute: h === nextHour ? nextMinute : null,
+      important: importantStart <= h && h < importantEnd,
+    });
   }
 
   const outDays = [];
@@ -1690,35 +1702,11 @@ function layoutNative(days, importantStart, importantEnd, nowH, sunMarks, hourly
       });
     });
 
-    // Who has something on THIS day, for the header's own small badge row (see shared.liquid —
-    // currently only shown for is_today, but computed for every day here since which day
-    // counts as "today" is a display concern, not a data one). Scans every all-day/timed
-    // badge already assembled above for this day and keeps the first one seen per declared
-    // person (person, set in applyCalendarPerson) — a category icon's badge has no `person`
-    // and is skipped, and a person tagged on 3 events today still only shows once here.
-    // personBadges (see e.personBadges above), not badges — the rail itself is category-icons-
-    // only now, so scanning badges here would find nothing; d.timed is the ORIGINAL per-day
-    // timed list (personBadges attached there directly), not the transformed `events` array
-    // below, which never carried personBadges through in the first place.
-    const dayPeopleSeen = new Set();
-    const dayPeople = [];
-    for (const b of [...d.allday.flatMap((a) => a.personBadges || []), ...d.timed.flatMap((ev) => ev.personBadges || [])]) {
-      if (!b.person || dayPeopleSeen.has(b.person)) continue;
-      dayPeopleSeen.add(b.person);
-      // person rides along too — badge_content's own photo-kind fallback (see shared.liquid)
-      // reads it to show an initial instead of the (currently unrendered) photo; stripping it
-      // here left the header's own badges rendering as empty boxes, invisible instead of
-      // falling back the way an event chip's own badge already did.
-      dayPeople.push(b.kind === "photo"
-        ? { kind: "photo", src: b.src, person: b.person, hue: b.hue, fg: b.fg }
-        : { kind: "letter", text: b.text, person: b.person, hue: b.hue, fg: b.fg });
-    }
-
     outDays.push({
       label: d.label, label_short: d.labelShort,
       label_short_weekday: d.labelShortWeekday, label_short_rest: d.labelShortRest,
       is_today: d.isToday,
-      temp: d.temp || null, icon: d.icon || null, people: dayPeople,
+      temp: d.temp || null, icon: d.icon || null,
       allday: d.allday.map((a) => ({
         title: a.title, hue: colorClass(a.hue), fg: foregroundFor(a.hue),
         // Left accent bar (see shared.liquid's chip_body) — every timed event already got one

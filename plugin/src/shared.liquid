@@ -160,7 +160,7 @@ elsewhere below) were written the obvious way, with the delimiters spelled out.
   {%- assign pad_right = 4 -%}
   {%- assign bar_w = 3 -%}
   {%- assign badge_d = 20 -%}
-  {%- assign head_badge_d = 16 -%}
+  {%- assign head_badge_d = 12 -%}
   {%- assign image_d = 24 -%}
 {%- elsif view == 3 -%}
   {%- comment -%} half_vertical: only ~400px WIDE (3 narrow day columns, ~133px each) —
@@ -187,12 +187,15 @@ elsewhere below) were written the obvious way, with the delimiters spelled out.
   the title — quadrant's smaller badge_d fits this view's real width constraint instead.
   {%- endcomment -%}
   {%- assign badge_d = 18 -%}
-  {%- comment -%} head_badge_d, unlike badge_d just above, does NOT drop to the narrow-width
-  tier here — today's header badges wrap into 2 rows (see the header markup below) rather than
-  spending width the way a single-row event-chip rail does, so this view's genuinely tall
-  ~480px-screen header still has the room the full-tier size needs; it's the FONT tier
-  (head_title_cls) that stays compact for width, not this. {%- endcomment -%}
-  {%- assign head_badge_d = 26 -%}
+  {%- comment -%} head_badge_d matches badge_d's own narrow-width drop now, not the full
+  tier's bigger size — today's header badges used to wrap into 2 rows, which only spent
+  height, so this view's genuinely tall ~480px screen had room to spare regardless of width;
+  now that they're a single row (see the header markup below), they spend WIDTH like an
+  event chip's own rail does, and this view's ~133px-wide columns can't absorb 4+ badges at
+  the full tier's larger size without overflowing — confirmed as a real, if narrow, margin
+  problem (4 badges at the old 26px left only a few px of slack against this column's actual
+  width), not just a hypothetical one. {%- endcomment -%}
+  {%- assign head_badge_d = 18 -%}
   {%- assign image_d = 42 -%}
 {%- elsif view == 2 -%}
   {%- comment -%} half_horizontal: full 800px width but half SCREEN HEIGHT (~240px, same as
@@ -213,7 +216,7 @@ elsewhere below) were written the obvious way, with the delimiters spelled out.
   {%- assign pad_right = 8 -%}
   {%- assign bar_w = 4 -%}
   {%- assign badge_d = 20 -%}
-  {%- assign head_badge_d = 16 -%}
+  {%- assign head_badge_d = 12 -%}
   {%- assign image_d = 24 -%}
 {%- else -%}
   {%- comment -%} full / "OG" 800x480 device: the hour axis at xlarge/xxlarge read too big
@@ -235,7 +238,7 @@ elsewhere below) were written the obvious way, with the delimiters spelled out.
   (~480px), the axis that actually constrains badge sizing (see the badge_pct comments further
   down and view 3's own comment above). {%- endcomment -%}
   {%- assign badge_d = 38 -%}
-  {%- assign head_badge_d = 26 -%}
+  {%- assign head_badge_d = 18 -%}
   {%- assign image_d = 42 -%}
 {%- endif -%}
 
@@ -311,13 +314,34 @@ where the axis was already a sane fraction and unchanged. {%- endcomment -%}
          is also a flex child of #cal-root's flex--col, so it's exposed to the identical class
          of bug even though it wasn't the one actually reported shrinking. -->
     <div class="grid gap--none h--[{{ header_pct }}cqh] bg--black" style="flex-shrink:0;flex-grow:0;height:{{ header_pct }}cqh;min-height:{{ header_pct }}cqh;">
-      <div class="col--span-1"></div>
+      <!-- Top-left gutter cell — the same otherwise-unused corner the all-day row's own
+           gutter icon sits in below this, previously just a blank col--span-1. Everyone with
+           anything anywhere in the whole visible range (see run()'s viewPeople — every day,
+           not just today) gets one small badge here, in a 2-wide grid that wraps to however
+           many rows however many people actually needs — one shared spot instead of a
+           duplicate badge row under every day that HAS a badge, which is what used to force
+           the header taller on some renders than others and misalign one day's own label
+           against the rest (see git history — both real, since-reverted problems). Same
+           badge span styling chip_body's own rail uses (bg--{{ b.hue }}/text--{{ b.fg }},
+           currentColor border) — falls back to plain black/white for a person with no color
+           set, same as everywhere else a badge renders. -->
+      <div class="flex flex--col flex--center-x flex--center-y" style="overflow:hidden;box-sizing:border-box;padding:1px;">
+        {%- if people.size > 0 -%}
+          <div style="display:grid;grid-template-columns:repeat(2, {{ head_badge_d }}px);gap:1px;">
+            {%- for b in people -%}
+              <span class="rounded--small flex flex--center-x flex--center-y text--{{ b.fg }} bg--{{ b.hue }}" style="width:{{ head_badge_d }}px;height:{{ head_badge_d }}px;overflow:hidden;border:1px solid currentColor;box-sizing:border-box;">
+                {%- render "badge_content", b: b -%}
+              </span>
+            {%- endfor -%}
+          </div>
+        {%- endif -%}
+      </div>
       {% for day in days %}
-        <!-- flex--top, not flex--center-y: only today's column has a badge row under its
-             label, so vertically centering this whole column would float every OTHER day's
-             label lower (centered alone) than today's (centered as label+badges together) —
-             the date line itself would sit at a different height per column instead of lining
-             up. Top-aligning fixes that regardless of which columns do or don't have badges. -->
+        <!-- flex--top, not flex--center-y: the gutter cell beside these (see above) can be
+             taller than a bare label line once it's hosting a badge grid, and centering this
+             column against THAT height would float the label down away from the gutter's own
+             icon/badges instead of lining up with them. Top-aligning keeps every day's label
+             (and the gutter's own content) starting at the same height regardless. -->
         <div class="col--span-{{ day_span }} flex flex--col flex--center-x flex--top border--v-1">
           <!-- min-width:0 undoes the flex default of min-width:auto (natural content width),
                which otherwise silently defeats overflow/ellipsis truncation on the child —
@@ -327,15 +351,7 @@ where the axis was already a sane fraction and unchanged. {%- endcomment -%}
                pill, that padding just added dead space on top of the font's own line-height,
                tall enough to blow past header_pct's box in the shorter views
                (half_horizontal/quadrant) and get vertically clipped; the wrapper div's own
-               small px--[10px] py--[2px] is enough breathing room against the header's edges.
-
-               flex--col now (label on top, today's badges — if any — on their own row below)
-               instead of side by side: side by side meant the badges were eating into the
-               SAME width budget as the label text, so they had to wrap into 2 rows to avoid
-               crushing it or running off the header. Stacked below, they get the day column's
-               FULL width to spread across instead of sharing it, comfortably fitting a single
-               row even at 4+ people — simpler than the 2-row split it replaced, and shorter
-               overall too. -->
+               small px--[10px] py--[2px] is enough breathing room against the header's edges. -->
           <div class="rounded--small px--[10px] py--[2px] flex flex--col flex--center-x" style="max-width:100%;min-width:0;overflow:hidden;gap:2px;">
             <!-- Weekday abbreviation in a muted gray, day+month in bold white — splits what
                used to be one plain string (dayLabelShort in transform.js) into
@@ -347,33 +363,12 @@ where the axis was already a sane fraction and unchanged. {%- endcomment -%}
                wouldn't pick up an ancestor's color by inheritance — same gotcha as
                border--h-1's fixed color noted elsewhere in this file. Plain space between the
                two spans renders fine here (unlike the footer's Max/Min fix elsewhere in this
-               file) since .title, unlike .label, isn't itself a flex container. -->
+               file) since .title, unlike .label, isn't itself a flex container. Person badges
+               used to live here too (today's own column only) — moved to the header's top-left
+               gutter cell instead (see above), one shared spot for everyone in the whole
+               visible range rather than a duplicate row that only fit some views and forced
+               this day's own label out of line with the rest (see git history). -->
             <span class="title {{ head_title_cls }}{% if view != 4 and view != 2 and view != 3 %} cal-full-daylabel{% endif %}" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;min-width:0;text-transform:uppercase;"><span style="color:#999;">{{ day.label_short_weekday }}</span> <span style="color:white;font-weight:bold;">{{ day.label_short_rest }}</span></span>
-            {%- if day.is_today and day.people.size > 0 and view != 4 and view != 2 -%}
-              <!-- Who has something on today, right under its own header — a glance answers
-                   "is anyone busy today" without reading every chip below. day.people (see
-                   run() in transform.js) is already deduped to one badge per declared person;
-                   a category icon never ends up here (it has no person attached). Each badge
-                   uses that PERSON's own color (b.hue/b.fg — colorClass/foregroundFor'd in
-                   run(), falling back to plain black/white for a person with no color set)
-                   rather than one shared black box for everyone, so the strip itself hints at
-                   who before you even reach their initial. currentColor border keeps a visible
-                   ring around every badge regardless of its own fill, including against this
-                   row's own bg--black header a lighter fill would otherwise sit flush against.
-
-                   full/half_vertical (the two full-SCREEN-HEIGHT views) only — view != 4 and
-                   != 2 excludes quadrant/half_horizontal, whose much shorter ~240px screens
-                   don't have the spare header room this needs without either crushing the
-                   date label or growing the header well past what those two tiers otherwise
-                   need for text alone. -->
-              <div class="flex" style="flex-direction:row;gap:1px;">
-                {%- for b in day.people -%}
-                  <span class="rounded--small flex flex--center-x flex--center-y text--{{ b.fg }} bg--{{ b.hue }}" style="width:{{ head_badge_d }}px;height:{{ head_badge_d }}px;flex-shrink:0;overflow:hidden;border:1.5px solid currentColor;box-sizing:border-box;">
-                    {%- render "badge_content", b: b -%}
-                  </span>
-                {%- endfor -%}
-              </div>
-            {%- endif -%}
           </div>
         </div>
       {% endfor %}
@@ -530,7 +525,13 @@ where the axis was already a sane fraction and unchanged. {%- endcomment -%}
                  own overflow:hidden (see script below) just clips those specific numbers,
                  which is fine: the emphasized hours (the ones actually worth reading) fit
                  exactly, and used to be hidden on quadrant entirely regardless of size. -->
-              <span class="label {{ axis_cls }} {% if row.bold %}font--bold{% endif %} cal-fit-text cal-axis-text{% if row.important %} cal-axis-important{% endif %}" data-fit-min="8" data-fit-max="40">{{ row.hour }}</span>
+              <!-- row.minute (see run() in transform.js) only ever has a real value on the
+                   one bold row — the next upcoming event's own hour — so appending ":MM" here
+                   only ever fires there too; every other row's row.minute is nil and this just
+                   prints the bare hour like before. Turns "the next event is SOMETIME in this
+                   hour" into the actual time, at exactly the one row already calling out
+                   attention to it. -->
+              <span class="label {{ axis_cls }} {% if row.bold %}font--bold{% endif %} cal-fit-text cal-axis-text{% if row.important %} cal-axis-important{% endif %}" data-fit-min="8" data-fit-max="40">{{ row.hour }}{% if row.minute %}:{{ row.minute }}{% endif %}</span>
           </div>
         {% endfor %}
       </div>
