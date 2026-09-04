@@ -72,12 +72,27 @@ async def index():
 
 @app.route('/tools/config-editor.html')
 async def editor():
-    return await send_from_directory(app.static_folder, 'tools/config-editor.html')
+    return await _no_cache(send_from_directory(app.static_folder, 'tools/config-editor.html'))
 
 
 @app.route('/plugin/src/transform.js')
 async def editor_transform_js():
-    return await send_from_directory(app.static_folder, 'plugin/src/transform.js')
+    return await _no_cache(send_from_directory(app.static_folder, 'plugin/src/transform.js'))
+
+
+async def _no_cache(resp_coro) -> Response:
+    # Both files change on every deploy (a straight COPY in backend/Dockerfile from the repo's
+    # own tools/config-editor.html and plugin/src/transform.js — see the routes above), but
+    # they're plain static-extension responses sitting behind Cloudflare, which caches those at
+    # the edge for hours regardless of how fresh the origin actually is — confirmed hitting a
+    # 12-hour-old copy here well after a redeploy, serving stale badge-order/sizing code to the
+    # editor's "Run Test" preview the whole time a session's worth of fixes were being pushed.
+    # no-store on the ORIGIN response is the correct fix for our side of it; Cloudflare's own
+    # cache still needs a manual purge (or its edge TTL turned down) after a deploy for
+    # already-cached copies to actually clear.
+    resp = await resp_coro
+    resp.headers['Cache-Control'] = 'no-store'
+    return resp
 
 
 # ------------------------------------------------------------------ ICS proxy (CORS-free)

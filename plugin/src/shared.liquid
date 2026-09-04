@@ -149,8 +149,8 @@ elsewhere below) were written the obvious way, with the delimiters spelled out.
   {%- assign event_title_cls = "title--small" -%}
   {%- assign pad_right = 4 -%}
   {%- assign bar_w = 3 -%}
-  {%- assign badge_d = 16 -%}
-  {%- assign head_badge_d = 14 -%}
+  {%- assign badge_d = 20 -%}
+  {%- assign head_badge_d = 16 -%}
   {%- assign image_d = 24 -%}
 {%- elsif view == 3 -%}
   {%- comment -%} half_vertical: only ~400px WIDE (3 narrow day columns, ~133px each) —
@@ -176,13 +176,13 @@ elsewhere below) were written the obvious way, with the delimiters spelled out.
   half_vertical's ~133px-wide columns can't absorb the full-tier rail without wrapping/crushing
   the title — quadrant's smaller badge_d fits this view's real width constraint instead.
   {%- endcomment -%}
-  {%- assign badge_d = 16 -%}
+  {%- assign badge_d = 18 -%}
   {%- comment -%} head_badge_d, unlike badge_d just above, does NOT drop to the narrow-width
   tier here — today's header badges wrap into 2 rows (see the header markup below) rather than
   spending width the way a single-row event-chip rail does, so this view's genuinely tall
   ~480px-screen header still has the room the full-tier size needs; it's the FONT tier
   (head_title_cls) that stays compact for width, not this. {%- endcomment -%}
-  {%- assign head_badge_d = 22 -%}
+  {%- assign head_badge_d = 26 -%}
   {%- assign image_d = 42 -%}
 {%- elsif view == 2 -%}
   {%- comment -%} half_horizontal: full 800px width but half SCREEN HEIGHT (~240px, same as
@@ -196,8 +196,8 @@ elsewhere below) were written the obvious way, with the delimiters spelled out.
   {%- assign event_title_cls = "title--small" -%}
   {%- assign pad_right = 8 -%}
   {%- assign bar_w = 4 -%}
-  {%- assign badge_d = 16 -%}
-  {%- assign head_badge_d = 14 -%}
+  {%- assign badge_d = 20 -%}
+  {%- assign head_badge_d = 16 -%}
   {%- assign image_d = 24 -%}
 {%- else -%}
   {%- comment -%} full / "OG" 800x480 device: the hour axis at xlarge/xxlarge read too big
@@ -218,8 +218,8 @@ elsewhere below) were written the obvious way, with the delimiters spelled out.
   {%- comment -%} Same badge tier as half_vertical (view 3) — both are full SCREEN HEIGHT
   (~480px), the axis that actually constrains badge sizing (see the badge_pct comments further
   down and view 3's own comment above). {%- endcomment -%}
-  {%- assign badge_d = 30 -%}
-  {%- assign head_badge_d = 22 -%}
+  {%- assign badge_d = 38 -%}
+  {%- assign head_badge_d = 26 -%}
   {%- assign image_d = 42 -%}
 {%- endif -%}
 

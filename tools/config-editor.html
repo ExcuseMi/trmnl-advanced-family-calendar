@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Advanced Family Calendar — Configuration Editor</title>
 <!-- Real TRMNL framework CSS, so every swatch/preview here uses the SAME bg--{hue}-65 /
-     text--black / rounded--full classes the plugin itself renders with — what you see here
+     text--black / rounded--small classes the plugin itself renders with — what you see here
      is what actually ships, not an approximation of it. -->
 <link rel="stylesheet" href="https://trmnl.com/css/latest/plugins.css">
 <style>
@@ -1362,7 +1362,7 @@
     if (display === "image" && badges.length) {
       // "image" display: same as the real template — badges fill the whole chip, no title.
       badges.forEach(function (b) {
-        chip.appendChild(badgeSpanFor(b, 22));
+        chip.appendChild(badgeSpanFor(b, 32));
       });
       return chip;
     }
@@ -1371,13 +1371,20 @@
       // darker/more-saturated step of the fill by default, or a matched Category's own color.
       chip.appendChild(el("span", { class: "bg--" + bar, style: "width:4px;align-self:stretch;border-radius:2px;flex-shrink:0;margin-right:2px;" }));
     }
-    badges.forEach(function (b, i) {
-      var span = badgeSpanFor(b, 16);
-      span.style.flexShrink = "0";
-      if (i < badges.length - 1) span.style.marginRight = "-6px";
-      chip.appendChild(span);
-    });
-    if (badges.length) chip.appendChild(el("span", { style: "width:6px;flex-shrink:0;" }));
+    if (badges.length) {
+      // Own wrapper, not badges appended straight into chip: preview-chip/-event's own CSS
+      // gap (6px, for the bar/title spacing) would otherwise land BETWEEN every badge too,
+      // fighting the 1px they're meant to sit at — real chip_body in shared.liquid keeps its
+      // badges in their own rail div for the same reason.
+      var rail = el("div", { style: "display:flex;align-items:center;gap:1px;flex-shrink:0;" });
+      badges.forEach(function (b) {
+        var span = badgeSpanFor(b, 24);
+        span.style.flexShrink = "0";
+        rail.appendChild(span);
+      });
+      chip.appendChild(rail);
+      chip.appendChild(el("span", { style: "width:12px;flex-shrink:0;" }));
+    }
     chip.appendChild(el("span", { text: title }));
     return chip;
   }
@@ -1391,8 +1398,8 @@
     else if (b.kind === "photo") content = [el("img", { src: b.src, style: "width:100%;height:100%;object-fit:cover;", alt: "" })];
     else content = [document.createTextNode(b.text || "")];
     return el("span", {
-      class: "text--white bg--black rounded--full",
-      style: "display:flex;align-items:center;justify-content:center;width:" + d + "px;height:" + d + "px;font-size:" + Math.round(d * 0.55) + "px;overflow:hidden;",
+      class: "text--white bg--black rounded--small",
+      style: "display:flex;align-items:center;justify-content:center;width:" + d + "px;height:" + d + "px;font-size:" + Math.round(d * 0.55) + "px;overflow:hidden;border:1.5px solid currentColor;box-sizing:border-box;",
     }, content);
   }
 
