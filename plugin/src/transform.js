@@ -367,6 +367,7 @@ async function run(input) {
     all_day_label: allDayText(locale),
     has_events: rawDays.some((d) => d.timed.length || d.allday.length),
     weather_error: sky.error,
+    temp_unit: fahrenheit ? "F" : "C",
   });
 }
 
@@ -414,6 +415,7 @@ function emptyResult(tzname, tz, locale, daysN, msg) {
     all_day_label: allDayText(locale),
     has_events: false,
     weather_error: null,
+    temp_unit: "C", // moot here — this branch never has a day.icon/temp to show a unit on
   });
 }
 

@@ -663,8 +663,21 @@ where the axis was already a sane fraction and unchanged. {%- endcomment -%}
             <img class="{{ chip_title_cls }}" style="height:1.6em;width:auto;flex-shrink:0;filter:invert(1);" src="{{ day.icon }}">
             <!-- color:white inline, not a text--white class: .label sets its own explicit
                  color (not currentColor), so it wouldn't pick up an ancestor's text--white
-                 by inheritance — same gotcha as .title on the day label above. -->
-            <span class="label {{ chip_title_cls }}" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;color:white;">{{ day.temp.high }}° / {{ day.temp.low }}°</span>
+                 by inheritance — same gotcha as .title on the day label above. Full view gets
+                 the more spelled-out "Max 27°C Min 18°C" (room to spare there); every other
+                 tier keeps the terser "27° / 18°" — same reasoning as the day label itself
+                 needing its own compact tier, just for this line instead. Max/Min labels in a
+                 muted gray (inline color, same reason as white above) so the actual numbers —
+                 the part worth reading at a glance — stay the visually louder white. -->
+            {%- if view == 1 -%}
+              <!-- .label is display:inline-flex (framework CSS) — a flex container discards
+                   whitespace-only text nodes between its children instead of rendering them as
+                   a gap the way normal inline flow would, so a plain space between these spans
+                   render collapsed with no gap at all. margin-right on each piece instead. -->
+              <span class="label {{ chip_title_cls }}" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;color:white;"><span style="color:#999;margin-right:0.3em;">Max</span><span style="margin-right:0.6em;">{{ day.temp.high }}°{{ temp_unit }}</span><span style="color:#999;margin-right:0.3em;">Min</span><span>{{ day.temp.low }}°{{ temp_unit }}</span></span>
+            {%- else -%}
+              <span class="label {{ chip_title_cls }}" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;color:white;">{{ day.temp.high }}° / {{ day.temp.low }}°</span>
+            {%- endif -%}
           {% endif %}
         </div>
       {% endfor %}
