@@ -671,7 +671,15 @@ where the axis was already a sane fraction and unchanged. {%- endcomment -%}
                    whitespace-only text nodes between its children instead of rendering them as
                    a gap the way normal inline flow would, so a plain space between these spans
                    render collapsed with no gap at all. margin-right on each piece instead. -->
-              <span class="label {{ chip_title_cls }}" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;color:white;"><span style="color:#999;margin-right:0.3em;">Max</span><span style="margin-right:0.6em;">{{ day.temp.high }}°{{ temp_unit }}</span><span style="color:#999;margin-right:0.3em;">Min</span><span>{{ day.temp.low }}°{{ temp_unit }}</span></span>
+              <!-- Small inline up/down triangle in place of a "Max"/"Min" text label — same
+                   idea (a quiet gray marker ahead of the actual number, which stays the
+                   visually louder white) but takes noticeably less width for it, and reads
+                   as a real high/low indicator rather than an abbreviation someone has to
+                   parse. fill="#999" directly (not currentColor + an ancestor color, the way
+                   the temperature text itself works) since these sit in a flex row of their
+                   own color, not inheriting white from the outer .label the way plain text
+                   would. -->
+              <span class="label {{ chip_title_cls }}" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;color:white;"><svg viewBox="0 0 10 10" style="width:0.6em;height:0.6em;flex-shrink:0;margin-right:0.2em;" fill="#999"><polygon points="5,1 9,8 1,8"/></svg><span style="margin-right:0.6em;">{{ day.temp.high }}°{{ temp_unit }}</span><svg viewBox="0 0 10 10" style="width:0.6em;height:0.6em;flex-shrink:0;margin-right:0.2em;" fill="#999"><polygon points="5,9 1,2 9,2"/></svg><span>{{ day.temp.low }}°{{ temp_unit }}</span></span>
             {%- else -%}
               <span class="label {{ chip_title_cls }}" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;color:white;">{{ day.temp.high }}° / {{ day.temp.low }}°</span>
             {%- endif -%}
