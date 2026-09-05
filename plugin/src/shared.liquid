@@ -94,7 +94,7 @@
     <div class="flex flex--col flex--center-x flex--center-y w--full h--full text--center p--6 gap--small" style="box-sizing:border-box;">
       <img src="https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/event_busy/default/48px.svg" alt="" class="h--auto w--max-8 lg:w--max-12">
       <span class="title title--large">{{ unavailable_label }}</span>
-      <span class="description text--gray-50 w--max-[85%]" data-clamp="3">{{ error }}</span>
+      <span class="description text--gray-50 w--max-[85cqw]" data-clamp="3">{{ error }}</span>
     </div>
   {% else %}
 
@@ -115,7 +115,7 @@
 
         <div class="col--span-{{ day_span }} flex flex--col flex--center-x flex--center-y border--v-1">
 
-          <div class="rounded--small px--2.5 py--0.5 w--max-full flex flex--col flex--center-x gap--[2px] w--min-0" style="overflow:hidden;">
+          <div class="rounded--small px--2.5 py--0.5 w--max-full flex flex--col flex--center-x gap--xsmall w--min-0" style="overflow:hidden;">
 
             <span class="title {{ head_title_cls }} block w--min-0" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-transform:uppercase;"><span class="text--gray-50">{{ day.label_short_weekday }}</span> <span class="text--white font--bold">{{ day.label_short_rest }}</span></span>
           </div>
@@ -167,9 +167,9 @@
       <div class="col--span-1 flex flex--col gap--none">
         {% for row in hour_rows %}
 
-          <div class="h--[{{ row.pct }}cqh] w--full flex flex--row flex--right cal-row cal-fit-box relative pr--2 {% if row.shade == 1 %}bg--gray-65{% endif %}">
+          <div class="h--[{{ row.pct }}cqh] w--full flex flex--row flex--right cal-row cal-fit-box relative pr--2 {% if row.current %}bg--black{% elsif row.shade == 1 %}bg--gray-65{% endif %}">
 
-              {% if row.period %}<span class="cal-axis-period text--gray-20 mr--1">{{ row.period }}</span>{% endif %}<span class="label {{ axis_cls }} {% if row.bold %}font--bold {% endif %}cal-fit-text cal-axis-text{% if row.important %} cal-axis-important{% endif %} inline-block text--right hours" data-fit-min="8" data-fit-max="40">{{ row.hour }}</span>
+              {% if row.period %}<span class="cal-axis-period {% if row.current %}text--gray-70{% else %}text--gray-15{% endif %} mr--1">{{ row.period }}</span>{% endif %}<span class="label {{ axis_cls }} {% if row.bold %}font--bold {% endif %}{% if row.current %}text--white {% endif %}cal-fit-text cal-axis-text{% if row.important %} cal-axis-important{% endif %} inline-block text--right hours" data-fit-min="8" data-fit-max="40">{{ row.hour }}</span>
           </div>
         {% endfor %}
       </div>
@@ -235,9 +235,9 @@
             {%- if view <= 4 -%}
 
               <span class="label {{ chip_title_cls }} bg--black text--white w--min-0">
-              <svg viewBox="0 0 10 10" class="w--2 h--2 lg:w--4 lg:h--4 mr--0_5 lg:mr--1 no-shrink" fill="#999"><polygon points="5,1 9,8 1,8"/></svg>
+              <svg viewBox="0 0 10 10" class="w--2 h--2 lg:w--4 lg:h--4 mr--0.5 lg:mr--1 no-shrink" fill="#999"><polygon points="5,1 9,8 1,8"/></svg>
               <span class="mr--1">{{ day.temp.high }}°{{ temp_unit }}</span>
-              <svg viewBox="0 0 10 10" class="w--2 h--2 lg:w--4 lg:h--4 mr--0_5 lg:mr--1 no-shrink" fill="#999"><polygon points="5,9 1,2 9,2"/></svg>
+              <svg viewBox="0 0 10 10" class="w--2 h--2 lg:w--4 lg:h--4 mr--0.5 lg:mr--1 no-shrink" fill="#999"><polygon points="5,9 1,2 9,2"/></svg>
               <span>{{ day.temp.low }}°{{ temp_unit }}</span></span>
             {%- else -%}
               <span class="label {{ chip_title_cls }} bg--black text--white w--min-0">{{ day.temp.high }}° / {{ day.temp.low }}°</span>

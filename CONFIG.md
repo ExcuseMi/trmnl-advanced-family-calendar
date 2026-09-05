@@ -104,6 +104,21 @@ at least one calendar, the plugin has nothing to display.
 ]
 ```
 
+**Simple mode:** if you don't need an `id`, a pinned `color`, or any of the advanced fields below,
+a calendar entry can just be the URL itself — a plain string instead of an object. Each one gets a
+color auto-assigned (cycling through the same palette a calendar with no `color` set would use),
+same as leaving `color` out of the full object form:
+
+```json
+"calendars": [
+  "https://cloud.example.com/family.ics",
+  "https://cloud.example.com/work.ics"
+]
+```
+
+The two forms mix freely in the same list — use the plain string for a quick add, and the full
+object wherever you actually need `id`/`color`/`exclude`/`defaultPerson`/`personRules`.
+
 | Field | Type | Required | Default | Notes |
 |---|---|---|---|---|
 | `url` | text | **yes** | — | The ICS feed's address. `webcal://` links are converted to `https://` automatically. |

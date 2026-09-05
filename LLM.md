@@ -17,7 +17,10 @@ an error.
 {
   "hours"?: { "start": int, "end": int },        // default 7-21; auto-widens for sunrise/events/
                                                     // sunset/now, never shrinks below what's given
-  "calendars": [                                  // required, at least one
+  "calendars": [                                  // required, at least one; a plain string entry
+                                                    // (just the URL) is shorthand for { "url":
+                                                    // string } with everything else defaulted —
+                                                    // the two forms mix freely in one array
     {
       "url": string,                              // required — ICS link (webcal:// ok)
       "id"?: string,                               // short label for reference only; never

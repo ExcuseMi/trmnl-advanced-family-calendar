@@ -1,60 +1,11 @@
-// TRMNL Serverless — Daylight ICS Calendar (3-day time-grid + sunrise/sunset)
-//
-// This is the plugin's serverless code. `serverless_language: node` in settings.yml tells
-// TRMNL to run it; `trmnlp push` uploads it like any other src file (no manual paste). Entry
-// point is run(input); it computes a native TRMNL-framework layout (hour axis + day columns,
-// events positioned by start time and sized by duration using h--[Ncqh] container-query
-// heights) — real HTML/Liquid, not an image, so it renders crisply and fills any device
-// (including the larger, portrait, 4-bit TRMNL X) via the framework's own responsive system
-// instead of a fixed-aspect picture.
-//
-// No npm packages are guaranteed in the Serverless VM (only global fetch()), so the ICS
-// parsing, RRULE expansion, and IANA-timezone math below are hand-rolled — same constraint
-// Python had, which is what made this a mechanical, faithful port rather than a redesign.
-// This same file also runs unmodified in a plain browser tab (see /tools/config-editor.html)
-// since both environments provide global fetch() and Intl — that dual use is the whole
-// reason this shipped as transform.js instead of staying transform.py.
-// Budget on TRMNL: 128 MB / 5 s — everything is bounded to the render window.
 
 const DEFAULT_DAYS = 3;
-const DEFAULT_HOURS = { start: 7, end: 21 }; // "Visible Hours" custom field's own default
+const DEFAULT_HOURS = { start: 7, end: 21 };
 const WD_MAP = { MO: 0, TU: 1, WE: 2, TH: 3, FR: 4, SA: 5, SU: 6 };
 
-// One color per configured calendar — cycled by position through the 10 chromatic hues (if
-// more calendars than hues) unless a calendar pinned an explicit one, or a matching Person
-// overrides it for a specific event (see applyCalendarPerson). A pinned color (calendar or
-// person) can also be an explicit gray shade ("gray-10".."gray-70") instead of a hue — most
-// real TRMNL devices are grayscale panels, not the color ones, so picking a gray directly
-// (rather than a hue that just falls back to SOME gray automatically) gives real control over
-// exactly how light/dark a calendar reads on those. Auto-cycling only ever picks a hue, never
-// a gray, since the whole point of cycling is telling multiple calendars apart at a glance —
-// gray shades are for a deliberate, single pinned choice.
-//
-// Chromatic hues render as real framework classes (bg--{hue}-65, checked against the live CSS
-// at trmnl.com/css/latest/plugins.css) — on a grayscale panel they automatically fall back to
-// distinct perceptually-appropriate gray shades, and render as actual color on a chromatic
-// panel. Step 65 (of the framework's 10=darkest/75=lightest scale, which peaks in SATURATION
-// around step 40-45 and only desaturates toward pastel above that) is light enough that solid
-// black chip text reads clearly against all 10 at once. Gray shades span near-black to
-// near-white though (bg--gray-10 is #111111, bg--gray-70 is #DDDDDD), so unlike the hues they
-// DO need a real per-shade foreground decision — see foregroundFor.
 const HUES = ["blue", "green", "orange", "purple", "red", "cyan", "pink", "lime", "violet", "yellow"];
-// 10..75 in steps of 5 is the framework's full extended-grayscale range (confirmed against the
-// live compiled CSS) — this used to stop at 70, one step short of the framework's own lightest
-// defined shade. "black"/"white" are a separate pair of real framework classes (bg--black/
-// bg--white, already used all over this file for badges/pills) rather than an extreme step of
-// this numeric scale — gray-10 is #111111 and gray-75 a light gray, not literal 0/255 — so
-// they're handled as their own two-value set below, not folded into GRAY_SHADES.
 const GRAY_SHADES = [10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75];
 const BLACK_WHITE = ["black", "white"];
-
-// This plugin has no notion of "which device" at all — it only ever reads/renders whatever
-// `color` values are already sitting in the config (pinned, or left blank to auto-cycle the
-// 10 named hues by position, same as always). Picking sensible colors for a specific panel
-// (e.g. a grayscale TRMNL OG/X, or the 4-ink Black/White/Red/Yellow TRMNL Display Color,
-// which can't render the other hues as genuinely distinct colors) is entirely
-// /tools/config-editor.html's job at config-BUILD time — it resolves and writes real `color`
-// values into the JSON you paste in here, so this file stays simple and hardware-agnostic.
 
 function isValidColor(v) {
   if (HUES.includes(v) || BLACK_WHITE.includes(v)) return true;
@@ -62,17 +13,10 @@ function isValidColor(v) {
   return !!m && GRAY_SHADES.includes(parseInt(m[1], 10));
 }
 
-// The bg-- class suffix for a validated color string — chromatic hues get the fixed pastel
-// step baked on, a gray-N value already names its own exact shade.
 function colorClass(color) {
   return HUES.includes(color) ? color + "-65" : color;
 }
 
-// Solid black for every chromatic hue (see the step-65 rationale above) and for any badge —
-// but a gray shade's own lightness decides its foreground: measured against the real hex
-// values (gray-10 #111111 ... gray-70 #DDDDDD), black stops being legible below gray-45
-// (#888888, relative luminance ~136 of 255 — the last step light enough for black text; 40's
-// #777777 (~119) is not).
 function foregroundFor(color) {
   if (color === "black") return "white";
   if (color === "white") return "black";
@@ -86,13 +30,6 @@ async function run(input) {
   const calendars = cfg.calendars;
   const people = cfg.people;
   const calendarColors = calendars.map((c) => c.color);
-  // Top-level "locale"/"timeZone" config overrides (see parseConfig) each win over their own
-  // auto-detected TRMNL account equivalent — explicit config beats auto-detection, same
-  // precedence for both. Useful for forcing a consistent language/zone regardless of who's
-  // actually viewing (e.g. the demo config pins "en"/"Europe/Brussels" so it reads the same
-  // for everyone trying it, not whatever the TRMNL account happens to be set to). timeZone
-  // also wins over the plugin's own "Time Zone" setting field — it's the more specific
-  // signal, same as a category's color winning over a calendar's elsewhere in this file.
   const locale = cfg.locale || localeOf(input);
   const tzname = cfg.timeZone || cf(input, "time_zone").trim() || userTz(input) || "UTC";
   const is12h = cf(input, "time_format").trim().toLowerCase() === "12h";
@@ -119,9 +56,6 @@ async function run(input) {
     let url = calendars[calIdx].url;
     if (url.startsWith("webcal://")) url = "https://" + url.slice("webcal://".length);
     try {
-      // NOTE: a custom User-Agent is settable in Node (TRMNL's serverless sandbox) but is a
-      // forbidden header in browser fetch() — silently dropped there rather than erroring,
-      // which is fine, it's just politeness, nothing here depends on it being sent.
       const resp = await fetchWithTimeout(url, 4000, { headers: { "User-Agent": "TRMNL-ICS-Calendar" } });
       if (!resp.ok) throw new Error("HTTP " + resp.status);
       const text = await resp.text();
@@ -131,13 +65,9 @@ async function run(input) {
     }
   }
 
-  // Only surface an error if every feed failed; partial results still render.
   let err = null;
   if (errors.length && !occ.length) err = "Fetch/parse failed: " + errors[0];
 
-  // Exclude tested against the RAW title (before personRules renaming) so a rename can't
-  // accidentally dodge or trigger an exclude rule by rewriting the very text it matches
-  // against; personRules then run on whatever survives each calendar's own exclude pass.
   const filtered = occ.filter((e) => {
     const cal = calendars[e.calIdx];
     return !cal.exclude.some((rx) => rx.test(e.title));
@@ -146,15 +76,9 @@ async function run(input) {
     const r = applyCalendarPerson(e.title, calendars[e.calIdx], people);
     e.title = r.title;
     e.hueOverride = r.hue;
-    // r.badges (person badges — "whose", not "what kind") is tracked as e.personBadges purely
-    // for the header's own "who has something today" strip (see day.people further down);
-    // individual event chips never show a badge of their own any more (categories, the icon
-    // rail, and "image" display mode were all removed together — categories were the only way
-    // to set any of those, so all three left with it).
     e.personBadges = r.badges;
   }
 
-  // Bucket occurrences into day columns (timed only now — see alldayBars below for all-day).
   const dayBounds = [];
   const rawDays = [];
   for (let i = 0; i < daysN; i++) {
@@ -191,13 +115,6 @@ async function run(input) {
     });
   }
 
-  // All-day events are computed ONCE for the whole visible window, not per day — a single
-  // event spanning several days becomes ONE bar (start_col/span identify its real range),
-  // rendered as one spanning grid item with its title centered once, instead of a separate
-  // fully-rounded pill repeating in every day column it happens to touch (each with its own
-  // copy of the title). Every all-day event is checked against every visible day's own bounds
-  // once (daysN is at most 3, and there are rarely more than a handful of these per week) to
-  // find its first/last touched day — always contiguous, since a day range is by definition.
   const alldaySpans = [];
   for (const e of filtered) {
     if (!(e.allDay || e.endEpoch - e.startEpoch >= 86400000)) continue;
@@ -208,22 +125,13 @@ async function run(input) {
         endCol = i;
       }
     }
-    if (startCol === -1) continue; // doesn't actually touch any visible day
+    if (startCol === -1) continue;
     alldaySpans.push({
       e, startCol, span: endCol - startCol + 1,
-      // Square off the edge that's mid-span (extends before/after the whole VISIBLE window
-      // now, not just one day's own boundary) instead of rendering a fully-rounded pill that
-      // implies the event starts/ends right there.
       continuesBefore: e.startEpoch < dayBounds[startCol].d0Epoch,
       continuesAfter: e.endEpoch > dayBounds[endCol].d1Epoch,
     });
   }
-  // Greedy row assignment, like timed events' own lane-splitting but at all-day's coarser
-  // day-column granularity: process left-to-right (longest-first among same-start spans, so a
-  // multi-day banner claims its row before a same-day single claims a lower one out from under
-  // it), placing each into the lowest row whose last-occupied column doesn't overlap it yet.
-  // Capped at 3 rows, same ceiling the old per-day `.slice(0, 3)` enforced — a real week can
-  // have more all-day events than there's reasonable room to show at once.
   alldaySpans.sort((a, b) => a.startCol - b.startCol || b.span - a.span);
   const rowEnds = [];
   for (const s of alldaySpans) {
@@ -245,9 +153,6 @@ async function run(input) {
     continuesAfter: s.continuesAfter,
   }));
 
-  // Fractional hour of "now" within today's column, e.g. 14:30 -> 14.5 — used to draw a
-  // current-time marker. winSEpoch (today's midnight) is always "now" with the clock zeroed,
-  // so this is just the elapsed time since then.
   const nowH = (nowEpoch - winSEpoch) / 3600000;
   const sky = await fetchSky(location, daysN, fahrenheit);
   rawDays.forEach((rd, i) => {
@@ -255,21 +160,6 @@ async function run(input) {
     rd.icon = rd.temp ? dayIcon(sky.hourlyWeather[i]) : null;
   });
 
-  // The shown range is the configured default hours (Calendar Configuration's "hours", see
-  // parseConfig — 7-21 unless overridden), automatically widened to also cover sunrise, the
-  // first/last meeting of the visible days, sunset, and the current hour, whichever push
-  // earlier/later — so daylight hours, every actual event, and "now" are always visible,
-  // never hidden along with the rest of an otherwise-empty hour. Floor the start / ceil the
-  // end so a meeting, sunrise/sunset, or the current moment falling mid-hour still pulls its
-  // whole hour in. Hours left outside this final range are hidden entirely (see
-  // layoutNative) rather than shown compressed — by construction they contain neither the
-  // default range nor any real event/sun mark nor the current time.
-  //
-  // nowH specifically: without it, hours are set to their configured default (e.g. 7-21) and
-  // the current time simply falls outside that once it's later than the configured end (21:53
-  // with hours 7-21, say) — the current hour's row, and the "now" marker that's positioned
-  // relative to it, both silently disappear instead of the grid stretching to keep today
-  // visible the same way it already does for a late sunset or a late meeting.
   const daySun = sky.sunMarks[0] || [];
   const sunriseMark = daySun.find((m) => m.kind === "sunrise");
   const sunsetMark = daySun.find((m) => m.kind === "sunset");
@@ -290,14 +180,6 @@ async function run(input) {
 
   const grid = layoutNative(rawDays, alldayBars, startH, endH, nowH, sky.sunMarks, sky.hourlyWeather, calendarColors, HEADER_PCT, is12h);
 
-  // Who has ANYTHING in the whole visible range (every day, not just today) — the header's
-  // own top-left gutter cell (see shared.liquid) was otherwise unused space, and showing
-  // "who's on today" only, once, under just one day's label, forced the header taller on
-  // every render that had it and misaligned that one day's own label against every other day's
-  // (see git history — both real, since-reverted problems). One small badge grid in a cell
-  // that already existed sidesteps both: scans every all-day bar's and every day's own timed
-  // personBadges (set in applyCalendarPerson) and keeps the first badge seen per declared
-  // person — someone appearing on 5 different events across the week still only shows once.
   const viewPeopleSeen = new Set();
   const viewPeople = [];
   for (const b of [...alldayBars.flatMap((a) => a.personBadges || []), ...rawDays.flatMap((d) => d.timed.flatMap((t) => t.personBadges || []))]) {
@@ -319,10 +201,7 @@ async function run(input) {
   });
 }
 
-// ---------------------------------------------------------------- input helpers
-
 function cf(input, key) {
-  // Read a custom form field. Serverless exposes them both flat and nested.
   if (!input || typeof input !== "object") return "";
   if (typeof input[key] === "string") return input[key];
   try {
@@ -339,13 +218,6 @@ function toInt(raw, def, lo, hi) {
   return Math.max(lo, Math.min(hi, Math.trunc(f)));
 }
 
-// Parses the "Visible Hours" custom field (see settings.yml) — a plain "start-end" string,
-// e.g. "7-21", rather than a nested object: TRMNL's real custom_fields schema has no "group"/
-// compound field type (confirmed against the platform's own field-type list), only ever a
-// flat string value per field, so a single string field parsed by hand is the actual
-// mechanism here, not a shortcut around a richer one. Returns null (not DEFAULT_HOURS) on
-// blank/malformed input so the caller can tell "not set" apart from an explicit value and
-// fall back on its own terms.
 function parseHours(raw) {
   const m = /^\s*(\d{1,2})\s*-\s*(\d{1,2})\s*$/.exec(String(raw || ""));
   if (!m) return null;
@@ -373,7 +245,7 @@ function emptyResult(tzname, tz, locale, daysN, is12h, msg) {
   }
   const grid = layoutNative(days, [], 8, 22, null, null, null, null, HEADER_PCT, is12h);
   return Object.assign({}, grid, {
-    people: [], // no real days/events in this branch, so nobody to show in the gutter either
+    people: [],
     generated_at: Math.floor(nowEpoch / 1000),
     tz: tzname,
     error: msg,
@@ -381,68 +253,9 @@ function emptyResult(tzname, tz, locale, daysN, is12h, msg) {
     all_day_label: allDayText(locale),
     has_events: false,
     weather_error: null,
-    temp_unit: "C", // moot here — this branch never has a day.icon/temp to show a unit on
+    temp_unit: "C",
   });
 }
-
-// --------------------------------------------------------- calendar configuration (JSON)
-//
-// The "Calendar Configuration" field is one JSON object:
-//   {
-//     "calendars": [
-//       { "id": "Alex", "url": "https://.../alex.ics", "defaultPerson": "Alex" },
-//       { "id": "School", "url": "https://.../school.ics", "exclude": "regex",
-//         "personRules": [
-//           { "match": "\\bL6\\b", "person": "Alex" },
-//           { "match": "\\bL2\\b", "person": "Jordan" }
-//         ] }
-//     ],
-//     "people": [
-//       { "name": "Alex", "color": "pink", "badge": "K" },
-//       { "name": "Jordan", "color": "blue" }
-//     ]
-//   }
-// The default hour range to show lives in its own "Visible Hours" custom field instead (see
-// parseHours/settings.yml — a plain "start-end" string, e.g. "7-21", not part of this JSON;
-// defaults to DEFAULT_HOURS, 7-21, when blank/unset). It's always widened to also cover
-// sunrise, every actual event, and sunset, whichever push earlier/later, so nothing real ever
-// gets hidden; hours left outside the final range are hidden entirely rather than shown
-// compressed (see layoutNative).
-// `people[]` holds ONLY formatting — `name` (required, also the lookup key), `color`
-// (optional, one of HUES or "gray-10".."gray-70" in steps of 5), and `badge` (optional short
-// text for the small header circle, defaults to `name`'s first letter). It carries no matching
-// logic: which events belong to a person is entirely
-// a property of the CALENDAR they're on, via two mechanisms that combine per calendar:
-//   - `calendars[].personRules`: an array of `{ match, person, rename }`. `match` (regex,
-//     case-insensitive) is tested against every surviving event on THAT calendar, in array
-//     order — a later rule's rename builds on an earlier one's output, and its color/badges
-//     win if it also matches (last match wins, same as color pinning). `person` names who the
-//     event belongs to (rename target text too) — either one name or an array of them (e.g.
-//     `["Alex", "Jordan"]` for a shared event), joined with " & " when renaming. A name
-//     doesn't need to already exist in `people[]`, but only a declared person contributes a
-//     badge — an undeclared name still renames, just with no styling. `rename` (default true)
-//     controls whether the matched text is actually replaced; set it false to tag/color
-//     without renaming.
-//   - `calendars[].defaultPerson`: a person name (or array of names, same as personRules[].
-//     person above) applied when NO personRule on that calendar matched — for a calendar
-//     that's already entirely one person's own (like a personal calendar per family member),
-//     this avoids needing a `personRules` entry at all. Never overrides an actual personRules
-//     match.
-// `calendars[].id` is optional — a short label `personRules[].person`/`defaultPerson` values
-// double as (see above); calendars are otherwise unrelated to it. `calendars[].color` is
-// optional, one of HUES or "gray-10".."gray-70", pins that calendar's own default color
-// instead of auto-cycling through the hues by position (a matched/defaulted person's color,
-// when there is one, still wins over this).
-// This plugin has no built-in notion of "holidays" — the Configuration Editor's country picker
-// is just a convenience that adds a normal calendar entry pointing at a public Google-hosted
-// holiday feed, with a color pre-filled; nothing here treats it specially.
-// `calendars[].exclude` is optional — a regex, or an array of them (case-insensitive):
-// matching ANY of them hides that event entirely, before personRules/defaultPerson ever see
-// it, only from THAT calendar.
-// Malformed JSON, or an entry missing its required field, is skipped rather than erroring
-// the whole render — this is designed to be generated by /tools/config-editor.html, not
-// necessarily hand-typed, so being forgiving of partial/in-progress edits matters more than
-// strict validation.
 
 function parseConfig(raw) {
   const empty = { calendars: [], people: {}, locale: null, timeZone: null };
@@ -451,25 +264,14 @@ function parseConfig(raw) {
   try {
     data = JSON.parse(raw);
   } catch (e) {
-    return empty;
+    data = { calendars: raw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean) };
   }
   if (!data || typeof data !== "object") return empty;
 
-  // Optional top-level "locale" (e.g. "en", "nl-BE") — overrides the TRMNL account's own
-  // auto-detected locale (see localeOf/run()) for day/month names and the unavailable-feed
-  // message. Not validated against a known list, same reasoning as localeOf itself:
-  // Intl.DateTimeFormat handles essentially any real locale tag natively, so there's nothing
-  // useful to validate beyond "is this actually a non-empty string".
   const locale = typeof data.locale === "string" && data.locale.trim() ? data.locale.trim() : null;
 
-  // Optional top-level "timeZone" (an IANA name, e.g. "Europe/Brussels") — overrides both the
-  // plugin's own Time Zone setting and the TRMNL account's own auto-detected zone (see
-  // resolveTz/run()). Not validated here — an unrecognized name is caught later by
-  // safeZone/resolveTz's own fallback, same as any other source of a zone name.
   const timeZone = typeof data.timeZone === "string" && data.timeZone.trim() ? data.timeZone.trim() : null;
 
-  // Keyed by lowercased name so personRules/defaultPerson lookups are case-insensitive, same
-  // as the regex matching around them.
   const people = {};
   for (const item of Array.isArray(data.people) ? data.people : []) {
     if (!item || typeof item !== "object") continue;
@@ -481,16 +283,12 @@ function parseConfig(raw) {
   }
 
   const calendars = [];
-  for (const item of Array.isArray(data.calendars) ? data.calendars : []) {
+  for (const raw_item of Array.isArray(data.calendars) ? data.calendars : []) {
+    const item = typeof raw_item === "string" ? { url: raw_item } : raw_item;
     if (!item || typeof item !== "object" || typeof item.url !== "string" || !item.url.trim()) continue;
     const id = typeof item.id === "string" && item.id.trim() ? item.id.trim() : null;
     const color = typeof item.color === "string" && isValidColor(item.color.toLowerCase()) ? item.color.toLowerCase() : null;
     const exclude = compileRegexList(item.exclude);
-    // `defaultPerson` (like `personRules[].person` below) accepts either one name or an array
-    // of them — a shared event (a family trip, a joint appointment) can tag more than one
-    // person at once instead of forcing a single "whose event is this really" choice.
-    // Normalized to an array-or-null here so every consumer downstream (applyCalendarPerson)
-    // only has to handle one shape.
     const defaultPerson = normalizeNameList(item.defaultPerson);
 
     const personRules = [];
@@ -514,9 +312,6 @@ function parseConfig(raw) {
   return { calendars, people, locale, timeZone };
 }
 
-// Accepts one name (string) or several (array of strings) for defaultPerson/personRules[].
-// person — either shape normalizes to an array of trimmed, non-empty names, or null if there's
-// nothing usable, so applyCalendarPerson only ever has to iterate one shape.
 function normalizeNameList(raw) {
   const list = Array.isArray(raw) ? raw : typeof raw === "string" ? [raw] : [];
   const names = list.filter((n) => typeof n === "string" && n.trim()).map((n) => n.trim());
@@ -534,11 +329,6 @@ function compileRegex(pattern) {
 }
 
 function compileRegexList(raw) {
-  // calendars[].exclude accepts either a single regex string (kept for backward
-  // compatibility with configs written before multiple excludes existed) or an array of
-  // them — an event is hidden if ANY compiled pattern matches. Invalid/empty entries are
-  // dropped rather than erroring the whole render, same forgiving handling as everywhere
-  // else in this parser.
   const list = Array.isArray(raw) ? raw : typeof raw === "string" ? [raw] : [];
   const rxs = [];
   for (const pattern of list) {
@@ -553,22 +343,12 @@ function applyCalendarPerson(title, cal, people) {
   for (const rule of cal.personRules) {
     if (!rule.rx.test(title)) continue;
     if (rule.rename) {
-      // Multiple people rename to their names joined with "&" (e.g. "Alex & Jordan") rather
-      // than picking just one — the whole point of tagging more than one person on a shared
-      // event is that neither name should get silently dropped from the title either.
       title = title.replace(new RegExp(rule.rx.source, "gi"), rule.people.join(" & "));
     }
     personNames = rule.people;
   }
   if (personNames === null) personNames = cal.defaultPerson;
 
-  // hue: the first matched person WITH a color set wins — a single accent color, same as
-  // before this supported more than one person; several different colors on one chip would
-  // read as noise, not signal, so this is deliberately not "blend" or "last wins" here.
-  // badges: one entry per matched, DECLARED person (an undeclared name in personRules/
-  // defaultPerson still renames the title above, it just contributes no badge — same
-  // "declared person required for styling" rule as always), in the order they were listed —
-  // read back out by run()'s "who has something today" header pass (see day.people below).
   let hue = null;
   const badges = [];
   if (personNames) {
@@ -576,11 +356,6 @@ function applyCalendarPerson(title, cal, people) {
       const p = people[personName.toLowerCase()];
       if (!p) continue;
       if (hue === null && p.color) hue = p.color;
-      // `person` (the declared name) rides along on top of text — chip rendering ignores it,
-      // it's only read back out by the header pass, which needs to dedupe by WHO, not by badge
-      // appearance alone (two people could share a badge letter). hue/fg: the person's OWN
-      // color (colorClass'd into a real bg-- suffix) — falls back to black/white for a person
-      // with no color set.
       const badgeHue = p.color ? colorClass(p.color) : "black";
       const badgeFg = p.color ? foregroundFor(p.color) : "white";
       badges.push({ text: p.badge, person: p.name, hue: badgeHue, fg: badgeFg });
@@ -589,15 +364,7 @@ function applyCalendarPerson(title, cal, people) {
   return { title, hue, badges };
 }
 
-// --------------------------------------------------------------------- locale / timezone
-
 function localeOf(input) {
-  // trmnl.user.locale is a real merge var (e.g. "en") — see usetrmnl/api-docs,
-  // plugin-marketplace/plugin-screen-generation-flow.md. Returned as-is (not restricted to
-  // a known set): Intl.DateTimeFormat below can render weekday/month names for essentially
-  // any real locale natively — unlike Python's strftime, which needs the OS's locale data
-  // actually installed, unreliable in a sandboxed serverless VM (why the original Python
-  // version hand-rolled a translation table instead). A malformed tag falls back to 'en'.
   try {
     const loc = input.trmnl.user.locale;
     if (typeof loc === "string" && loc.trim()) return loc.trim();
@@ -606,24 +373,16 @@ function localeOf(input) {
 }
 
 function unavailableText(locale) {
-  // Intl has no general string-translation facility (only date/number/list formatting), so
-  // this one UI string still needs a small hand-maintained table — unlike weekday/month
-  // names below. Falls back to English for any locale outside this short list.
   const code = String(locale).toLowerCase().split(/[-_]/)[0];
   return (UNAVAILABLE[code] || UNAVAILABLE.en);
 }
 
-// Label shown in the hour-axis gutter next to the all-day event row. Same small hand-maintained
-// table/fallback pattern as unavailableText — this is real, narrow real estate (the same gutter
-// column hour numbers share), so the strings above are kept deliberately short.
 function allDayText(locale) {
   const code = String(locale).toLowerCase().split(/[-_]/)[0];
   return (ALL_DAY_LABEL[code] || ALL_DAY_LABEL.en);
 }
 
 function userTz(input) {
-  // Fall back to the device owner's own timezone (trmnl.user.time_zone_iana) when the
-  // plugin's own Time Zone field is left blank, instead of defaulting to UTC.
   try {
     const tz = input.trmnl.user.time_zone_iana;
     return typeof tz === "string" && tz.trim() ? tz.trim() : null;
@@ -633,8 +392,6 @@ function userTz(input) {
 }
 
 function userUtcOffsetMinutes(input) {
-  // trmnl.user.utc_offset (seconds from UTC) as a last-resort fallback for computing "now"
-  // — see resolveTz.
   try {
     const s = input.trmnl.user.utc_offset;
     const n = Number(s);
@@ -645,14 +402,6 @@ function userUtcOffsetMinutes(input) {
 }
 
 function resolveTz(tzname, input) {
-  // An IANA name (from the Time Zone field or trmnl.user.time_zone_iana) is preferred since
-  // it's DST-aware for future recurring events, but safeZone(name) returns null if the
-  // runtime's tzdata doesn't recognize it — silently falling back to UTC in that case
-  // mispositions everything computed from "now" (event bucketing, day boundaries, the
-  // current-time line) by the zone's actual offset. trmnl.user.utc_offset is a raw number
-  // that needs no tzdata lookup at all, so it's a strictly more reliable fallback than
-  // defaulting straight to UTC. Zones are represented as either an IANA string or a plain
-  // number of UTC-offset minutes (the fixed-offset fallback) throughout this file.
   const tz = tzname ? safeZone(tzname) : null;
   if (tz) return tz;
   const offsetMin = userUtcOffsetMinutes(input);
@@ -669,14 +418,6 @@ function safeZone(name) {
   }
 }
 
-// ------------------------------------------------------------- zone-aware date primitives
-//
-// No IANA tzdata ships with plain JS the way Python's zoneinfo does, but Intl.DateTimeFormat
-// DOES carry the runtime's own tzdata — this reads a zone's UTC offset at a specific instant
-// via its "longOffset" formatting (e.g. "GMT+02:00"), which is enough to hand-roll the two
-// primitives everything else here is built from: an instant -> civil wall-clock fields in a
-// zone (fromEpoch), and civil wall-clock fields in a zone -> an instant (zonedTimeToUtc).
-
 const _offsetFmtCache = new Map();
 function offsetFormatter(tz) {
   let f = _offsetFmtCache.get(tz);
@@ -688,7 +429,7 @@ function offsetFormatter(tz) {
 }
 
 function getOffsetMinutes(epochMs, tz) {
-  if (typeof tz === "number") return tz; // fixed-offset-minutes fallback (see resolveTz)
+  if (typeof tz === "number") return tz;
   const parts = offsetFormatter(tz).formatToParts(new Date(epochMs));
   const part = parts.find((p) => p.type === "timeZoneName");
   const v = part ? part.value : "GMT";
@@ -715,7 +456,6 @@ function civilFormatter(tz) {
 }
 
 function fromEpoch(epochMs, tz) {
-  // Instant -> civil {y, mo, d, h, mi, s, wd} (wd: Mon=0..Sun=6) in the given zone.
   if (typeof tz === "number") {
     const d = new Date(epochMs + tz * 60000);
     return {
@@ -728,16 +468,11 @@ function fromEpoch(epochMs, tz) {
   for (const p of civilFormatter(tz).formatToParts(new Date(epochMs))) parts[p.type] = p.value;
   const y = +parts.year, mo = +parts.month, d = +parts.day;
   let h = +parts.hour;
-  if (h === 24) h = 0; // some engines report midnight as "24" under hourCycle h23
+  if (h === 24) h = 0;
   return { y, mo, d, h, mi: +parts.minute, s: +parts.second, wd: civilWeekday(y, mo, d) };
 }
 
 function zonedTimeToUtc(y, mo, d, h, mi, s, tz) {
-  // Civil wall-clock fields in a zone -> the instant (epoch ms) they represent. Standard
-  // double-conversion trick: guess the offset by treating the fields as UTC, correct once,
-  // then correct again from the corrected instant — accurate outside the ambiguous/skipped
-  // hour of a DST transition, which is an inherent edge case no amount of iteration resolves
-  // cleanly (Python's zoneinfo has its own analogous ambiguous-time behavior there too).
   if (typeof tz === "number") return Date.UTC(y, mo - 1, d, h, mi, s) - tz * 60000;
   const guess = Date.UTC(y, mo - 1, d, h, mi, s);
   const off1 = getOffsetMinutes(guess, tz);
@@ -747,7 +482,7 @@ function zonedTimeToUtc(y, mo, d, h, mi, s, tz) {
 }
 
 function civilWeekday(y, mo, d) {
-  return (new Date(Date.UTC(y, mo - 1, d)).getUTCDay() + 6) % 7; // Mon=0..Sun=6
+  return (new Date(Date.UTC(y, mo - 1, d)).getUTCDay() + 6) % 7;
 }
 
 function civilDateOrdinal(y, mo, d) {
@@ -760,10 +495,6 @@ function ordinalToYmd(ordinal) {
 }
 
 function addCivilDays(civil, n) {
-  // Pure calendar-field arithmetic (Date.UTC normalizes month/year rollover for free) — NOT
-  // zone-aware, deliberately: this mirrors how Python's `aware_datetime + timedelta(days=n)`
-  // behaves with a ZoneInfo tzinfo attached (shifts the calendar date, keeps the same
-  // wall-clock time-of-day, re-derives the UTC offset for the new date only when needed).
   const dt = new Date(Date.UTC(civil.y, civil.mo - 1, civil.d + n, civil.h, civil.mi, civil.s));
   return { y: dt.getUTCFullYear(), mo: dt.getUTCMonth() + 1, d: dt.getUTCDate(), h: dt.getUTCHours(), mi: dt.getUTCMinutes(), s: dt.getUTCSeconds() };
 }
@@ -782,20 +513,6 @@ function addMonths(civil, n) {
   return { y, mo: m + 1, d: Math.min(civil.d, maxDay), h: civil.h, mi: civil.mi, s: civil.s };
 }
 
-// -------------------------------------------------------------------------- i18n / labels
-//
-// A hardcoded table for the languages we've actually verified, checked FIRST — Intl.
-// DateTimeFormat only steps in for locales outside it. Intl alone isn't reliable enough to
-// be the only source: whether it actually has non-English weekday/month data depends on
-// whether the runtime was built with full ICU or a slimmed-down "small-icu" build (common in
-// serverless sandboxes for faster cold starts) — small-icu doesn't error for an unsupported
-// locale, it just silently formats in English, which is exactly what happened here (real
-// TRMNL input with locale "nl" rendered English day/month names). Same class of problem
-// Python's strftime has with the OS's locale data not being installed in a sandboxed VM —
-// this hits it at the JS/ICU layer instead. The table covers what shipped before Intl was
-// introduced; Intl is still tried for anything outside it, on the chance the runtime's ICU
-// happens to cover it — better than a guaranteed-English default for those, even if not
-// guaranteed to work.
 const I18N = {
   en: {
     wd: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
@@ -841,10 +558,6 @@ const _weekdayFmtCache = new Map();
 const _monthFmtCache = new Map();
 
 function localeDatePart(locale, width, kind, y, mo, d) {
-  // width: 'short' | 'long'; kind: 'weekday' | 'month'. Formatted against a UTC-anchored
-  // Date built straight from civil fields (see addCivilDays) — timeZone: 'UTC' keeps that
-  // reading stable regardless of the runtime's own local zone, which would otherwise risk
-  // shifting the displayed weekday/month by a day right around midnight.
   const cacheKey = locale + "|" + width;
   const cache = kind === "weekday" ? _weekdayFmtCache : _monthFmtCache;
   let fmt = cache.get(cacheKey);
@@ -868,14 +581,7 @@ function dayLabel(civil, locale) {
   return wd + " " + civil.d + " " + month;
 }
 
-// Split out from dayLabelShort so the header (see shared.liquid) can style the weekday
-// abbreviation differently from the day/month — a plain joined string can't be restyled
-// in Liquid without fragile locale-dependent string splitting.
 function dayLabelShortParts(civil, locale) {
-  // Abbreviated-month variant for narrow layouts (quadrant, half_vertical, or a wide Days-to-
-  // Show setting) — the full month name is what wraps/gets clipped there, e.g. "Zo 5 Juli"
-  // losing "Juli" off the header at 7 columns; the weekday/day are already short enough not
-  // to need shrinking.
   const code = String(locale).toLowerCase().split(/[-_]/)[0];
   const t = I18N[code];
   const wd = t ? t.wd[civilWeekday(civil.y, civil.mo, civil.d)] : localeDatePart(locale, "short", "weekday", civil.y, civil.mo, civil.d);
@@ -897,8 +603,6 @@ function fmtTime(epoch, tz, is12h) {
   }
   return c.h + ":" + mi;
 }
-
-// ------------------------------------------------------------------------- ICS parsing
 
 function unfold(text) {
   const lines = [];
@@ -933,10 +637,6 @@ function untext(v) {
 }
 
 function parseDt(value, params, tz) {
-  // Returns {epoch, allDay, civil:{y,mo,d,h,mi,s}, zone} — zone is what RRULE expansion
-  // advances civil fields in (see expandEvent), an IANA string or a fixed-offset-minutes
-  // number, matching the DTSTART's own TZID when present (falling back to the calendar's
-  // display zone otherwise), same as _parse_dt did in the Python version.
   const v = value.trim();
   if (params.VALUE === "DATE" || (v.length === 8 && !v.includes("T"))) {
     const y = +v.slice(0, 4), mo = +v.slice(4, 6), d = +v.slice(6, 8);
@@ -1026,8 +726,6 @@ function parseRrule(value, tz) {
   return rr;
 }
 
-// ------------------------------------------------------------------ recurrence expansion
-
 function expandEvent(ev, tz, winS, winE, out) {
   const start = ev.start;
   if (!start) return;
@@ -1068,7 +766,6 @@ function expandEvent(ev, tz, winS, winE, out) {
   let curEpoch = start.epoch;
   const startOrdinal = civilDateOrdinal(start.civil.y, start.civil.mo, start.civil.d);
 
-  // Fast-forward so ancient DTSTARTs don't blow the iteration budget.
   if ((freq === "DAILY" || freq === "WEEKLY") && !(freq === "WEEKLY" && byday)) {
     const unit = freq === "DAILY" ? 1 : 7;
     const winSCivil = fromEpoch(winS, tz);
@@ -1107,7 +804,6 @@ function expandEvent(ev, tz, winS, winE, out) {
       emit(curEpoch);
     }
 
-    // Advance one cycle.
     if (freq === "DAILY") {
       cur = addCivilDays(cur, interval);
     } else if (freq === "WEEKLY") {
@@ -1131,15 +827,6 @@ function expandEvent(ev, tz, winS, winE, out) {
   }
 }
 
-// --------------------------------------------------------------------------- sun times
-//
-// Open-Meteo is free and needs no API key: the Location field is TRMNL's built-in lat_lon
-// picker (search a place, pick from autocomplete), which always hands back "lat,lon" — so no
-// geocoding step is needed here, just parse the pair and ask Open-Meteo's forecast endpoint
-// for sunrise/sunset. Best-effort only — the calendar itself is the primary feature, so any
-// failure here (malformed value, network hiccup, timeout) just omits the sun marks instead
-// of surfacing as a page-level error.
-
 function parseLatLon(raw) {
   const parts = raw.split(",");
   if (parts.length !== 2) return null;
@@ -1161,9 +848,6 @@ function weatherKind(code) {
   return null;
 }
 
-// TRMNL hosts a full weather-icon set — reused here from the same set the daily-weather
-// plugin (elsewhere in this workspace) already uses. Priority order for picking ONE icon to
-// represent a whole day: worst condition wins, defaulting to sunny when nothing's flagged.
 const ICON_BASE = "https://trmnl.com/images/plugins/weather/";
 const ICON_PRIORITY = ["storm", "snow", "rain", "fog"];
 const ICON_FILE = { storm: "wi-day-thunderstorm.svg", snow: "wi-day-snow.svg", rain: "wi-day-rain.svg", fog: "wi-day-fog.svg" };
@@ -1175,10 +859,6 @@ function dayIcon(hours) {
 }
 
 function splitIsoLocal(iso) {
-  // Open-Meteo returns naive local timestamps like "2026-07-04T05:47" when timezone=auto —
-  // parsed by hand (not via `new Date(...)`) because a timezone-less date-time string handed
-  // to the Date constructor is interpreted in the RUNTIME's own zone (server or browser),
-  // not the calendar location's zone Open-Meteo actually resolved.
   const [datePart, timePart] = iso.split("T");
   const [y, mo, d] = datePart.split("-").map(Number);
   const [h, mi] = (timePart || "00:00").split(":").map(Number);
@@ -1231,9 +911,6 @@ async function fetchSky(location, daysN, fahrenheit) {
       dailyTemps[i] = { high: Math.round(highs[i]), low: Math.round(lows[i]) };
     }
 
-    // Walk hourly entries in order, incrementing the day index whenever the date actually
-    // changes — robust to a DST day being 23 or 25 hours instead of assuming a fixed stride
-    // of 24, while still needing no locally-computed reference date.
     const hourly = body.hourly || {};
     const hTimes = hourly.time || [], codes = hourly.weathercode || [];
     const hourlyWeather = {};
@@ -1257,54 +934,20 @@ async function fetchSky(location, daysN, fahrenheit) {
 
     return { sunMarks, hourlyWeather, dailyTemps, error: null };
   } catch (exc) {
-    // Best-effort: never break the calendar over a weather hiccup. But silently swallowing
-    // the reason made a real failure indistinguishable from "no location configured" —
-    // return it so run() can surface it as a debug-only field (never a page-level error)
-    // instead of leaving a future occurrence to guesswork.
     return { sunMarks: {}, hourlyWeather: {}, dailyTemps: {}, error: (exc && exc.name ? exc.name : "Error") + ": " + (exc && exc.message ? exc.message : exc) };
   }
 }
 
-// -------------------------------------------------------------------- native grid layout
-//
-// Builds percent-of-screen heights (h--[Ncqh]) for a real HTML/Liquid grid instead of drawing
-// an image. cqh is a percentage of the outer .layout element (see shared.liquid), so every
-// number here is a 0-100 integer share of the WHOLE screen — not pixels — which is what lets
-// the same numbers render correctly on any device, including the larger TRMNL X. Liquid does
-// no layout math itself; it just loops over this pre-baked structure.
-
-const HEADER_PCT = 11; // day label (one line) plus the header's own top-left gutter cell
-                      // (everyone with anything in the visible range, see shared.liquid's
-                      // people badges) — same reserved height on every day/view.
-const FOOTER_PCT = 7; // weather icon + daily high/low, its own zone at the bottom of the
-                      // screen (see shared.liquid) rather than a second header line — kept
-                      // out of gridBase (the hourly grid's own top-offset math) since it sits
-                      // AFTER the grid, not before it; only gridPct's own size shrinks for it.
-const ALLDAY_ROW_PCT = 10; // bumped from 6 to 9 to 12 for visual weight (see the all-day chip's
-                           // own h--[Ncqh] comment in shared.liquid for a real, since-fixed bug
-                           // this value alone couldn't have masked: allday_row_pct wasn't wired
-                           // through the view files' {% render %} calls, so the row had no real
-                           // height at all in some views regardless of what this constant said).
-                           // Eased back down from 12 once badge sizing (see badge_d1/badge_d2 in
-                           // shared.liquid) started giving a lone all-day event's own badge most
-                           // of the row's height on its own — 12 read oversized for the common
-                           // case of just one all-day event once that badge was doing the visual
-                           // weight lifting instead of raw row height.
-const MIN_EVENT_PCT = 10; // floor so a block is never a literally invisible sliver — actual font
-                           // sizing is handled client-side by the fit-text script (see shared.liquid),
-                           // which measures the real rendered box and grows/shrinks text to match.
-                           // Unlike every other *_pct value on this page, an event's own top_pct/
-                           // height_pct (see layoutNative) are a share of grid_pct specifically (the
-                           // day column's own height), not the whole screen — events are an
-                           // absolutely-positioned overlay sized relative to their direct container.
+const HEADER_PCT = 11;
+const FOOTER_PCT = 7;
+const ALLDAY_ROW_PCT = 10;
+const MIN_EVENT_PCT = 10;
 function hueOf(calIdx, calendarColors) {
   if (calendarColors && calIdx < calendarColors.length && calendarColors[calIdx]) return calendarColors[calIdx];
   return HUES[calIdx % HUES.length];
 }
 
 function cluster(events) {
-  // Group overlapping/touching timed events; assign side-by-side lanes within each. Returns
-  // a list of clusters: {h0, h1, lanes: [[event, laneIndex], ...], nlanes}.
   const clusters = [];
   let active = [];
   let cur = null;
@@ -1343,38 +986,11 @@ function layoutNative(days, alldayBars, importantStart, importantEnd, nowH, sunM
   importantStart = Math.max(0, Math.min(23, Math.trunc(importantStart)));
   importantEnd = Math.max(importantStart + 1, Math.min(24, Math.trunc(importantEnd)));
 
-  // Row assignment (run()'s own greedy pass) already capped every bar's `row` at 0-2, so the
-  // real row COUNT is just the highest one actually used, not a separate re-count.
   const maxAdRows = alldayBars.length ? Math.max(...alldayBars.map((b) => b.row)) + 1 : 0;
   const alldayPct = Math.min(3, maxAdRows) * ALLDAY_ROW_PCT;
   const gridBase = headerPct + alldayPct;
   const gridPct = 100 - gridBase - FOOTER_PCT;
 
-  // Hours outside [importantStart, importantEnd) are hidden entirely (0% height) — that
-  // range is always at least the configured default hours (see DEFAULT_HOURS/run()),
-  // widened to also cover any real sunrise/event/sunset outside them, so anything left
-  // outside it by construction has nothing worth keeping on screen. With hidden hours
-  // contributing zero, there's no separate "important vs compressed" ratio to weigh
-  // anymore — every visible hour just splits gridPct evenly.
-  //
-  // h--[Ncqh] is a bracket "arbitrary value" utility class that only works for INTEGERS: a
-  // decimal value silently no-ops (the element falls back to its unstyled content-box
-  // height). So gridPct has to divide across importantN hours as whole percents, and the
-  // leftover from that division has to land somewhere.
-  //
-  // NOT "give the first `deficit` hours a whole extra percent each, in order" — that piled
-  // every bumped hour at the START of the visible range (hour 7 gets +1, so does 8, 9, ...
-  // however many the deficit needed), which read as "the rows aren't all the same size, even
-  // in the middle of the day" once the deficit was more than 1 or 2 (confirmed: with a 16-
-  // hour range you can have a 5-hour deficit — 5 back-to-back morning rows visibly taller
-  // than the rest of the day, not just a rounding fringe). Cumulative rounding spreads that
-  // same total leftover evenly across the whole range instead — round(i*gridPct/importantN)
-  // for each position i, taking each hour's share as the difference from the previous
-  // position's rounded cumulative total. Consecutive differences of a linear sequence
-  // rounded this way can only ever be base or base+1, and the +1s fall roughly one every
-  // importantN/deficit hours rather than all bunched at the front — everywhere still sums
-  // exactly to gridPct (the last cumulative value is round(importantN*gridPct/importantN),
-  // and gridPct is already an integer, so that's just gridPct itself).
   const importantN = importantEnd - importantStart;
   const hourPct = new Array(24).fill(0);
   let prevCum = 0;
@@ -1394,10 +1010,6 @@ function layoutNative(days, alldayBars, importantStart, importantEnd, nowH, sunM
     return gridBase + cum;
   }
 
-  // Bold the hour label at the NEXT upcoming timed event today, so the axis doubles as an
-  // at-a-glance "what's coming up" — only ever one hour bold, not every hour anything starts
-  // today (that read as mostly-bold on a busy day and lost the signal), and nothing at all
-  // once today's last event has already started (there's nothing left to point at).
   let nextEventH0 = null;
   if (nowH !== null && nowH !== undefined) {
     for (const d of days) {
@@ -1408,18 +1020,15 @@ function layoutNative(days, alldayBars, importantStart, importantEnd, nowH, sunM
     }
   }
   const nextHour = nextEventH0 !== null ? Math.trunc(nextEventH0) : null;
-  // No minute suffix on any row any more (used to append the next-event's minute on the one
-  // bold row — removed, the axis is a strictly clean integer-hour scale otherwise). AM/PM
-  // stays, but ONLY when the user's own time-format setting is 12h — is12h already converts
-  // the hour NUMBER itself to 1-12 form, and without a period a 12h axis is genuinely
-  // ambiguous (1 could be 1am or 1pm), unlike the minute suffix which was just a nicety.
+  const hasNowHour = nowH !== null && nowH !== undefined && nowH >= 0 && nowH < 24;
+  const nowHour = hasNowHour ? Math.floor(nowH) : null;
   const hourRows = [];
   for (let h = 0; h < 24; h++) {
     const hourDisplay = is12h ? (h % 12 || 12) : h;
     const period = is12h ? (h < 12 ? "AM" : "PM") : null;
     hourRows.push({
       hour: hourDisplay, period, pct: hourPct[h], shade: h % 2, bold: h === nextHour,
-      important: importantStart <= h && h < importantEnd,
+      important: importantStart <= h && h < importantEnd, current: h === nowHour,
     });
   }
 
@@ -1431,22 +1040,9 @@ function layoutNative(days, alldayBars, importantStart, importantEnd, nowH, sunM
       c.h1 = Math.min(c.h1, 24);
     }
 
-    // Background bounds: window edges + every whole hour, ALWAYS — regardless of whether an
-    // event happens to be running — so the zebra/night/weather background keeps its normal
-    // per-hour texture underneath an event exactly like it would without one. Events are a
-    // separate absolutely-positioned overlay (below) painted on top.
     const boundsSet = new Set([0, 24]);
     for (let h = 1; h < 24; h++) boundsSet.add(h);
 
-    // Sunrise/sunset: shading the whole night portion of the column solid dark is a
-    // large-area signal that survives e-ink rendering (a thin colored line measured
-    // unreadable on the real grayscale device). Still split bounds at the sunrise/sunset
-    // hour so the transition lands at the right minute, not just the right hour band.
-    //
-    // Deliberately uses day 0's (today's) sunrise/sunset for EVERY column, not each day's
-    // own — sunrise/sunset drifts by about a minute a day, and that real difference, rounded
-    // to whole percentage points, made the night/day boundary zigzag between adjacent
-    // columns; a single shared reference keeps it a straight, aligned line.
     const daySun = (sunMarks || {})[0] || [];
     const sunriseMark = daySun.find((m) => m.kind === "sunrise");
     const sunsetMark = daySun.find((m) => m.kind === "sunset");
@@ -1455,8 +1051,6 @@ function layoutNative(days, alldayBars, importantStart, importantEnd, nowH, sunM
     for (const h of [sunriseH, sunsetH]) {
       if (h !== null && h >= 0 && h < 24) boundsSet.add(h);
     }
-    // Also split at "now" (today only) so segments cleanly separate into wholly-past or
-    // wholly-upcoming — see `past` below — instead of one segment straddling the boundary.
     const hasNow = d.isToday && nowH !== null && nowH !== undefined && nowH >= 0 && nowH < 24;
     if (hasNow) boundsSet.add(nowH);
     const bounds = [...boundsSet].sort((a, b) => a - b);
@@ -1472,11 +1066,6 @@ function layoutNative(days, alldayBars, importantStart, importantEnd, nowH, sunM
     for (let bi = 0; bi < bounds.length - 1; bi++) {
       const a = bounds[bi], b = bounds[bi + 1];
       const mid = (a + b) / 2.0;
-      // A segment never spans more than one hour (bounds already split at every whole hour),
-      // so Math.trunc(a) identifies which hour's budget it draws from. Telescope WITHIN that
-      // hour — round(hourPct[h]*localB) - round(hourPct[h]*localA) — rather than rounding
-      // pctAt(b)-pctAt(a) independently: rounding each fragment of a split hour on its own
-      // doesn't guarantee the fragments sum back to that hour's already-fixed integer total.
       const h = Math.trunc(a);
       const pct = Math.round(hourPct[h] * (b - h)) - Math.round(hourPct[h] * (a - h));
       const shade = Math.trunc(a) % 2;
@@ -1484,27 +1073,12 @@ function layoutNative(days, alldayBars, importantStart, importantEnd, nowH, sunM
       segments.push({ pct, shade, night: isNight(mid), past, weather: dayWeather[Math.trunc(a)] || null });
     }
 
-    // "Now" is an absolutely-positioned overlay too, for the same reason events are: its
-    // position is derived straight from pctAt(nowH), independent of the segment list, so
-    // nothing about today's own background sizing ever has to change to show it.
     let nowMarker = null;
     if (d.isToday && nowH !== null && nowH !== undefined && nowH >= 0 && nowH < 24) {
       const top = pctAt(nowH) - gridBase;
       nowMarker = { top_pct: round4((top / gridPct) * 100), night: isNight(nowH) };
     }
 
-    // Events are absolutely-positioned overlays, sized straight from pctAt() on each EVENT's
-    // OWN h0/h1 (not the whole cluster's) — clustering only decides which lane (horizontal
-    // slot) an event sits in among whatever else overlaps it; each lane still gets its own
-    // independent vertical position/size. A cluster's h0/h1 is the UNION of everything in
-    // it, so sizing every lane to that shared span used to stretch a short event to match a
-    // much longer one it merely overlapped (e.g. a 45-minute class inside an 8-hour block) —
-    // confirmed against real data, not a hypothetical. Flattened across all clusters and
-    // sorted by start time so the MIN_EVENT_PCT growth-cap below (an event too short to read
-    // grows down, but never past whatever's next) has one consistent, chronological list to
-    // check against — capping against the immediately-following event overall is a
-    // conservative, always-safe bound: two events sharing a lane can never be adjacent
-    // without something between them (in any lane) starting first.
     const flatEvents = [];
     for (const c of clusters) {
       for (const [ev, laneIdx] of c.lanes) flatEvents.push({ ev, laneIdx, nlanes: c.nlanes });
@@ -1541,18 +1115,6 @@ function layoutNative(days, alldayBars, importantStart, importantEnd, nowH, sunM
     });
   });
 
-  // One bar per all-day event, spanning start_col/span day columns — see run()'s alldaySpans
-  // for how those (and row, the 0-2 stacking slot within the alldayPct band) got computed.
-  // Rendered as a single grid item in shared.liquid, positioned with an EXPLICIT
-  // grid-column-start (computed from start_col) rather than relying on this file's usual
-  // auto-placement-infers-the-column-count trick (see the day-column comment elsewhere in this
-  // file) — that trick only ever needed to work for one auto-placed row; here shared.liquid
-  // instead states the band's total column count explicitly (once) and places each bar/row
-  // explicitly too, which also means gaps between bars need no filler cells at all — an
-  // unoccupied explicit grid cell is just blank space. A flat array, deliberately: trmnlp's
-  // own YAML-to-Liquid mock conversion (confirmed) doesn't expose an array-of-arrays at all —
-  // a flat list of bars each carrying its own start_col/row is both simpler AND the only shape
-  // actually renderable locally.
   const alldayBarsOut = alldayBars.map((b) => ({
     title: b.title, hue: colorClass(b.hue), fg: foregroundFor(b.hue),
     start_col: b.startCol, span: b.span, row: b.row,

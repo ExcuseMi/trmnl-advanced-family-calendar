@@ -73,8 +73,8 @@
 
   <h2>Import existing configuration <span class="muted">(optional)</span></h2>
   <div class="card">
-    <p class="muted" style="margin-top:0;">Already have a Calendar Configuration from TRMNL? Paste it here to load it into the form below instead of starting from scratch.</p>
-    <textarea id="importIn" rows="4" placeholder='{"calendars": [...], "people": [...]}'></textarea>
+    <p class="muted" style="margin-top:0;">Already have a Calendar Configuration from TRMNL? Paste it here to load it into the form below instead of starting from scratch — a full configuration JSON, or just a plain list of ICS URLs, one per line.</p>
+    <textarea id="importIn" rows="4" placeholder='{"calendars": [...], "people": [...]}&#10;&#10;or just:&#10;https://your-calendar.example.com/one.ics&#10;https://your-calendar.example.com/two.ics'></textarea>
     <div class="row" style="margin-top:8px;">
       <button id="loadImport">Load into editor</button>
       <span id="importStatus" class="status"></span>
@@ -296,9 +296,14 @@
     return sel;
   }
 
+  // Plain bg--{hue}/text--{fg} classes on this swatch span would render with NO color at all
+  // here: the framework only ever defines those custom properties under ".trmnl .screen" (see
+  // colorOptionStyle above), and this span sits in the page's real, visible DOM — which has
+  // .trmnl on <body> but deliberately no .screen ancestor (adding one broke this page's own
+  // layout the first time it was tried). Reusing colorOptionStyle's already-correct computed
+  // rgb() values sidesteps that entirely, same fix as the <option> list, applied here too.
   function swatchFor(color) {
-    var cls = color ? "bg--" + colorClass(color) + " text--" + foregroundFor(color) : "";
-    var s = el("span", { class: "swatch " + cls, style: color ? "" : "border:1px dashed #bbb;" });
+    var s = el("span", { class: "swatch", style: color ? colorOptionStyle(color) : "border:1px dashed #bbb;" });
     return s;
   }
 
@@ -306,7 +311,29 @@
 
   function uid() { return Math.random().toString(36).slice(2, 9); }
   function newCalendar() { return { _id: uid(), url: "", id: "", color: "", excludes: [""], defaultPerson: [], personRules: [] }; }
-  function newPersonRule() { return { _id: uid(), match: "", person: [], rename: true }; }
+  // matchType/matchText are editor-only convenience state, never exported (buildConfig only
+  // ever reads/writes r.match, the real regex string transform.js actually uses) — they just
+  // drive which input the rule shows and how it derives r.match, so a raw regex pasted in
+  // (or loaded from an existing config) round-trips untouched under "Custom regex".
+  function newPersonRule() { return { _id: uid(), match: "", person: [], rename: true, matchType: "contains", matchText: "", testText: "" }; }
+
+  function escapeRegex(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+  function regexForMatchType(type, text) {
+    var esc = escapeRegex(text);
+    if (type === "word") return "\\b" + esc + "\\b";
+    if (type === "starts") return "^" + esc;
+    if (type === "ends") return esc + "$";
+    if (type === "exact") return "^" + esc + "$";
+    return esc; // "contains"
+  }
+  var MATCH_TYPES = [
+    { value: "contains", label: "Contains" },
+    { value: "word", label: "Whole word" },
+    { value: "starts", label: "Starts with" },
+    { value: "ends", label: "Ends with" },
+    { value: "exact", label: "Exact (whole title)" },
+    { value: "custom", label: "Custom regex" },
+  ];
   function newPerson() { return { _id: uid(), name: "", color: "", badge: "" }; }
 
   var calendars = [newCalendar()];
@@ -419,8 +446,48 @@
     function renderRules() {
       rulesWrap.innerHTML = "";
       c.personRules.forEach(function (r, i) {
-        var matchInput = el("input", { type: "text", class: "field field-regex", placeholder: "match regex, e.g. \\bL6\\b", value: r.match });
-        matchInput.addEventListener("input", function () { r.match = matchInput.value; renderJson(); });
+        var typeSelect = el("select", { class: "field", style: "flex:0 0 auto;width:auto;" });
+        MATCH_TYPES.forEach(function (t) {
+          var opt = el("option", { value: t.value }, [document.createTextNode(t.label)]);
+          if (t.value === r.matchType) opt.setAttribute("selected", "selected");
+          typeSelect.appendChild(opt);
+        });
+
+        // "Custom regex" edits r.match directly (unchanged raw-regex behavior); every other
+        // type edits a plain-text field and derives r.match from it, so no regex knowledge is
+        // needed for the common cases.
+        var textInput = el("input", { type: "text", class: "field", placeholder: "text to match, e.g. L6" });
+        var regexInput = el("input", { type: "text", class: "field field-regex", placeholder: "match regex, e.g. \\bL6\\b" });
+
+        function syncMatchFromText() {
+          r.matchText = textInput.value;
+          r.match = regexForMatchType(r.matchType, r.matchText);
+          regexInput.value = r.match;
+          updateTestResult();
+          renderJson();
+        }
+        function syncMatchFromRegex() {
+          r.match = regexInput.value;
+          updateTestResult();
+          renderJson();
+        }
+        function applyMode() {
+          var custom = r.matchType === "custom";
+          textInput.hidden = custom;
+          regexInput.hidden = !custom;
+          regexInput.readOnly = !custom;
+        }
+
+        textInput.value = r.matchText;
+        regexInput.value = r.match;
+        applyMode();
+        textInput.addEventListener("input", syncMatchFromText);
+        regexInput.addEventListener("input", syncMatchFromRegex);
+        typeSelect.addEventListener("change", function () {
+          r.matchType = typeSelect.value;
+          applyMode();
+          if (r.matchType === "custom") { updateTestResult(); renderJson(); } else { syncMatchFromText(); }
+        });
 
         var personInput = personMultiSelect(r.person);
         personInput.classList.add("field");
@@ -434,7 +501,28 @@
         var rm = el("button", { class: "small danger" }, [document.createTextNode("Remove")]);
         rm.addEventListener("click", function () { c.personRules.splice(i, 1); renderRules(); renderJson(); });
 
-        rulesWrap.appendChild(el("div", { class: "sub-entry" }, [matchInput, personInput, renameLbl, rm]));
+        // Live test: type a sample event title, see whether the rule's actual regex (same
+        // case-insensitive test transform.js itself runs) matches it — no need to save/preview
+        // the whole config just to check one rule.
+        var testInput = el("input", { type: "text", class: "field", placeholder: "test against a sample title...", value: r.testText, style: "flex:1 1 160px;" });
+        var testResult = el("span", { style: "font-size:12px;white-space:nowrap;min-width:80px;" });
+        function updateTestResult() {
+          if (!r.testText) { testResult.textContent = ""; return; }
+          if (!r.match) { testResult.textContent = ""; return; }
+          try {
+            var matches = new RegExp(r.match, "i").test(r.testText);
+            testResult.textContent = matches ? "✓ matches" : "✗ no match";
+            testResult.style.color = matches ? "#1a7f37" : "#d1242f";
+          } catch (e) {
+            testResult.textContent = "invalid regex";
+            testResult.style.color = "#d1242f";
+          }
+        }
+        testInput.addEventListener("input", function () { r.testText = testInput.value; updateTestResult(); });
+        updateTestResult();
+
+        rulesWrap.appendChild(el("div", { class: "sub-entry", style: "flex-wrap:wrap;" }, [typeSelect, textInput, regexInput, personInput, renameLbl, rm]));
+        rulesWrap.appendChild(el("div", { style: "display:flex;gap:6px;align-items:center;margin:2px 0 8px;" }, [testInput, testResult]));
       });
     }
     renderRules();
@@ -571,9 +659,9 @@
     try {
       data = JSON.parse(raw);
     } catch (e) {
-      status.textContent = "Invalid JSON: " + e.message;
-      status.className = "status err";
-      return;
+      // Simple mode: not JSON at all — just one ICS URL per line, same fallback as
+      // transform.js's own parseConfig, so pasting either form here works.
+      data = { calendars: raw.split(/\r?\n/).map(function (l) { return l.trim(); }).filter(Boolean) };
     }
     if (!data || typeof data !== "object") {
       status.textContent = "Expected a JSON object with \"calendars\"/\"people\".";
@@ -582,6 +670,9 @@
     }
 
     var newCalendars = (Array.isArray(data.calendars) ? data.calendars : [])
+      // Simple mode: a plain ICS URL string is shorthand for { url: <that string> } — expand it
+      // here so pasting a simple-mode config still lands correctly in the full form below.
+      .map(function (c) { return typeof c === "string" ? { url: c } : c; })
       .filter(function (c) { return c && typeof c === "object" && typeof c.url === "string" && c.url.trim(); })
       .map(function (c) {
         var excludes = Array.isArray(c.exclude)
@@ -589,7 +680,7 @@
           : typeof c.exclude === "string" && c.exclude.trim() ? [c.exclude] : [];
         var personRules = (Array.isArray(c.personRules) ? c.personRules : [])
           .filter(function (r) { return r && typeof r === "object" && typeof r.match === "string" && (typeof r.person === "string" || Array.isArray(r.person)); })
-          .map(function (r) { return { _id: uid(), match: r.match, person: normalizeNames(r.person), rename: r.rename !== false }; });
+          .map(function (r) { return { _id: uid(), match: r.match, person: normalizeNames(r.person), rename: r.rename !== false, matchType: "custom", matchText: "", testText: "" }; });
         return {
           _id: uid(),
           url: c.url.trim(),
