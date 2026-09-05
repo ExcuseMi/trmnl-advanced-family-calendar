@@ -34,7 +34,7 @@ custom_fields:
 - keyname: author_info
   name: About This Plugin
   field_type: author_bio
-  description: A smart-scaling agenda from any ICS calendar feed. Combine multiple calendars, each in its own color, with sunrise/sunset and daily weather. 1 to 3 days of coverage.<br /><br />Runs on TRMNL <strong>Serverless</strong>.<br /><br />Icon by Solar Icons, CC Attribution.
+  description: A smart-scaling agenda from any ICS calendar feed. Combine multiple calendars, each in its own color, with sunrise/sunset and daily weather. 1 to 3 days of coverage.<br /><br />Runs on TRMNL <strong>Serverless</strong>.<br /><br />Icon by Solar Icons, CC Attribution.<br /><br />Weather by <a href="https://open-meteo.com/" target="_blank">Open-Meteo</a>.
   github_url: https://github.com/ExcuseMi/trmnl-family-calendar
   category: calendar
   help_text: TRMNL X Ready

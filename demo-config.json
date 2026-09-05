@@ -4,7 +4,8 @@
   "calendars": [
     {
       "id": "Family",
-      "url": "https://raw.githubusercontent.com/ExcuseMi/trmnl-family-calendar/main/demo/family.ics"
+      "url": "https://raw.githubusercontent.com/ExcuseMi/trmnl-family-calendar/main/demo/family.ics",
+      "color": "gray-25"
     },
     {
       "id": "Alex",
@@ -39,13 +40,13 @@
     {
       "id": "Holidays",
       "url": "https://calendar.google.com/calendar/ical/en.usa%23holiday%40group.v.calendar.google.com/public/basic.ics",
-      "color": "red"
+      "color": "gray-45"
     }
   ],
   "people": [
-    { "name": "Alex", "color": "blue" },
-    { "name": "Jordan", "color": "purple" },
-    { "name": "Mia", "color": "pink" },
-    { "name": "Leo", "color": "green" }
+    { "name": "Alex", "color": "gray-15" },
+    { "name": "Jordan", "color": "gray-35" },
+    { "name": "Mia", "color": "gray-55" },
+    { "name": "Leo", "color": "gray-65" }
   ]
 }

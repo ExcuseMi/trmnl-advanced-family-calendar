@@ -2,7 +2,7 @@
 
 {% template badge_circle %}
 
-  <span class="rounded--small {{head_badge_cls}} no-shrink flex flex--center-x flex--center-y text--{{ fg }} bg--{{ hue }} ">
+  <span class="rounded--small {{head_badge_cls}} no-shrink flex flex--center-x flex--center-y text--{{ fg }} bg--{{ hue }} font--bold">
     {{- b.text -}}
   </span>
 {% endtemplate %}
@@ -10,14 +10,15 @@
 {% template chip_body %}
 
   <div class="w--full h--full flex flex--row flex--center-x flex--center-y w--min-0">
-    <span class="title {{ title_cls }} text--{{ fg }} text--center cal-fit-text{% if clip %} cal-fit-clip{% endif %} {{ pad_right_cls }} w--min-0" data-fit-min="{{ fit_min }}" data-fit-max="90">{{ title }}</span>
+    <span class="title {{ title_cls }} text--{{ fg }} text--center cal-fit-text{% if clip %} cal-fit-clip{% endif %} {{ pad_x_cls }} w--min-0" data-fit-min="{{ fit_min }}" data-fit-max="90">{{ title }}</span>
   </div>
 {% endtemplate %}
 
 {% template chip %}
-
-  <div class="{{ size_class }} bg--{{ hue }} text--{{ fg }} w--full {{ pad_cls }} {{ radius_cls }} flex {{ flex_dir }} flex--center-y cal-fit-box relative" style="overflow:hidden;box-sizing:border-box;{{ size_style }}border-top:2px solid currentColor;border-bottom:2px solid currentColor;{% if border_left %}border-left:2px solid currentColor;{% endif %}{% if border_right %}border-right:2px solid currentColor;{% endif %}">
-    {%- render "chip_body", title: title, fg: fg, title_cls: title_cls, fit_min: fit_min, clip: clip, pad_right_cls: pad_right_cls -%}
+  {%- assign border_color = "currentColor" -%}
+  {%- if fg == "white" -%}{%- assign border_color = "#888888" -%}{%- endif -%}
+  <div class="{{ size_class }} bg--{{ hue }} text--{{ fg }} w--full {{ pad_cls }} {{ radius_cls }} flex {{ flex_dir }} flex--center-y cal-fit-box relative" style="overflow:hidden;box-sizing:border-box;{{ size_style }}border-top:1px solid {{ border_color }};border-left:1px solid {{ border_color }};border-bottom:3px solid {{ border_color }};border-right:3px solid {{ border_color }};">
+    {%- render "chip_body", title: title, fg: fg, title_cls: title_cls, fit_min: fit_min, clip: clip, pad_x_cls: pad_x_cls -%}
   </div>
 {% endtemplate %}
 
@@ -35,7 +36,7 @@
   {%- assign axis_cls = "label--small" -%}
   {%- assign event_pad_cls = "pt--0 pb--1" -%}
   {%- assign event_title_cls = "title--small" -%}
-  {%- assign pad_right_cls = "pr--1" -%}
+  {%- assign pad_x_cls = "px--1" -%}
   {%- assign head_badge_cls = "w--3 h--3 lg:w--4 lg:h--4 rounded rounded--small"  -%}
 {%- elsif view == 3 -%}
 
@@ -44,7 +45,7 @@
   {%- assign axis_cls = "label--base lg:label--large" -%}
   {%- assign event_pad_cls = "pt--0 pb--1" -%}
   {%- assign event_title_cls = "title--small" -%}
-  {%- assign pad_right_cls = "pr--1" -%}
+  {%- assign pad_x_cls = "px--1" -%}
   {%- assign head_badge_cls = "w--3 h--3 lg:w--4 lg:h--4  rounded rounded--small" -%}
 {%- elsif view == 2 -%}
 
@@ -53,7 +54,7 @@
   {%- assign axis_cls = "label--base lg:label--large" -%}
   {%- assign event_pad_cls = "pt--1 pb--2" -%}
   {%- assign event_title_cls = "title--small" -%}
-  {%- assign pad_right_cls = "pr--2" -%}
+  {%- assign pad_x_cls = "px--2" -%}
   {%- assign head_badge_cls = "w--3 h--3 lg:w--4 lg:h--4  rounded rounded--small" -%}
 {%- else -%}
 
@@ -62,7 +63,7 @@
   {%- assign axis_cls = "label--large lg:label--xxlarge" -%}
   {%- assign event_pad_cls = "pt--1 pb--2" -%}
   {%- assign event_title_cls = "title--base" -%}
-  {%- assign pad_right_cls = "pr--2" -%}
+  {%- assign pad_x_cls = "px--2" -%}
   {%- assign head_badge_cls = "w--4 h--4 lg:w--8 lg:h--8  rounded" -%}
 {%- endif -%}
 
@@ -117,7 +118,7 @@
 
           <div class="rounded--small px--2.5 py--0.5 w--max-full flex flex--col flex--center-x gap--xsmall w--min-0" style="overflow:hidden;">
 
-            <span class="title {{ head_title_cls }} block w--min-0" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-transform:uppercase;"><span class="text--gray-50">{{ day.label_short_weekday }}</span> <span class="text--white font--bold">{{ day.label_short_rest }}</span></span>
+            <span class="title {{ head_title_cls }} block w--min-0{% if day.is_today %} relative label--underline{% endif %}" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-transform:uppercase;"><span class="text--gray-50">{{ day.label_short_weekday }}</span> <span class="text--white font--bold">{{ day.label_short_rest }}</span></span>
           </div>
         </div>
       {% endfor %}
@@ -135,27 +136,16 @@
           {% if bar.start_col < shown_days_n %}
 
           {% assign allday_visible_span = shown_days_n | minus: bar.start_col %}
-          {% assign ad_continues_after = bar.continues_after %}
-          {% if bar.span > allday_visible_span %}
-            {% assign ad_continues_after = true %}
-          {% else %}
+          {% if bar.span <= allday_visible_span %}
             {% assign allday_visible_span = bar.span %}
-          {% endif %}
-
-          {% if bar.continues_before and ad_continues_after %}
-            {% assign ad_radius_cls = "rounded--none" %}
-          {% elsif ad_continues_after %}
-            {% assign ad_radius_cls = "rounded-l--small" %}
-          {% elsif bar.continues_before %}
-            {% assign ad_radius_cls = "rounded-r--small" %}
-          {% else %}
-            {% assign ad_radius_cls = "rounded--small" %}
           {% endif %}
 
           {% assign allday_col_start = day_span | times: bar.start_col | plus: 2 %}
           {% assign allday_bar_span = day_span | times: allday_visible_span %}
           {% assign allday_row_num = bar.row | plus: 1 %}
-          <div class="bg--{{ bar.hue }} text--{{ bar.fg }} flex flex--row flex--center-x flex--center-y cal-fit-box mx--0.5 {{ ad_radius_cls }}" style="grid-column:{{ allday_col_start }} / span {{ allday_bar_span }};grid-row:{{ allday_row_num }};overflow:hidden;box-sizing:border-box;border:2px solid currentColor;">
+          {% assign ad_border_color = "currentColor" %}
+          {% if bar.fg == "white" %}{% assign ad_border_color = "#888888" %}{% endif %}
+          <div class="bg--{{ bar.hue }} text--{{ bar.fg }} flex flex--row flex--center-x flex--center-y cal-fit-box rounded--none" style="grid-column:{{ allday_col_start }} / span {{ allday_bar_span }};grid-row:{{ allday_row_num }};overflow:hidden;box-sizing:border-box;border-bottom:1px solid {{ ad_border_color }};">
             <span class="title {{ chip_title_cls }} text--{{ bar.fg }} cal-fit-text cal-fit-clip w--min-0" data-fit-min="9" data-fit-max="90">{{ bar.title }}</span>
           </div>
           {% endif %}
@@ -163,11 +153,11 @@
       </div>
     {% endif %}
 
-    <div class="grid gap--none h--[{{ grid_pct }}cqh] h--min-[{{ grid_pct }}cqh] flex-none">
+    <div class="grid gap--none h--[{{ grid_pct }}cqh] h--min-[{{ grid_pct }}cqh] flex-none relative">
       <div class="col--span-1 flex flex--col gap--none">
         {% for row in hour_rows %}
 
-          <div class="h--[{{ row.pct }}cqh] w--full flex flex--row flex--right cal-row cal-fit-box relative pr--2 {% if row.current %}bg--black{% elsif row.shade == 1 %}bg--gray-65{% endif %}">
+          <div class="h--[{{ row.pct }}cqh] w--full flex flex--row {% if row.period %}gap--distribute{% else %}flex--right{% endif %} cal-row cal-fit-box relative pr--2 {% if row.current %}bg--black{% elsif row.shade == 1 %}bg--gray-65{% endif %}" {% if row.current %}style="border-top:1px solid #888888;"{% endif %}>
 
               {% if row.period %}<span class="cal-axis-period {% if row.current %}text--gray-70{% else %}text--gray-15{% endif %} mr--1">{{ row.period }}</span>{% endif %}<span class="label {{ axis_cls }} {% if row.bold %}font--bold {% endif %}{% if row.current %}text--white {% endif %}cal-fit-text cal-axis-text{% if row.important %} cal-axis-important{% endif %} inline-block text--right hours" data-fit-min="8" data-fit-max="40">{{ row.hour }}</span>
           </div>
@@ -181,7 +171,6 @@
             {% if seg.night %}
 
               {% assign seg_bg = "bg--gray-30" %}
-              {% if seg.shade == 1 %}{% assign seg_bg = "bg--gray-40" %}{% endif %}
             {% elsif day.is_today and seg.past %}
 
               {% assign seg_bg = "bg--gray-70" %}
@@ -193,7 +182,7 @@
               {% assign seg_bg = "bg--gray-70" %}
               {% if seg.shade == 1 %}{% assign seg_bg = "bg--gray-55" %}{% endif %}
             {% endif %}
-            <div class="h--[{{ seg.pct }}cqh] w--full cal-row {{ seg_bg }} relative">
+            <div class="h--[{{ seg.pct }}cqh] w--full cal-row {{ seg_bg }} relative" {% if seg.night %}style="border-bottom:1px solid rgba(255,255,255,0.2);"{% endif %}>
               {% if seg.weather == "rain" %}
                 <div class="absolute inset--0" style="background-image:url('data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2728%27 height=%2728%27 viewBox=%270 0 28 28%27%3E%3Cpath fill=%27%23888888%27 d=%27M7 3c-1.6 2.2-2.6 4.1-2.6 5.6 0 1.9 1.2 3.4 2.6 3.4s2.6-1.5 2.6-3.4C9.6 7.1 8.6 5.2 7 3z%27 transform=%27rotate(15 7 7.5)%27/%3E%3Cpath fill=%27%23888888%27 d=%27M20 13c-1.6 2.2-2.6 4.1-2.6 5.6 0 1.9 1.2 3.4 2.6 3.4s2.6-1.5 2.6-3.4c0-1.5-1-3.4-2.6-5.6z%27 transform=%27rotate(15 20 17.5)%27/%3E%3C/svg%3E');background-position:0 -{{ seg_cum_pct }}cqh;"></div>
               {% elsif seg.weather == "storm" %}
@@ -206,24 +195,23 @@
             </div>
             {% assign seg_cum_pct = seg_cum_pct | plus: seg.pct %}
           {% endfor %}
-          {% if day.now_marker %}
-
-            <div class="absolute left--0 right--0" style="top:{{ day.now_marker.top_pct }}%;">
-              {% if day.now_marker.night %}
-                <div class="h--1 w--full bg--white"></div>
-              {% else %}
-                <div class="h--1 w--full bg--red"></div>
-              {% endif %}
-            </div>
-          {% endif %}
           {% for event in day.events %}
 
-            <div class="absolute px--0.5" style="top:{{ event.top_pct }}%;height:{{ event.height_pct }}%;left:calc({{ event.lane_index }} * 100% / {{ event.nlanes }});width:calc(100% / {{ event.nlanes }});box-sizing:border-box;">
-              {% render "chip", hue: event.hue, fg: event.fg, title: event.title, flex_dir: "flex--col", size_class: "h--full w--full", size_style: "", pad_cls: event_pad_cls, radius_cls: "rounded--small", border_left: true, border_right: true, title_cls: event_title_cls, fit_min: 11, clip: false, pad_right_cls: pad_right_cls %}
+            <div class="absolute px--0.5 relative z--1" style="top:{{ event.top_pct }}%;height:{{ event.height_pct }}%;left:calc({{ event.lane_index }} * 100% / {{ event.nlanes }});width:calc(100% / {{ event.nlanes }});box-sizing:border-box;">
+              {% render "chip", hue: event.hue, fg: event.fg, title: event.title, flex_dir: "flex--col", size_class: "h--full w--full", size_style: "", pad_cls: event_pad_cls, radius_cls: "rounded--xsmall", title_cls: event_title_cls, fit_min: 11, clip: false, pad_x_cls: pad_x_cls %}
             </div>
           {% endfor %}
         </div>
       {% endfor %}
+      {% if days.first.now_marker %}
+        <div class="absolute left--0 right--0 z--0" style="grid-column:2 / -1;top:{{ days.first.now_marker.top_pct }}%;">
+          {% if days.first.now_marker.night %}
+            <div class="h--1 w--full bg--gray-70"></div>
+          {% else %}
+            <div class="h--1 w--full bg--red"></div>
+          {% endif %}
+        </div>
+      {% endif %}
     </div>
 
     <div class="grid gap--none h--[{{ footer_pct }}cqh] h--min-[{{ footer_pct }}cqh] bg--black flex flex--center-y" style="overflow:hidden;">
@@ -360,7 +348,12 @@
     }
 
     function fitAxisGroup(selector, maxOverride) {
-      var els = root.querySelectorAll(selector);
+      var all = root.querySelectorAll(selector);
+      var els = [];
+      for (var i = 0; i < all.length; i++) {
+        var box = all[i].closest('.cal-fit-box');
+        if (box && box.clientHeight > 0) els.push(all[i]);
+      }
       var minSize = null;
       for (var j = 0; j < els.length; j++) {
         if (maxOverride) els[j].setAttribute('data-fit-max', maxOverride);

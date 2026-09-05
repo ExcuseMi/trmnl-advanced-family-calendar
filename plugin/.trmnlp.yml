@@ -211,7 +211,7 @@ variables:
     - pct: 4
       shade: 0
       night: false
-      weather: null
+      weather: rain
     - pct: 4
       shade: 1
       night: false
