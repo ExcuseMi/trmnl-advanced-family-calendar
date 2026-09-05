@@ -13,10 +13,17 @@ an error.
 
 ## Schema
 
+Alternative top-level shape: if the whole field's contents fail to parse as JSON, they're read as
+**freetext instead — one ICS URL per line, nothing else** — equivalent to
+`{"calendars": [<those URLs>]}`. Only offer this when the user explicitly wants the simplest
+possible input (no color/exclude/personRules on any calendar); otherwise generate the JSON below.
+
 ```
 {
-  "hours"?: { "start": int, "end": int },        // default 7-21; auto-widens for sunrise/events/
-                                                    // sunset/now, never shrinks below what's given
+  "locale"?: string,                              // e.g. "en", "nl-BE" — overrides the TRMNL
+                                                    // account's own locale (day/month names)
+  "timeZone"?: string,                             // IANA name, e.g. "Europe/Brussels" —
+                                                    // overrides the account's own time zone
   "calendars": [                                  // required, at least one; a plain string entry
                                                     // (just the URL) is shorthand for { "url":
                                                     // string } with everything else defaulted —
@@ -64,6 +71,8 @@ N in `10 15 20 25 30 35 40 45 50 55 60 65 70 75` (10=darkest, 75=lightest), or l
 
 ## Common mistakes to avoid generating
 
+- Generating a top-level `"hours"` key. It's not part of this JSON — visible hour range is the
+  plugin's own separate "Visible Hours" setting field, not something this config controls.
 - Un-escaped backslashes in a regex (`"\bL6\b"` is invalid JSON-as-written; must be `"\\bL6\\b"`).
 - Treating `id` as something that renames or matches events — it's purely a label for reference.
 - Giving a person a `badge` but no `color` when the intent was "make their events look

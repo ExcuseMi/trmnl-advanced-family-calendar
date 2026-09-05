@@ -25,8 +25,9 @@ the plugin depends on at render time.
   meeting hours automatically given more vertical space than the quiet hours around them.
 - All-day events as chips, timed events as blocks sized by duration, overlapping events split
   into side-by-side lanes.
-- A red line for the current time, plus night shading around sunrise/sunset when a location is
-  configured, and a daily weather icon + high/low.
+- A red line for the current time (spanning every visible day, not just today), plus night
+  shading around sunrise/sunset when a location is configured, a subtle pattern overlay on hours
+  with real rain/snow/storm/fog forecast, and a daily weather icon + high/low.
 - One color per configured calendar — auto-assigned in order (cycled if you add more than the
   palette covers) or pinned per calendar — so you can combine as many ICS feeds as you like and
   still tell them apart at a glance.
@@ -65,6 +66,10 @@ the plugin depends on at render time.
      this — the quadrant/half-horizontal/half-vertical layouts are narrow or short enough that
      more than one day column stops being legible, so those three always show just today,
      regardless of what's set here.
+   - **Visible Hours** (Advanced): the default "start-end" hour range (e.g. `7-21`), blank =
+     `7-21`. Only ever a starting point — real events, sunrise/sunset, and the current hour
+     always widen it further; hours outside your configured range but inside that wider window
+     render compressed instead of disappearing or diluting the rest of the grid.
 
 ## Try it with the demo calendar
 
@@ -190,10 +195,12 @@ exercise `run()`/`transform.js` itself against real data, use the
 |------|---------|
 | `plugin/src/transform.js` | Serverless code: fetch ICS, expand recurrences, compute layout, fetch sun times. Runs on TRMNL (Node) and in `tools/config-editor.html` (browser) unmodified. |
 | `plugin/src/shared.liquid` | The `main` template for all four view sizes (`full`/`half_*`/`quadrant`) |
-| `plugin/src/settings.yml` | Custom fields (Calendar Configuration, time zone, time format, location, days to show) |
+| `plugin/src/settings.yml` | Custom fields (Calendar Configuration, days to show, location, temperature unit, time format, visible hours, time zone) |
 | `plugin/.trmnlp.yml` | Local mock data for `trmnlp serve` |
 | `tools/config-editor.html` | Standalone config builder + real-data tester — see above; served as a static page by GitHub Pages |
 | `demo/*.ics` | Demo calendars — see "Try it with the demo calendar" above; served as static files via raw.githubusercontent.com |
+| `demo-config.json` | The complete Calendar Configuration paired with the demo calendars above — paste as-is to try the plugin |
+| `assets/weather/*.svg` | Source SVGs for the rain/storm/snow/fog hour-background patterns (tiled as a CSS background in the grid) |
 | `backend/` | CORS-free ICS test proxy only — see [Backend](#backend) |
 
 ## Notes & limits

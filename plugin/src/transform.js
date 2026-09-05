@@ -172,13 +172,21 @@ async function run(input) {
     }
   }
   const defaultHours = parseHours(cf(input, "hours")) || DEFAULT_HOURS;
-  const startCandidates = [defaultHours.start, sunriseMark ? sunriseMark.hour : null, nowH, ...eventStarts].filter((h) => h !== null && h !== undefined);
-  const endCandidates = [defaultHours.end, sunsetMark ? sunsetMark.hour : null, nowH, ...eventEnds].filter((h) => h !== null && h !== undefined);
-  const startH = Math.floor(Math.min(...startCandidates));
-  let endH = Math.ceil(Math.max(...endCandidates));
+  // "Core" bounds: the user's configured range plus anything with real content (sunrise/sunset,
+  // actual events) — deliberately excludes nowH, so a lone "it's currently 2am" doesn't itself
+  // count as content. "now" is added only afterward (outerStartH/outerEndH) purely so the current
+  // hour always has a row to land on; hours that exist ONLY because of that get compressed
+  // (see EXTENSION_WEIGHT in layoutNative) instead of sharing the core range's full-size rows.
+  const coreStartCandidates = [defaultHours.start, sunriseMark ? sunriseMark.hour : null, ...eventStarts].filter((h) => h !== null && h !== undefined);
+  const coreEndCandidates = [defaultHours.end, sunsetMark ? sunsetMark.hour : null, ...eventEnds].filter((h) => h !== null && h !== undefined);
+  const coreStartH = Math.floor(Math.min(...coreStartCandidates));
+  let coreEndH = Math.ceil(Math.max(...coreEndCandidates));
+  coreEndH = Math.max(coreEndH, coreStartH + 1);
+  const startH = nowH !== null && nowH !== undefined ? Math.min(coreStartH, Math.floor(nowH)) : coreStartH;
+  let endH = nowH !== null && nowH !== undefined ? Math.max(coreEndH, Math.ceil(nowH) + 1) : coreEndH;
   endH = Math.max(endH, startH + 1);
 
-  const grid = layoutNative(rawDays, alldayBars, startH, endH, nowH, sky.sunMarks, sky.hourlyWeather, calendarColors, HEADER_PCT, is12h);
+  const grid = layoutNative(rawDays, alldayBars, startH, endH, coreStartH, coreEndH, nowH, sky.sunMarks, sky.hourlyWeather, calendarColors, HEADER_PCT, is12h);
 
   const viewPeopleSeen = new Set();
   const viewPeople = [];
@@ -278,7 +286,7 @@ function parseConfig(raw) {
     const name = typeof item.name === "string" ? item.name.trim() : "";
     if (!name) continue;
     const color = typeof item.color === "string" && isValidColor(item.color.toLowerCase()) ? item.color.toLowerCase() : "";
-    const badge = typeof item.badge === "string" && item.badge.trim() ? item.badge.trim() : name[0].toUpperCase();
+    const badge = (typeof item.badge === "string" && item.badge.trim() ? item.badge.trim() : name[0].toUpperCase()).slice(0, 1).toUpperCase();
     people[name.toLowerCase()] = { name, color, badge };
   }
 
@@ -982,21 +990,37 @@ function round4(x) {
   return Math.round(x * 10000) / 10000;
 }
 
-function layoutNative(days, alldayBars, importantStart, importantEnd, nowH, sunMarks, hourlyWeather, calendarColors, headerPct, is12h) {
-  importantStart = Math.max(0, Math.min(23, Math.trunc(importantStart)));
-  importantEnd = Math.max(importantStart + 1, Math.min(24, Math.trunc(importantEnd)));
+// An hour inside the core range (the user's configured hours, sunrise/sunset, or a real event)
+// gets a full share of the grid; an hour that only exists because it's outside that range but
+// still inside the outer (nowH-widened) window gets EXTENSION_WEIGHT's fraction of a full
+// share instead — compressed to a thin sliver rather than either disappearing (outside the
+// outer window still gets a real 0) or padding out to match a genuinely relevant hour.
+const EXTENSION_WEIGHT = 0.4;
+
+function layoutNative(days, alldayBars, outerStart, outerEnd, coreStart, coreEnd, nowH, sunMarks, hourlyWeather, calendarColors, headerPct, is12h) {
+  outerStart = Math.max(0, Math.min(23, Math.trunc(outerStart)));
+  outerEnd = Math.max(outerStart + 1, Math.min(24, Math.trunc(outerEnd)));
+  coreStart = Math.max(outerStart, Math.min(23, Math.trunc(coreStart)));
+  coreEnd = Math.max(coreStart + 1, Math.min(outerEnd, Math.trunc(coreEnd)));
 
   const maxAdRows = alldayBars.length ? Math.max(...alldayBars.map((b) => b.row)) + 1 : 0;
   const alldayPct = Math.min(3, maxAdRows) * ALLDAY_ROW_PCT;
   const gridBase = headerPct + alldayPct;
   const gridPct = 100 - gridBase - FOOTER_PCT;
 
-  const importantN = importantEnd - importantStart;
+  const weight = new Array(24).fill(0);
+  let totalWeight = 0;
+  for (let h = outerStart; h < outerEnd; h++) {
+    weight[h] = h >= coreStart && h < coreEnd ? 1 : EXTENSION_WEIGHT;
+    totalWeight += weight[h];
+  }
   const hourPct = new Array(24).fill(0);
   let prevCum = 0;
-  for (let i = 1; i <= importantN; i++) {
-    const cum = Math.round((i * gridPct) / importantN);
-    hourPct[importantStart + i - 1] = cum - prevCum;
+  let cumW = 0;
+  for (let h = outerStart; h < outerEnd; h++) {
+    cumW += weight[h];
+    const cum = Math.round((cumW * gridPct) / totalWeight);
+    hourPct[h] = cum - prevCum;
     prevCum = cum;
   }
 
@@ -1028,7 +1052,7 @@ function layoutNative(days, alldayBars, importantStart, importantEnd, nowH, sunM
     const period = is12h ? (h < 12 ? "AM" : "PM") : null;
     hourRows.push({
       hour: hourDisplay, period, pct: hourPct[h], shade: h % 2, bold: h === nextHour,
-      important: importantStart <= h && h < importantEnd, current: h === nowHour,
+      important: coreStart <= h && h < coreEnd, current: h === nowHour,
     });
   }
 

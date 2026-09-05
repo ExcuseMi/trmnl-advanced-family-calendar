@@ -17,7 +17,7 @@ calendars before you save anything.
 
 - [The short version](#the-short-version)
 - [Overview](#overview)
-- [`hours`](#hours)
+- [`locale` / `timeZone`](#locale--timezone)
 - [`calendars[]`](#calendars)
 - [`people[]`](#people)
 - [A quick primer on regex](#a-quick-primer-on-regex)
@@ -46,18 +46,20 @@ changing it.
 
 ## Overview
 
-The whole configuration is **one JSON object** with up to three top-level keys, all optional
+The whole configuration is **one JSON object** with up to four top-level keys, all optional
 except `calendars`:
 
 | Key | What it's for |
 |---|---|
-| [`hours`](#hours) | The default time-of-day range the grid shows |
+| [`locale`](#locale--timezone) | Overrides the language day/month names render in |
+| [`timeZone`](#locale--timezone) | Overrides which IANA time zone the grid uses |
 | [`calendars`](#calendars) | Your ICS feeds — the actual event sources |
 | [`people`](#people) | Names you can attach to events, each with their own color/badge |
 
 ```json
 {
-  "hours": { ... },
+  "locale": "en",
+  "timeZone": "Europe/Brussels",
   "calendars": [ { ... }, { ... } ],
   "people": [ { ... } ]
 }
@@ -68,24 +70,34 @@ required field, has invalid JSON, or points at a broken URL, the plugin skips th
 keeps going with everything else, rather than showing an error for your whole calendar. This is
 deliberate — it's meant to tolerate you editing the JSON a bit at a time.
 
+**The default hour range** the grid shows (e.g. "7-21") isn't set here — it's the plugin's own
+**Visible Hours** field, alongside Time Zone/Time Format/Location in the plugin's settings, not
+in this JSON. Like everything else in the grid's layout, it's only ever a *starting point*: real
+events, sunrise/sunset, and the current hour always widen it further, and hours outside your
+configured range but inside that wider window render compressed rather than disappearing or
+padding out to full size.
+
 ---
 
-## `hours`
+## `locale` / `timeZone`
+
+Both optional, and both override something that's normally auto-detected from your TRMNL
+account instead of set here:
 
 ```json
-"hours": { "start": 7, "end": 21 }
+{ "locale": "en", "timeZone": "Europe/Brussels" }
 ```
 
-| Field | Type | Required | Default | Notes |
-|---|---|---|---|---|
-| `start` | whole number, 0–23 | no | `7` | Hour of day the grid starts at |
-| `end` | whole number, 1–24 | no | `21` | Hour of day the grid ends at |
+| Field | Type | Default | Notes |
+|---|---|---|---|
+| `locale` | a locale tag, e.g. `"en"`, `"nl-BE"`, `"fr"` | your TRMNL account's own locale | Controls day/month name language. Any locale your browser/`Intl` supports — not a fixed list. |
+| `timeZone` | an IANA zone name, e.g. `"Europe/Brussels"`, `"America/New_York"` | your TRMNL account's own time zone, or the plugin's own **Time Zone** setting if that's set | Which zone events/sun times/the current-time line are computed in. |
 
-This is only the *default* range — the plugin always **widens it automatically** so that
-sunrise, sunset, and every actual event on screen are visible, no matter what you set here. It
-only ever shrinks the *unused* hours out of the way (e.g. the middle of the night), never hides
-something real. So you can leave this out entirely and the grid will size itself sensibly around
-your actual day.
+You'd normally leave both out entirely and let them follow your account — they exist mainly for
+a calendar you want to read the same way regardless of who's actually viewing the device (e.g.
+this repo's own [demo config](demo-config.json) pins both, so the demo looks identical no matter
+whose TRMNL account loads it), or for a device physically living in a different zone than your
+account's own settings.
 
 ---
 
@@ -118,6 +130,19 @@ same as leaving `color` out of the full object form:
 
 The two forms mix freely in the same list — use the plain string for a quick add, and the full
 object wherever you actually need `id`/`color`/`exclude`/`defaultPerson`/`personRules`.
+
+**Freetext mode:** if you don't need JSON at all, the whole Calendar Configuration field also
+accepts **plain text — one ICS URL per line, nothing else**:
+
+```
+https://cloud.example.com/family.ics
+https://cloud.example.com/work.ics
+```
+
+This is exactly equivalent to `{"calendars": [<those same URLs>]}` — colors auto-assign the same
+way. Whenever the field's contents fail to parse as JSON, they're read this way instead, so a
+single pasted URL with no braces or quotes at all works too. The moment you need anything beyond
+a URL (a color, `exclude`, a person), switch to the JSON object form above for that entry.
 
 | Field | Type | Required | Default | Notes |
 |---|---|---|---|---|
@@ -252,7 +277,8 @@ country, and it fills in a real calendar entry like the one below):
 
 ```json
 {
-  "hours": { "start": 7, "end": 21 },
+  "locale": "en",
+  "timeZone": "Europe/Brussels",
   "calendars": [
     { "id": "Alex", "url": "https://cloud.example.com/alex.ics", "defaultPerson": "Alex" },
     {
@@ -289,6 +315,9 @@ reads.
 
 ## Common mistakes
 
+- **Putting `"hours"` in this JSON.** It used to live here; it's now the plugin's own **Visible
+  Hours** setting field (a plain "7-21" string, not JSON) alongside Time Zone and Location. A
+  stray `"hours"` key in this config is simply ignored.
 - **A single backslash in a regex.** `\bL6\b` in raw JSON is invalid — it needs to be `\\bL6\\b`.
   If your pattern silently doesn't match anything, this is the first thing to check. (The
   Configuration Editor's form fields avoid this entirely — only matters if hand-editing JSON.)
