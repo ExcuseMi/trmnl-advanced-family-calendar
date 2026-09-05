@@ -106,6 +106,20 @@ custom_fields:
   description: Blank = your TRMNL account's own time zone.
   optional: true
   group: Advanced
+- keyname: rss_url
+  field_type: string
+  name: News Feed (optional)
+  description: An RSS or Atom feed URL. Shows its top headlines as a ticker in the footer instead of per-day weather (which moves up into the header) — leave blank to hide it.
+  placeholder: https://rss.nytimes.com/services/xml/rss/nyt/US.xml
+  optional: true
+  group: Advanced
+- keyname: rss_label
+  field_type: string
+  name: News Feed Label
+  description: Tag shown before the headlines in the ticker (it doesn't have to say "NEWS" — use whatever fits the feed, e.g. "SPORTS" or "BLOG"). Blank = "NEWS".
+  placeholder: NEWS
+  optional: true
+  group: Advanced
 name: Family Calendar
 description: Smart-scaling family agenda
 refresh_interval: 15

@@ -68,7 +68,7 @@
 {%- endif -%}
 
 {%- if view == 1 -%}
-  {%- assign shown_days_n = days.size -%}
+  {%- assign shown_days_n = data.days.size -%}
 {%- else -%}
   {%- assign shown_days_n = 1 -%}
 {%- endif -%}
@@ -90,49 +90,59 @@
 {%- endif -%}
 
 <div class="layout layout--col gap--none" id="cal-root">
-  {% if error and has_events == false %}
+  {% if data.error and data.has_events == false %}
 
     <div class="flex flex--col flex--center-x flex--center-y w--full h--full text--center p--6 gap--small" style="box-sizing:border-box;">
       <img src="https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/event_busy/default/48px.svg" alt="" class="h--auto w--max-8 lg:w--max-12">
-      <span class="title title--large">{{ unavailable_label }}</span>
-      <span class="description text--gray-50 w--max-[85cqw]" data-clamp="3">{{ error }}</span>
+      <span class="title title--large">{{ data.unavailable_label }}</span>
+      <span class="description text--gray-50 w--max-[85cqw]" data-clamp="3">{{ data.error }}</span>
     </div>
   {% else %}
 
-    <div class="grid gap--none h--[{{ header_pct }}cqh] h--min-[{{ header_pct }}cqh] bg--black flex-none" style="overflow:hidden;">
+    <div class="grid gap--none h--[{{ data.header_pct }}cqh] h--min-[{{ data.header_pct }}cqh] bg--black flex-none" style="overflow:hidden;">
 
       <div class="flex flex--col flex--center-x flex--center-y p--0.5" style="overflow:hidden;box-sizing:border-box;">
 
-        {%- if people.size > 0 and view == 1 -%}
+        {%- if data.people.size > 0 and view == 1 -%}
 
           <div class="grid w--auto gap--xsmall grid--cols-2 ">
-            {%- for b in people limit: 4 -%}
+            {%- for b in data.people limit: 4 -%}
               {%- render "badge_circle", head_badge_cls:head_badge_cls, b: b, hue: b.hue, fg: b.fg, extra: "cal-head-badge" -%}
             {%- endfor -%}
           </div>
         {%- endif -%}
       </div>
-      {% for day in days limit: shown_days_n %}
+      {% for day in data.days limit: shown_days_n %}
 
         <div class="col--span-{{ day_span }} flex flex--col flex--center-x flex--center-y border--v-1">
 
-          <div class="rounded--small px--2.5 py--0.5 w--max-full flex flex--col flex--center-x gap--xsmall w--min-0" style="overflow:hidden;">
+          <div class="rounded--small px--2.5 py--0.5 w--max-full flex {% if shown_days_n == 1 %}flex--row flex--center-y flex--center-x gap--small{% else %}flex--col flex--center-x gap--xsmall{% endif %} w--min-0" style="overflow:hidden;">
 
-            <span class="title {{ head_title_cls }} block w--min-0{% if day.is_today %} relative label--underline{% endif %}" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-transform:uppercase;"><span class="text--gray-50">{{ day.label_short_weekday }}</span> <span class="text--white font--bold">{{ day.label_short_rest }}</span></span>
+            <span class="title {{ head_title_cls }} block w--min-0{% if shown_days_n == 1 %} no-shrink{% endif %}{% if day.is_today %} relative label--underline{% endif %}" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-transform:uppercase;"><span class="text--gray-50">{{ day.label_short_weekday }}</span> <span class="text--white font--bold">{{ day.label_short_rest }}</span></span>
+            {% if data.rss_headline and day.icon %}
+              <span class="flex flex--row flex--center-y gap--xsmall no-shrink">
+                <img class="{% if view == 1 %} w--5 h--5 lg:w--6 lg:h--6 {% else %} w--3 h--3 {% endif %} no-shrink" style="filter:invert(1);" src="{{ day.icon }}">
+                <span class="label {% if view == 1 %}label--base{% else %}label--small{% endif %} text--white w--min-0">
+                <svg viewBox="0 0 10 10" class="{% if view == 1 %} w--3 h--3 {% else %} w--2 h--2 {% endif %} mr--0.5 no-shrink" fill="#999"><polygon points="5,1 9,8 1,8"/></svg>
+                <span class="mr--1">{{ day.temp.high }}°{{ data.temp_unit }}</span>
+                <svg viewBox="0 0 10 10" class="{% if view == 1 %} w--3 h--3 {% else %} w--2 h--2 {% endif %} mr--0.5 no-shrink" fill="#999"><polygon points="5,9 1,2 9,2"/></svg>
+                <span>{{ day.temp.low }}°{{ data.temp_unit }}</span></span>
+              </span>
+            {% endif %}
           </div>
         </div>
       {% endfor %}
     </div>
 
-    {% if allday_pct > 0 %}
+    {% if data.allday_pct > 0 %}
 
       {%- assign allday_total_units = day_span | times: shown_days_n | plus: 1 -%}
-      <div class="grid gap--none h--[{{ allday_pct }}cqh] h--min-[{{ allday_pct }}cqh] flex-none relative" style="grid-template-columns:repeat({{ allday_total_units }}, 1fr);overflow:hidden;">
+      <div class="grid gap--none h--[{{ data.allday_pct }}cqh] h--min-[{{ data.allday_pct }}cqh] flex-none relative" style="grid-template-columns:repeat({{ allday_total_units }}, 1fr);overflow:hidden;">
 
-        <div class="col--span-1 flex flex--col flex--center-x flex--center-y px--0.5" style="grid-row:1 / span {{ allday_max_rows }};overflow:hidden;box-sizing:border-box;">
-          <!-- <img src="https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/today/default/48px.svg" alt="{{ all_day_label }}" class="md:w--8 lg:w--12"> -->
+        <div class="col--span-1 flex flex--col flex--center-x flex--center-y px--0.5" style="grid-row:1 / span {{ data.allday_max_rows }};overflow:hidden;box-sizing:border-box;">
+          <!-- <img src="https://fonts.gstatic.com/s/i/short-term/release/materialsymbolsoutlined/today/default/48px.svg" alt="{{ data.all_day_label }}" class="md:w--8 lg:w--12"> -->
         </div>
-        {% for bar in allday_bars %}
+        {% for bar in data.allday_bars %}
           {% if bar.start_col < shown_days_n %}
 
           {% assign allday_visible_span = shown_days_n | minus: bar.start_col %}
@@ -153,9 +163,9 @@
       </div>
     {% endif %}
 
-    <div class="grid gap--none h--[{{ grid_pct }}cqh] h--min-[{{ grid_pct }}cqh] flex-none relative">
+    <div class="grid gap--none h--[{{ data.grid_pct }}cqh] h--min-[{{ data.grid_pct }}cqh] flex-none relative">
       <div class="col--span-1 flex flex--col gap--none">
-        {% for row in hour_rows %}
+        {% for row in data.hour_rows %}
 
           <div class="h--[{{ row.pct }}cqh] w--full flex flex--row {% if row.period %}gap--distribute{% else %}flex--right{% endif %} cal-row cal-fit-box relative pr--2 {% if row.current %}bg--black{% elsif row.shade == 1 %}bg--gray-65{% endif %}" {% if row.current %}style="border-top:1px solid #888888;"{% endif %}>
 
@@ -163,7 +173,7 @@
           </div>
         {% endfor %}
       </div>
-      {% for day in days limit: shown_days_n %}
+      {% for day in data.days limit: shown_days_n %}
         <div class="col--span-{{ day_span }} flex flex--col gap--none border--v-1 relative">
 
           {% assign seg_cum_pct = 0 %}
@@ -203,9 +213,9 @@
           {% endfor %}
         </div>
       {% endfor %}
-      {% if days.first.now_marker %}
-        <div class="absolute left--0 right--0 z--0" style="grid-column:2 / -1;top:{{ days.first.now_marker.top_pct }}%;">
-          {% if days.first.now_marker.night %}
+      {% if data.days.first.now_marker %}
+        <div class="absolute left--0 right--0 z--0" style="grid-column:2 / -1;top:{{ data.days.first.now_marker.top_pct }}%;">
+          {% if data.days.first.now_marker.night %}
             <div class="h--1 w--full bg--gray-70"></div>
           {% else %}
             <div class="h--1 w--full bg--red"></div>
@@ -214,32 +224,38 @@
       {% endif %}
     </div>
 
-    <div class="grid gap--none h--[{{ footer_pct }}cqh] h--min-[{{ footer_pct }}cqh] bg--black flex flex--center-y" style="overflow:hidden;">
+    <div class="grid gap--none h--[{{ data.footer_pct }}cqh] h--min-[{{ data.footer_pct }}cqh] bg--black flex flex--center-y" style="overflow:hidden;">
+      {% if data.rss_headline %}
+        <div class="h--full col--span-{{ shown_days_n | times: day_span | plus: 1 }} flex flex--row flex--center-y flex--left pl--2 pr--2 w--min-0" style="overflow:hidden;">
+          <span class="label {% if view == 1 %}label--base{% else %}label--small{% endif %} font--bold bg--black text--white w--min-0 w--full" style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-transform:uppercase;letter-spacing:0.5px;">{{ data.rss_headline }}</span>
+        </div>
+      {% else %}
       <div class="col--span-1 flex flex--center-x">
-      <svg class="{% if view == 1 %} w--6 h--6  lg:w--10 lg:h--10 {% else if view == 2 or view == 4 %} hidden {% else %} w--4 h--4 {% endif %} image" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <svg class="{% if view == 1 %} w--6 h--6  lg:w--10 lg:h--10 {% else if view == 2 or view == 4 %} hidden {% else %} w--4 h--4 {% endif %} image" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
 <path d="M7.75 2.5C7.75 2.08579 7.41421 1.75 7 1.75C6.58579 1.75 6.25 2.08579 6.25 2.5V4.07926C4.81067 4.19451 3.86577 4.47737 3.17157 5.17157C2.47737 5.86577 2.19451 6.81067 2.07926 8.25H21.9207C21.8055 6.81067 21.5226 5.86577 20.8284 5.17157C20.1342 4.47737 19.1893 4.19451 17.75 4.07926V2.5C17.75 2.08579 17.4142 1.75 17 1.75C16.5858 1.75 16.25 2.08579 16.25 2.5V4.0129C15.5847 4 14.839 4 14 4H10C9.16097 4 8.41527 4 7.75 4.0129V2.5Z" fill="white"/>
 <path fill-rule="evenodd" clip-rule="evenodd" d="M2 12C2 11.161 2 10.4153 2.0129 9.75H21.9871C22 10.4153 22 11.161 22 12V14C22 17.7712 22 19.6569 20.8284 20.8284C19.6569 22 17.7712 22 14 22H10C6.22876 22 4.34315 22 3.17157 20.8284C2 19.6569 2 17.7712 2 14V12ZM17 14C17.5523 14 18 13.5523 18 13C18 12.4477 17.5523 12 17 12C16.4477 12 16 12.4477 16 13C16 13.5523 16.4477 14 17 14ZM17 18C17.5523 18 18 17.5523 18 17C18 16.4477 17.5523 16 17 16C16.4477 16 16 16.4477 16 17C16 17.5523 16.4477 18 17 18ZM13 13C13 13.5523 12.5523 14 12 14C11.4477 14 11 13.5523 11 13C11 12.4477 11.4477 12 12 12C12.5523 12 13 12.4477 13 13ZM13 17C13 17.5523 12.5523 18 12 18C11.4477 18 11 17.5523 11 17C11 16.4477 11.4477 16 12 16C12.5523 16 13 16.4477 13 17ZM7 14C7.55228 14 8 13.5523 8 13C8 12.4477 7.55228 12 7 12C6.44772 12 6 12.4477 6 13C6 13.5523 6.44772 14 7 14ZM7 18C7.55228 18 8 17.5523 8 17C8 16.4477 7.55228 16 7 16C6.44772 16 6 16.4477 6 17C6 17.5523 6.44772 18 7 18Z" fill="white"/>
 </svg>
       </div>
-      {% for day in days limit: shown_days_n %}
-        <div class="h--full  col--span-{{ day_span }} flex flex--row flex--center-x flex--center-y gap--xsmall border--v-1" style="overflow:hidden;">
-          {% if day.icon %}
+        {% for day in data.days limit: shown_days_n %}
+          <div class="h--full  col--span-{{ day_span }} flex flex--row flex--center-x flex--center-y gap--xsmall border--v-1" style="overflow:hidden;">
+            {% if day.icon %}
 
-            <img class="{{ chip_title_cls }} no-shrink  {% if view == 1 %} w--6 h--6  lg:w--10 lg:h--10 {% else %} w--4 h--4  {% endif %}" style="filter:invert(1);" src="{{ day.icon }}">
+              <img class="{{ chip_title_cls }} no-shrink  {% if view == 1 %} w--6 h--6  lg:w--10 lg:h--10 {% else %} w--4 h--4  {% endif %}" style="filter:invert(1);" src="{{ day.icon }}">
 
-            {%- if view <= 4 -%}
+              {%- if view <= 4 -%}
 
-              <span class="label {{ chip_title_cls }} bg--black text--white w--min-0">
-              <svg viewBox="0 0 10 10" class="w--2 h--2 lg:w--4 lg:h--4 mr--0.5 lg:mr--1 no-shrink" fill="#999"><polygon points="5,1 9,8 1,8"/></svg>
-              <span class="mr--1">{{ day.temp.high }}°{{ temp_unit }}</span>
-              <svg viewBox="0 0 10 10" class="w--2 h--2 lg:w--4 lg:h--4 mr--0.5 lg:mr--1 no-shrink" fill="#999"><polygon points="5,9 1,2 9,2"/></svg>
-              <span>{{ day.temp.low }}°{{ temp_unit }}</span></span>
-            {%- else -%}
-              <span class="label {{ chip_title_cls }} bg--black text--white w--min-0">{{ day.temp.high }}° / {{ day.temp.low }}°</span>
-            {%- endif -%}
-          {% endif %}
-        </div>
-      {% endfor %}
+                <span class="label {{ chip_title_cls }} bg--black text--white w--min-0">
+                <svg viewBox="0 0 10 10" class="w--2 h--2 lg:w--4 lg:h--4 mr--0.5 lg:mr--1 no-shrink" fill="#999"><polygon points="5,1 9,8 1,8"/></svg>
+                <span class="mr--1">{{ day.temp.high }}°{{ data.temp_unit }}</span>
+                <svg viewBox="0 0 10 10" class="w--2 h--2 lg:w--4 lg:h--4 mr--0.5 lg:mr--1 no-shrink" fill="#999"><polygon points="5,9 1,2 9,2"/></svg>
+                <span>{{ day.temp.low }}°{{ data.temp_unit }}</span></span>
+              {%- else -%}
+                <span class="label {{ chip_title_cls }} bg--black text--white w--min-0">{{ day.temp.high }}° / {{ day.temp.low }}°</span>
+              {%- endif -%}
+            {% endif %}
+          </div>
+        {% endfor %}
+      {% endif %}
     </div>
   {% endif %}
 </div>

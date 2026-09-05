@@ -880,10 +880,11 @@
 
     Promise.resolve(run(input)).then(function (result) {
       window.fetch = realFetch;
-      runStatus.textContent = result.error ? ("Done, with a page-level error: " + result.error) : "Done.";
-      runStatus.className = result.error ? "status err" : "status ok";
+      var data = result.data;
+      runStatus.textContent = data.error ? ("Done, with a page-level error: " + data.error) : "Done.";
+      runStatus.className = data.error ? "status err" : "status ok";
       document.getElementById("resultJson").value = JSON.stringify(result, null, 2);
-      renderPreview(result);
+      renderPreview(data);
     }).catch(function (e) {
       window.fetch = realFetch;
       runStatus.textContent = "run() threw: " + (e && e.message ? e.message : e);

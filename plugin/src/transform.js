@@ -35,6 +35,8 @@ async function run(input) {
   const is12h = cf(input, "time_format").trim().toLowerCase() === "12h";
   const location = cf(input, "lat_lon");
   const fahrenheit = cf(input, "temperature_unit").trim().toLowerCase() === "fahrenheit";
+  const rssUrl = cf(input, "rss_url").trim();
+  const rssLabel = cf(input, "rss_label").trim() || "NEWS";
   const daysN = toInt(cf(input, "view_days"), DEFAULT_DAYS, 1, 3);
 
   const tz = resolveTz(tzname, input);
@@ -154,7 +156,8 @@ async function run(input) {
   }));
 
   const nowH = (nowEpoch - winSEpoch) / 3600000;
-  const sky = await fetchSky(location, daysN, fahrenheit);
+  const [sky, rssHeadline] = await Promise.all([fetchSky(location, daysN, fahrenheit), fetchRssHeadline(rssUrl, rssLabel)]);
+  const newsPct = rssHeadline ? NEWS_PCT : 0;
   rawDays.forEach((rd, i) => {
     rd.temp = sky.dailyTemps[i] || null;
     rd.icon = rd.temp ? dayIcon(sky.hourlyWeather[i]) : null;
@@ -186,7 +189,7 @@ async function run(input) {
   let endH = nowH !== null && nowH !== undefined ? Math.max(coreEndH, Math.ceil(nowH) + 1) : coreEndH;
   endH = Math.max(endH, startH + 1);
 
-  const grid = layoutNative(rawDays, alldayBars, startH, endH, coreStartH, coreEndH, nowH, sky.sunMarks, sky.hourlyWeather, calendarColors, HEADER_PCT, is12h);
+  const grid = layoutNative(rawDays, alldayBars, startH, endH, coreStartH, coreEndH, nowH, sky.sunMarks, sky.hourlyWeather, calendarColors, HEADER_PCT, is12h, newsPct);
 
   const viewPeopleSeen = new Set();
   const viewPeople = [];
@@ -196,7 +199,7 @@ async function run(input) {
     viewPeople.push({ text: b.text, person: b.person, hue: b.hue, fg: b.fg });
   }
 
-  return Object.assign({}, grid, {
+  const data = Object.assign({}, grid, {
     people: viewPeople,
     generated_at: Math.floor(nowEpoch / 1000),
     tz: tzname,
@@ -206,7 +209,9 @@ async function run(input) {
     has_events: alldayBars.length > 0 || rawDays.some((d) => d.timed.length),
     weather_error: sky.error,
     temp_unit: fahrenheit ? "F" : "C",
+    rss_headline: rssHeadline,
   });
+  return { data };
 }
 
 function cf(input, key) {
@@ -252,7 +257,7 @@ function emptyResult(tzname, tz, locale, daysN, is12h, msg) {
     });
   }
   const grid = layoutNative(days, [], 8, 22, null, null, null, null, HEADER_PCT, is12h);
-  return Object.assign({}, grid, {
+  const data = Object.assign({}, grid, {
     people: [],
     generated_at: Math.floor(nowEpoch / 1000),
     tz: tzname,
@@ -262,7 +267,9 @@ function emptyResult(tzname, tz, locale, daysN, is12h, msg) {
     has_events: false,
     weather_error: null,
     temp_unit: "C",
+    rss_headline: null,
   });
+  return { data };
 }
 
 function parseConfig(raw) {
@@ -946,8 +953,69 @@ async function fetchSky(location, daysN, fahrenheit) {
   }
 }
 
+function decodeXmlEntities(s) {
+  return s
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
+    .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&#39;/g, "'")
+    .replace(/&#(\d+);/g, (m, n) => String.fromCodePoint(parseInt(n, 10)))
+    .replace(/<[^>]+>/g, "")
+    .trim();
+}
+
+const RSS_HEADLINE_LIMIT = 3;
+const RSS_HEADLINE_SEPARATOR = "   •   ";
+const RSS_LABEL_SEPARATOR = "  »  ";
+
+function findElements(xml, localName, limit) {
+  const results = [];
+  const openRe = new RegExp("<(?:[\\w-]+:)?" + localName + "\\b([^>]*?)(/)?>", "gi");
+  let open;
+  while (results.length < limit && (open = openRe.exec(xml)) !== null) {
+    if (open[2]) { results.push(""); continue; }
+    const closeRe = new RegExp("<\\/(?:[\\w-]+:)?" + localName + "\\s*>", "i");
+    const rest = xml.slice(openRe.lastIndex);
+    const close = closeRe.exec(rest);
+    if (close) {
+      results.push(rest.slice(0, close.index));
+      openRe.lastIndex += close.index + close[0].length;
+    } else {
+      results.push("");
+    }
+  }
+  return results;
+}
+
+function findFirstElement(xml, localName) {
+  const all = findElements(xml, localName, 1);
+  return all.length ? all[0] : null;
+}
+
+async function fetchRssHeadline(url, label) {
+  url = (url || "").trim();
+  if (!url) return null;
+  try {
+    const resp = await fetchWithTimeout(url, 4000, { headers: { "User-Agent": "TRMNL-ICS-Calendar" } });
+    if (!resp.ok) return null;
+    const text = await resp.text();
+    let entries = findElements(text, "item", RSS_HEADLINE_LIMIT);
+    if (!entries.length) entries = findElements(text, "entry", RSS_HEADLINE_LIMIT);
+    const titles = entries
+      .map((entryXml) => findFirstElement(entryXml, "title"))
+      .filter((t) => t)
+      .map((t) => decodeXmlEntities(t))
+      .filter((t) => t);
+    if (!titles.length) return null;
+    const joined = titles.join(RSS_HEADLINE_SEPARATOR);
+    return label ? label + RSS_LABEL_SEPARATOR + joined : joined;
+  } catch (exc) {
+    return null;
+  }
+}
+
 const HEADER_PCT = 11;
 const FOOTER_PCT = 7;
+const NEWS_PCT = 2;
 const ALLDAY_ROW_PCT = 10;
 const MIN_EVENT_PCT = 10;
 function hueOf(calIdx, calendarColors) {
@@ -997,15 +1065,17 @@ function round4(x) {
 // outer window still gets a real 0) or padding out to match a genuinely relevant hour.
 const EXTENSION_WEIGHT = 0.4;
 
-function layoutNative(days, alldayBars, outerStart, outerEnd, coreStart, coreEnd, nowH, sunMarks, hourlyWeather, calendarColors, headerPct, is12h) {
+function layoutNative(days, alldayBars, outerStart, outerEnd, coreStart, coreEnd, nowH, sunMarks, hourlyWeather, calendarColors, headerPct, is12h, newsPct) {
   outerStart = Math.max(0, Math.min(23, Math.trunc(outerStart)));
   outerEnd = Math.max(outerStart + 1, Math.min(24, Math.trunc(outerEnd)));
   coreStart = Math.max(outerStart, Math.min(23, Math.trunc(coreStart)));
   coreEnd = Math.max(coreStart + 1, Math.min(outerEnd, Math.trunc(coreEnd)));
+  newsPct = newsPct || 0;
 
+  const headerRenderedPct = headerPct + newsPct;
   const maxAdRows = alldayBars.length ? Math.max(...alldayBars.map((b) => b.row)) + 1 : 0;
   const alldayPct = Math.min(3, maxAdRows) * ALLDAY_ROW_PCT;
-  const gridBase = headerPct + alldayPct;
+  const gridBase = headerRenderedPct + alldayPct;
   const gridPct = 100 - gridBase - FOOTER_PCT;
 
   const weight = new Array(24).fill(0);
@@ -1145,5 +1215,5 @@ function layoutNative(days, alldayBars, outerStart, outerEnd, coreStart, coreEnd
     continues_before: b.continuesBefore, continues_after: b.continuesAfter,
   }));
 
-  return { header_pct: headerPct, allday_pct: alldayPct, allday_row_pct: ALLDAY_ROW_PCT, allday_bars: alldayBarsOut, allday_max_rows: maxAdRows, grid_pct: gridPct, footer_pct: FOOTER_PCT, hour_rows: hourRows, days: outDays };
+  return { header_pct: headerRenderedPct, allday_pct: alldayPct, allday_row_pct: ALLDAY_ROW_PCT, allday_bars: alldayBarsOut, allday_max_rows: maxAdRows, grid_pct: gridPct, footer_pct: FOOTER_PCT, news_pct: newsPct, hour_rows: hourRows, days: outDays };
 }
