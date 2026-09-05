@@ -106,10 +106,25 @@ custom_fields:
   description: Blank = your TRMNL account's own time zone.
   optional: true
   group: Advanced
+- keyname: news_feed_enabled
+  field_type: select
+  name: News Feed
+  description: Show top headlines from an RSS or Atom feed as a ticker in the footer, instead of per-day weather (which moves up into the header).
+  options:
+  - 'Off': 'no'
+  - 'On': 'yes'
+  default: 'no'
+  optional: true
+  group: Advanced
+  conditional_validation:
+  - when: 'no'
+    hidden:
+    - rss_url
+    - rss_label
 - keyname: rss_url
   field_type: string
-  name: News Feed (optional)
-  description: An RSS or Atom feed URL. Shows its top headlines as a ticker in the footer instead of per-day weather (which moves up into the header) — leave blank to hide it.
+  name: News Feed URL
+  description: An RSS or Atom feed URL.
   placeholder: https://rss.nytimes.com/services/xml/rss/nyt/US.xml
   optional: true
   group: Advanced
